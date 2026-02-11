@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "the-front-office"
+version = "0.1.0"
+description = "All-In-One NBA Fantasy Intelligence — AI-powered General Manager"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "yahoofantasy>=1.4.9",
+    "python-dotenv>=1.0.0",
+]
+
+[project.scripts]
+front-office = "the_front_office.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["the_front_office*"]
+namespaces = false
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+extraPaths = ["./src"]
+pythonVersion = "3.10"
+reportMissingImports = false
