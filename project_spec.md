@@ -8,7 +8,7 @@ An all-encompassing NBA Fantasy command center that transforms raw league data i
 ## 2. Technical Stack
 * **IDE:** Antigravity (AI-native development).
 * **Language:** Python 3.10.
-* **LLM Provider:** Google AI (Gemini 2.5 Flash - Verified stable).
+* **LLM Provider:** Google AI (Gemini 2.5 Pro for strategy, Gemini 2.5 Flash for data parsing).
 * **Core APIs:**
     * **Yahoo Fantasy Sports API:** Primary source for current league state via `yahoofantasy` SDK.
     * **ESPN Fantasy API:** Secondary integration using `espn-api` Python library (Planned).
@@ -44,7 +44,7 @@ An all-encompassing NBA Fantasy command center that transforms raw league data i
 
 ### Milestone 2: The Waiver Engine
 - [x] Script to fetch the top 20 available Free Agents by 7-day performance.
-- [x] Integrate Gemini 2.5 Flash to summarize the "Best Value" pickup for the current week.
+- [x] Integrate Gemini 2.5 Pro to summarize the "Best Value" pickup for the current week.
 
 ### Milestone 3: Dashboard MVP
 - [ ] Launch a Streamlit app that displays the AI-generated "Morning Scout Report."
@@ -54,5 +54,5 @@ An all-encompassing NBA Fantasy command center that transforms raw league data i
 ## 5. Constraints & Security
 * **Privacy:** Never commit `.env` or `.yahoofantasy` (token) files to version control.
 * **Rate Limiting:** Implement 1-second delays between `nba_api` calls to avoid IP blocks.
-* **Model Usage:** Use **Gemini 2.5 Flash** for strategic analysis and data parsing (verified stable quota).
+* **Model Usage:** Use **Gemini 2.5 Pro** for strategic analysis and **Gemini 2.5 Flash** for high-volume data parsing.
 * **Type Safety:** Maintain strict type checking with `mypy` and avoid `Any` types.

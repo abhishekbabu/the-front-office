@@ -92,9 +92,9 @@ INSTRUCTIONS:
 """
 
         try:
-            # Using Gemini 2.5 Flash for stability (Pro models currently have quota issues)
+            # Using Gemini 2.5 Pro for strategy tasks
             response = self.client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-2.5-pro',
                 contents=prompt
             )
             return response.text or "❌ No response from AI"
