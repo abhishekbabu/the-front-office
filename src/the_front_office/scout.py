@@ -2,7 +2,8 @@ import os
 import logging
 from google import genai
 from datetime import datetime
-from typing import List, Any, Optional
+from typing import List, Optional
+from yahoofantasy import Player, League, Team  # type: ignore[import-untyped]
 
 from the_front_office.auth import get_context
 
@@ -19,7 +20,7 @@ class Scout:
             # Using the new google.genai client
             self.client = genai.Client(api_key=api_key)
 
-    def fetch_free_agents(self, league, count: int = 20) -> List[Any]:
+    def fetch_free_agents(self, league: League, count: int = 20) -> List[Player]:
         """
         Fetch the top available free agents.
         
@@ -35,14 +36,14 @@ class Scout:
             # Attempt to fetch all available players
             # The library doesn't expose 'count' directly to the user in the players() signature
             # but it uses COUNT=25 internally.
-            players: List[Any] = league.players(status='A')
+            players: List[Player] = league.players(status='A')
             return players[:count]
         except Exception as e:
             logger.error(f"Error fetching players: {e}")
             # Fallback: maybe try without status or just return empty
             return []
 
-    def get_morning_report(self, league) -> str:
+    def get_morning_report(self, league: League) -> str:
         """
         Generate a morning scout report for the given league.
         """
@@ -56,7 +57,8 @@ class Scout:
         if not my_team:
             return "⚠️ Could not identify your team in this league."
 
-        roster = my_team.players()
+        my_team_typed: Team = my_team
+        roster: List[Player] = my_team_typed.players()
         roster_str = "\n".join([f"- {p.name.full} ({p.display_position})" for p in roster])
 
         # 2. Get Free Agents

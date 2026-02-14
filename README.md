@@ -4,19 +4,18 @@
 
 ---
 
-## 🚀 Current Status: Mission 1 Complete
-The project is initialized with a modular Python structure and full Yahoo Fantasy OAuth2 connectivity. You can currently authenticate and print your NBA rosters to the terminal.
+## 🚀 Current Status: Mission 2 Complete
+The Waiver Engine is now live! You can authenticate with Yahoo Fantasy and generate AI-powered "Morning Scout Reports" that analyze your roster against available free agents using Gemini.
 
 ---
 
 ## 🛠 Technical Stack
-- **Language:** Python 3.11+
+- **Language:** Python 3.10
 - **APIs:** 
     - **Yahoo Fantasy Sports API** (via `yahoofantasy` SDK)
-    - **ESPN Fantasy API** (planned)
-    - **nba_api** (planned for real-world trends)
-- **AI Engine:** Google Gemini (Flash for data parsing, Pro for complex strategy)
-- **Frontend:** Streamlit (planned "War Room" dashboard)
+    - **Google Gemini API** (via `google-genai` SDK)
+- **AI Engine:** Gemini 2.5 Flash (Optimized for strategic waiver analysis)
+- **Dev Tools:** Mypy (Typesafety), Flake8 (Hygiene)
 
 ---
 
@@ -25,12 +24,14 @@ The project is initialized with a modular Python structure and full Yahoo Fantas
 the-front-office/
 ├── src/
 │   └── the_front_office/
-│       ├── auth/           # OAuth2 Handshake (Yahoo/ESPN)
-│       ├── main.py         # Entry point & Roster Printer
-│       └── ...             # Future: scout, trade_analyzer
-├── pyproject.toml          # Package metadata & Dependencies
+│       ├── auth/           # OAuth2 Handshake (Yahoo)
+│       ├── main.py         # Entry point & CLI handler
+│       └── scout.py        # Waiver Engine & AI Intelligence
+├── .agent/                 # Project rules & Assistant guidelines
 ├── .env                    # Local secrets (Client IDs/Secrets)
-└── pyrightconfig.json      # IDE/Language Server configuration
+├── mypy.ini                # Type checking configuration
+├── pyproject.toml          # Package metadata & Dependencies
+└── requirements.txt        # Pinned dependencies
 ```
 
 ---
@@ -38,8 +39,9 @@ the-front-office/
 ## 🏁 Getting Started
 
 ### 1. Prerequisites
-- Python 3.11+
+- **Python 3.10** (required for `yahoofantasy` compatibility)
 - A Yahoo Developer App (with Fantasy Sports "Read" permissions and `https://localhost:8080` as the Redirect URI).
+- A Google Gemini API Key (from Google AI Studio).
 
 ### 2. Setup
 ```bash
@@ -49,10 +51,10 @@ cd the-front-office
 
 # Create and activate virtual environment
 python -m venv .venv
-source .venv/Scripts/activate  # Windows Git Bash
+source .venv/Scripts/activate  # Windows: .venv\Scripts\activate
 
-# Install dependencies
-pip install -e .
+# Install dependencies (including dev tools)
+pip install -e ".[dev]"
 ```
 
 ### 3. Configuration
@@ -60,10 +62,19 @@ Copy `.env.template` to `.env` and add your credentials:
 ```env
 YAHOO_CLIENT_ID=your_id
 YAHOO_CLIENT_SECRET=your_secret
+GOOGLE_API_KEY=your_gemini_key
 ```
 
 ### 4. Run
-Print your current NBA rosters:
+
+#### Generate Scout Report (AI)
+Analyze your team against available free agents:
+```bash
+python -m the_front_office.main --scout
+```
+
+#### Print Roster (Standard)
+List your current NBA rosters for all leagues:
 ```bash
 python -m the_front_office.main
 ```
@@ -72,12 +83,13 @@ python -m the_front_office.main
 
 ## 🗺 Roadmap
 - [x] **Mission 1: Connectivity** — OAuth2 & Roster Sync.
-- [ ] **Mission 2: The Waiver Engine** — Scan top free agents and summarize "Best Value" via Gemini.
+- [x] **Mission 2: The Waiver Engine** — Scan top free agents and summarize via Gemini 2.5 Flash.
 - [ ] **Mission 3: Dashboard MVP** — Streamlit "Morning Scout Report."
 - [ ] **Mission 4: Trade War Room** — Natural language trade evaluation.
 
 ---
 
-## 🔒 Security
-- Never commit `.env` or `oauth2.json` to version control.
-- Credentials and tokens are stored locally.
+## 🔒 Security & Quality
+- Never commit `.env` or `.yahoofantasy` (token) files.
+- **Type Safety:** Always run `mypy src/the_front_office` before committing changes.
+- **Import Hygiene:** Keep code clean of unused imports (`flake8`).

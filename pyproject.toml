@@ -20,6 +20,7 @@ front-office = "the_front_office.main:main"
 [project.optional-dependencies]
 dev = [
     "mypy>=1.0.0",
+    "flake8>=7.0.0",
 ]
 
 [tool.setuptools.packages.find]

@@ -7,10 +7,16 @@ The Front Office is an AI-powered NBA fantasy sports assistant that provides wai
 
 ### Type Safety
 - **ALWAYS** run `mypy src/the_front_office` before committing
+- **AVOID** using `Any`. Use specific types from libraries or `object` if truly generic.
 - Add type hints to all function signatures
-- Use `List`, `Dict`, `Optional`, `Any` from `typing` module
+- Use `List`, `Dict`, `Optional` from `typing` module
 - Handle `None` values explicitly with assertions or conditional checks
 - Add `# type: ignore[import-untyped]` for untyped third-party libraries
+
+### Metadata & Documentation
+- **ALWAYS** update `README.md`, `project_spec.md`, `pyproject.toml`, and other metadata files before committing new changes.
+- Ensure the "Current Status" and "Roadmap" in `README.md` reflect the latest accomplishments.
+- Keep the `Technical Stack` and `Project Structure` accurate.
 
 ### Import Hygiene
 - **ALWAYS** remove unused imports. Use `flake8 --select=F401` to check.

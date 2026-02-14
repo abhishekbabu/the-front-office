@@ -8,9 +8,11 @@ and prints your current roster to the terminal.
 import sys
 import argparse
 from datetime import datetime
+from typing import List
 
 from the_front_office.auth import login, get_context
 from the_front_office.scout import Scout
+from yahoofantasy import League, Team  # type: ignore[import-untyped]
 
 
 # ---------------------------------------------------------------------------
@@ -25,7 +27,7 @@ def _print_header(text: str) -> None:
     print("═" * width)
 
 
-def _print_roster(team) -> None:
+def _print_roster(team: Team) -> None:
     """Pretty-print a team's roster."""
     players = team.players()
     if not players:
@@ -66,7 +68,7 @@ def main() -> None:
     
     print(f"\n  Fetching NBA leagues for {season_year} season …")
 
-    leagues = ctx.get_leagues("nba", season_year)
+    leagues: List[League] = ctx.get_leagues("nba", season_year)
 
     if not leagues:
         print("  ⚠️  No NBA leagues found for this season.")
