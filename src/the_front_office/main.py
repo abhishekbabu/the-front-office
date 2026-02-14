@@ -6,9 +6,11 @@ and prints your current roster to the terminal.
 """
 
 import sys
+import argparse
 from datetime import datetime
 
 from the_front_office.auth import login, get_context
+from the_front_office.scout import Scout
 
 
 # ---------------------------------------------------------------------------
@@ -44,7 +46,10 @@ def _print_roster(team) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    """Authenticate and print the current NBA fantasy roster."""
+    """Authenticate and print the current NBA fantasy roster or run scout report."""
+    parser = argparse.ArgumentParser(description="The Front Office — NBA Fantasy Intelligence")
+    parser.add_argument("--scout", action="store_true", help="Run the Morning Scout Report (AI waiver analysis)")
+    args = parser.parse_args()
 
     _print_header("🏀 The Front Office — NBA Fantasy Intelligence")
     print(f"  {datetime.now().strftime('%A, %B %d %Y  •  %I:%M %p')}")
@@ -67,15 +72,23 @@ def main() -> None:
         print("  ⚠️  No NBA leagues found for this season.")
         sys.exit(0)
 
-    # --- Print each league's roster ---
+    # --- Process leagues ---
     for league in leagues:
-        _print_header(f"League: {league.name}")
-        print(f"  ID: {league.id}  •  Type: {league.league_type}\n")
+        if args.scout:
+            _print_header(f"Scouting Report: {league.name}")
+            scout = Scout()
+            report = scout.get_morning_report(league)
+            print(report)
+        else:
+            _print_header(f"League: {league.name}")
+            print(f"  ID: {league.id}  •  Type: {league.league_type}\n")
 
-        for team in league.teams():
-            is_mine = "(YOU)" if hasattr(team, "is_owned_by_current_login") and team.is_owned_by_current_login else ""
-            print(f"\n  📋 {team.name} — managed by {team.manager.nickname} {is_mine}")
-            _print_roster(team)
+            for team in league.teams():
+                is_mine = "(YOU)" if hasattr(team, "is_owned_by_current_login") and team.is_owned_by_current_login else ""
+                print(f"\n  📋 {team.name} — managed by {team.manager.nickname} {is_mine}")
+                # For roster display, we don't need to be as robust as for FA fetching,
+                # but let's keep it consistent.
+                _print_roster(team)
 
     _print_header("Done ✅")
 
