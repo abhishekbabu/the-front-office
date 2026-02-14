@@ -22,6 +22,9 @@ USER'S CURRENT ROSTER:
 
 {matchup_context}
 
+REAL-WORLD STATS & TRENDS:
+{nba_stats}
+
 TOP AVAILABLE FREE AGENTS:
 {fas_str}
 

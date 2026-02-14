@@ -21,6 +21,7 @@ YAHOO_TOKEN_FILE = ".yahoofantasy"
 # Scouting Settings
 DEFAULT_FREE_AGENT_COUNT = 20
 REPORT_FREE_AGENT_LIMIT = 15
+NBA_API_DELAY = 1.0  # Seconds to wait between nba_api calls
 
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

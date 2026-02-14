@@ -10,6 +10,7 @@ from the_front_office.providers.yahoo import YahooProvider
 from the_front_office.config.settings import REPORT_FREE_AGENT_LIMIT
 from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
 from the_front_office.providers.yahoo import YahooProvider
+from the_front_office.providers.nba import NBAProvider
 from the_front_office.ai.gemini import GeminiClient
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,7 @@ class Scout:
     """
     def __init__(self):
         self.ai = GeminiClient()
+        self.nba = NBAProvider()
 
     def get_morning_report(self, league: League) -> str:
         """
@@ -39,10 +41,18 @@ class Scout:
         fas = provider.fetch_free_agents(count=REPORT_FREE_AGENT_LIMIT)
         fas_str = "\n".join([f"- {p.name.full} ({p.display_position})" for p in fas])
 
-        # 3. Analyze with AI
+        # 3. Enrich with real-world NBA stats (Top 3 Free Agents for now)
+        nba_stats = "Top Waiver Targets Trends:\n"
+        for p in fas[:3]:
+            stats = self.nba.get_player_stats(p.name.full)
+            if stats:
+                nba_stats += f"- {p.name.full}: {stats}\n"
+        
+        # 4. Analyze with AI
         prompt = SCOUT_PROMPT_TEMPLATE.format(
             roster_str=roster_str,
             matchup_context=matchup_context,
+            nba_stats=nba_stats,
             fas_str=fas_str
         )
         
