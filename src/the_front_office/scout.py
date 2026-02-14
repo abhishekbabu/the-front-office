@@ -39,9 +39,9 @@ class Scout:
         fas = self.yahoo.fetch_free_agents(count=REPORT_FREE_AGENT_LIMIT)
         fas_str = "\n".join([f"- {p.name.full} ({p.display_position})" for p in fas])
 
-        # 3. Enrich with real-world NBA stats (Top 3 Free Agents for now)
+        # 3. Enrich with real-world NBA stats (Top 7 Free Agents)
         nba_stats = "Top Waiver Targets Trends:\n"
-        for p in fas[:3]:
+        for p in fas[:7]:
             stats = self.nba.get_player_stats(p.name.full)
             if stats:
                 nba_stats += f"- {p.name.full}: {stats}\n"
@@ -78,7 +78,6 @@ def scout_league(league_name: Optional[str] = None):
         return
 
     for league in target_leagues:
-        print(f"\nScouting League: {league.name}...")
         scout = Scout(league)
         report = scout.get_morning_report()
         print("\n" + "="*40)

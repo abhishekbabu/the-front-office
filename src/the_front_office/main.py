@@ -61,13 +61,8 @@ def main() -> None:
     ctx = YahooFantasyClient.get_context()
 
     # --- Fetch NBA leagues for the current season ---
-    # NBA seasons are identified by their start year (e.g., 2025-26 is '2025')
     now = datetime.now()
-    # If we are in Jan-Aug, the current season started in the previous year
     season_year = now.year if now.month >= 9 else now.year - 1
-    
-    print(f"\n  Fetching NBA leagues for {season_year} season …")
-
     leagues: List[League] = ctx.get_leagues("nba", season_year)
 
     if not leagues:
