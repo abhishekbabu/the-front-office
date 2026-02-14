@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import List, Optional
 from yahoofantasy import Player, League, Team, Week  # type: ignore[import-untyped]
 
+from yahoofantasy.api.parse import as_list  # type: ignore[import-untyped]
 from the_front_office.auth import get_context
 
 logger = logging.getLogger(__name__)
@@ -68,13 +69,19 @@ class Scout:
             is_team1 = my_matchup.team1.team_key == my_team.team_key
             opponent = my_matchup.team2 if is_team1 else my_matchup.team1
             
+            # Scores
+            team1_data = as_list(my_matchup.teams.team)[0]
+            team2_data = as_list(my_matchup.teams.team)[1]
+            
+            my_score = team1_data.team_points.total if is_team1 else team2_data.team_points.total
+            opp_score = team2_data.team_points.total if is_team1 else team1_data.team_points.total
+            
             # Opponent Roster
             opp_roster: List[Player] = opponent.players()
             opp_roster_str = ", ".join([f"{p.name.full} ({p.display_position})" for p in opp_roster[:12]])
             
-            # Matchup Score (if available)
-            # Yahoo returns stats for matchups. We'll simplify for the prompt.
             context = f"\nCURRENT MATCHUP: Playing against {opponent.name}"
+            context += f"\nMATCHUP SCORE: You {my_score} - {opp_score} Opponent"
             context += f"\nOPPONENT KEY PLAYERS: {opp_roster_str}"
             
             return context
@@ -135,7 +142,7 @@ TOP AVAILABLE FREE AGENTS:
 
 INSTRUCTIONS:
 1. Start with a "Morning Scout Report" header.
-2. Provide a "Matchup Insight" talking briefly about the opponent's build and where we can beat them.
+2. Provide a "Matchup Insight" section. **EXPLICITLY mention the current matchup score** (e.g., "Current Score: 5-4") and discuss where we can beat the opponent based on their build.
 3. Provide a "Top Target" section with details on which specific categories they boost and why they should be added.
 4. Suggest a "Drop Candidate" if applicable.
 5. Keep it under 250 words.
