@@ -9,6 +9,7 @@ __pycache__/
 dist/
 build/
 *.egg
+.mypy_cache/
 
 # Virtual environments
 .venv/
@@ -27,5 +28,5 @@ Thumbs.db
 
 # Yahoo Fantasy OAuth
 oauth2.json
-.yahoofantasyofantasy/
+.yahoofantasy
 token.json

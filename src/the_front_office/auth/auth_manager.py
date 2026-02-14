@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from yahoofantasy import Context
+from yahoofantasy import Context  # type: ignore[import-untyped]
 
 
 # ---------------------------------------------------------------------------
@@ -76,11 +76,17 @@ def login(force: bool = False) -> None:
     client_id = os.getenv("YAHOO_CLIENT_ID")
     client_secret = os.getenv("YAHOO_CLIENT_SECRET")
 
+    # These should always be set due to _load_env() check, but mypy needs explicit assertion
+    assert client_id is not None, "YAHOO_CLIENT_ID must be set"
+    assert client_secret is not None, "YAHOO_CLIENT_SECRET must be set"
+
     # The yahoofantasy executable is in the same folder as the python executable (Scripts)
     python_dir = Path(sys.executable).parent
-    yahoofantasy_bin = python_dir / "yahoofantasy.exe"
+    yahoofantasy_bin_path = python_dir / "yahoofantasy.exe"
 
-    if not yahoofantasy_bin.exists():
+    if yahoofantasy_bin_path.exists():
+        yahoofantasy_bin: str = str(yahoofantasy_bin_path)
+    else:
         # Fallback for non-Windows or direct path
         yahoofantasy_bin = "yahoofantasy"
 
