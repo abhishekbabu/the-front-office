@@ -15,25 +15,23 @@ LEAGUE RULES:
 - DO NOT chase categories that are lost by a landslide.
 - Focus on securing a 5-4 or 6-3 win; the exact score doesn't matter as much as the win.
 
-CURRENT ROSTER:
+CURRENT ROSTER (with Real-World Stats):
 {roster_str}
 
 MATCHUP CONTEXT:
 {matchup_context}
 
-REAL-WORLD STATS & TRENDS (from NBA.com):
-{nba_stats}
-
-TOP AVAILABLE FREE AGENTS (Yahoo):
+TOP AVAILABLE FREE AGENTS (with Real-World Stats):
 {fas_str}
 
 YOUR TASK:
 1. Analyze the matchup: Identify "Close" categories where a small boost could flip the category in our favor or secure a slim lead. Use specific category names (e.g., "trailing in BLK by 5").
-2. Recommend **3 players** to add from the Free Agents list. 
-3. For each recommendation, provide:
+2. Compare the underperformers on the current roster with the high-upside players on the waiver wire using the provided stats.
+3. Recommend **3 players** to add from the Free Agents list. 
+4. For each recommendation, provide:
     - **Reasoning**: Why this player helps specifically in the "Close" categories identified.
     - **Drop Target**: Suggest a specific player from the current roster to drop, with a clear justification (e.g., redundant stats, poor recent form, or non-active status).
-4. Use a professional, tactical tone. Avoid flowery prose.
+5. Use a professional, tactical tone. Avoid flowery prose.
 
 REPORT FORMAT:
 ### **Scout Report**

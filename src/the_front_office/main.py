@@ -74,7 +74,7 @@ def main() -> None:
         if args.scout:
             _print_header(f"Scouting Report: {league.name}")
             scout = Scout(league)
-            report = scout.get_morning_report()
+            report = scout.get_report()
             print(report)
         else:
             _print_header(f"League: {league.name}")
