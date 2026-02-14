@@ -2,20 +2,84 @@
 NBA.com Data Client (via nba_api).
 """
 import time
+import json
 import logging
-from typing import Optional
+from pathlib import Path
+from datetime import datetime, time as dt_time
+from typing import Optional, Dict
 from nba_api.stats.static import players, teams  # type: ignore[import-untyped]
 from nba_api.stats.endpoints import playercareerstats, playerdashboardbygeneralsplits  # type: ignore[import-untyped]
-from the_front_office.config.settings import NBA_API_DELAY
+from the_front_office.config.settings import NBA_API_DELAY, NBA_STATS_CACHE_FILE
 
 logger = logging.getLogger(__name__)
 
 class NBAClient:
     """
-    Fetches real-world NBA stats using the nba_api library.
+    Fetches real-world NBA stats using the nba_api library with local caching.
     """
     def __init__(self):
         self._last_call_time = 0.0
+        self._cache: Dict[str, str] = {}
+        self._cache_file = Path(NBA_STATS_CACHE_FILE)
+        self._load_cache()
+
+    def _load_cache(self) -> None:
+        """Load cache from JSON file if it exists and is valid."""
+        if not self._cache_file.exists():
+            logger.info("No cache file found. Starting fresh.")
+            return
+        
+        try:
+            with open(self._cache_file, 'r') as f:
+                self._cache = json.load(f)
+            
+            # Check if cache should be invalidated
+            if not self._is_cache_valid():
+                logger.info("Cache is stale. Clearing cache.")
+                self._cache = {}
+                self._save_cache()
+            else:
+                logger.info(f"Loaded {len(self._cache)} cached player stats.")
+        except Exception as e:
+            logger.warning(f"Failed to load cache: {e}. Starting fresh.")
+            self._cache = {}
+
+    def _save_cache(self) -> None:
+        """Save cache to JSON file."""
+        try:
+            with open(self._cache_file, 'w') as f:
+                json.dump(self._cache, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Failed to save cache: {e}")
+
+    def _is_cache_valid(self) -> bool:
+        """
+        Check if cache should be invalidated based on time.
+        Cache invalidates twice daily:
+        - 3:00 PM PT (before games start)
+        - 1:00 AM PT (after games end)
+        """
+        if not self._cache:
+            return True  # Empty cache is always valid
+        
+        now = datetime.now()
+        
+        # Define invalidation times (Pacific Time assumed)
+        invalidation_times = [
+            dt_time(15, 0),  # 3:00 PM PT
+            dt_time(1, 0),   # 1:00 AM PT
+        ]
+        
+        # Check if we've crossed an invalidation boundary since last cache write
+        # For simplicity, we'll invalidate if current hour matches invalidation hours
+        current_hour = now.time().hour
+        if current_hour in [t.hour for t in invalidation_times]:
+            # Check if cache was written before this invalidation window
+            cache_mtime = datetime.fromtimestamp(self._cache_file.stat().st_mtime)
+            if cache_mtime.hour != current_hour:
+                return False  # Cache is stale
+        
+        return True
 
     def _wait_for_rate_limit(self):
         """Ensures at least NBA_API_DELAY seconds between calls."""
@@ -26,8 +90,14 @@ class NBAClient:
 
     def get_player_stats(self, full_name: str, retries: int = 2) -> Optional[str]:
         """
-        Fetch season averages and recent trends for a player with retries.
+        Fetch season averages and recent trends for a player with caching and retries.
         """
+        # Check cache first
+        if full_name in self._cache:
+            logger.debug(f"Cache hit for {full_name}")
+            return self._cache[full_name]
+        
+        # Cache miss - fetch from API
         for attempt in range(retries + 1):
             try:
                 # 1. Find Player ID
@@ -61,6 +131,10 @@ class NBAClient:
                     recent = splits_df.iloc[0]
                     avg_stats += f" | L5: {recent['PTS']} PTS, {recent['REB']} REB, {recent['AST']} AST"
 
+                # Cache the result
+                self._cache[full_name] = avg_stats
+                self._save_cache()
+                
                 return avg_stats
 
             except Exception as e:

@@ -30,3 +30,6 @@ Thumbs.db
 oauth2.json
 .yahoofantasy
 token.json
+
+# NBA Stats Cache
+.nba_stats_cache.json
