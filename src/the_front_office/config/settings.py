@@ -12,6 +12,12 @@ load_dotenv(env_path)
 GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
 DEFAULT_MODEL = "gemini-2.5-pro"
 
+# Yahoo Settings
+YAHOO_CLIENT_ID = os.getenv("YAHOO_CLIENT_ID")
+YAHOO_CLIENT_SECRET = os.getenv("YAHOO_CLIENT_SECRET")
+YAHOO_REDIRECT_URI = "https://localhost:8080"
+YAHOO_TOKEN_FILE = ".yahoofantasy"
+
 # Scouting Settings
 DEFAULT_FREE_AGENT_COUNT = 20
 REPORT_FREE_AGENT_LIMIT = 15

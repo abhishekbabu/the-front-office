@@ -2,6 +2,6 @@
 
 __version__ = "0.1.0"
 
-from the_front_office.auth import login, get_context
+from the_front_office.providers.yahoo import YahooProvider
 
-__all__ = ["login", "get_context"]
+__all__ = ["YahooProvider"]

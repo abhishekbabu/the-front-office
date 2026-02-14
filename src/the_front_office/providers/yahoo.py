@@ -2,9 +2,15 @@
 Yahoo Fantasy Data Provider.
 """
 import logging
+import subprocess
+import sys
+from pathlib import Path
 from typing import List, Optional
-from yahoofantasy import Player, League, Team, Week
+from yahoofantasy import Player, League, Team, Week, Context
 from yahoofantasy.api.parse import as_list
+from the_front_office.config.settings import (
+    YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET, YAHOO_REDIRECT_URI, YAHOO_TOKEN_FILE
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +29,54 @@ NBA_STAT_MAP = {
 }
 
 class YahooProvider:
+    @staticmethod
+    def _token_exists() -> bool:
+        """Check whether a cached OAuth2 token file already exists."""
+        return Path(YAHOO_TOKEN_FILE).exists()
+
+    @classmethod
+    def login(cls, force: bool = False) -> None:
+        """Run the yahoofantasy OAuth2 login flow."""
+        if cls._token_exists() and not force:
+            return
+
+        print("🔐 Starting Yahoo Fantasy OAuth2 login …")
+        print(f"   Redirect URI → {YAHOO_REDIRECT_URI}")
+        print("   A browser window will open — please authorize the app.\n")
+
+        # These should always be set due to .env loading in settings.py
+        if not YAHOO_CLIENT_ID or not YAHOO_CLIENT_SECRET:
+            print("⚠️  YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET must be set in .env")
+            sys.exit(1)
+
+        # Find the yahoofantasy executable
+        python_dir = Path(sys.executable).parent
+        yahoofantasy_bin_path = python_dir / "yahoofantasy.exe"
+        yahoofantasy_bin = str(yahoofantasy_bin_path) if yahoofantasy_bin_path.exists() else "yahoofantasy"
+
+        cmd = [
+            yahoofantasy_bin,
+            "login",
+            "--redirect-uri", YAHOO_REDIRECT_URI,
+            "--client-id", YAHOO_CLIENT_ID,
+            "--client-secret", YAHOO_CLIENT_SECRET,
+            "--listen-port", "8080",
+        ]
+
+        try:
+            subprocess.run(cmd, check=True)
+            print("\n✅ Login successful! Token saved.")
+        except subprocess.CalledProcessError as exc:
+            print(f"\n❌ Login failed (exit code {exc.returncode}).")
+            sys.exit(1)
+
+    @classmethod
+    def get_context(cls) -> Context:
+        """Return an authenticated yahoofantasy Context."""
+        if not cls._token_exists():
+            cls.login()
+        return Context()
+
     def __init__(self, league: League):
         self.league = league
 

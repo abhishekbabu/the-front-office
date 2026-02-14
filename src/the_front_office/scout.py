@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import List, Optional
 from yahoofantasy import League, Team  # type: ignore[import-untyped]
 
-from the_front_office.auth import get_context
+from the_front_office.providers.yahoo import YahooProvider
 from the_front_office.config.settings import REPORT_FREE_AGENT_LIMIT
 from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
 from the_front_office.providers.yahoo import YahooProvider
@@ -52,7 +52,7 @@ def scout_league(league_name: Optional[str] = None):
     """
     Main entry point for scouting.
     """
-    ctx = get_context()
+    ctx = YahooProvider.get_context()
     now = datetime.now()
     season_year = now.year if now.month >= 9 else now.year - 1
     
