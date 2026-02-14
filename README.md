@@ -29,7 +29,7 @@ the-front-office/
 │       ├── providers/      # Data provider layer (Yahoo API, Auth)
 │       ├── main.py         # Entry point & CLI handler
 │       └── scout.py        # Scout orchestrator (AI waiver analysis)
-├── .agent/                 # Project rules & Assistant guidelines
+├── .agent/rules/rules.md    # Project rules & Assistant guidelines
 ├── .env                    # Local secrets (Client IDs/Secrets)
 ├── mypy.ini                # Type checking configuration
 └── pyproject.toml          # Package metadata & Dependencies

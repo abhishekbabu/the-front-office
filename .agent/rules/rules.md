@@ -33,7 +33,7 @@ the-front-office/
 │   ├── main.py               # CLI entry point (League listing, Scout trigger)
 │   └── scout.py              # Scout orchestrator (AI waiver analysis)
 ├── tests/                    # Unit tests (when added)
-├── .agent/                   # Project configuration and rules
+├── .agent/rules/rules.md     # Project configuration and rules
 ├── mypy.ini                  # Type checking config
 └── pyproject.toml            # Project metadata & dependencies
 ```

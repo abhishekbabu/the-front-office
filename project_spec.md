@@ -59,4 +59,4 @@ An all-encompassing NBA Fantasy command center that transforms raw league data i
 * **Rate Limiting:** Implement 1-second delays between `nba_api` calls to avoid IP blocks.
 * **Model Usage:** Use **Gemini 2.5 Pro** for strategic analysis and **Gemini 2.5 Flash** for high-volume data parsing.
 * **League Focus:** Optimized specifically for **Category Leagues** (analyzing individual stat contributions like BLK, AST, FG%) rather than points or dynasty value.
-* **Type Safety:** Maintain strict type checking with `mypy` and avoid `Any` types.
+* **Type Safety:** Maintain strict type checking with `mypy` and avoid `Any` types (Rules in `.agent/rules/rules.md`).
