@@ -27,13 +27,15 @@ The Front Office is an AI-powered NBA fantasy sports assistant that provides wai
 ```
 the-front-office/
 ├── src/the_front_office/     # All production code goes here
-│   ├── auth/                 # Authentication module
-│   ├── main.py              # CLI entry point
-│   └── scout.py             # Waiver analysis module
+│   ├── ai/                   # AI Intelligence layer (Gemini wrapper)
+│   ├── config/               # Configuration layer (constants, settings)
+│   ├── providers/            # Data provider layer (Yahoo API, Auth)
+│   ├── main.py               # CLI entry point (League listing, Scout trigger)
+│   └── scout.py              # Scout orchestrator (AI waiver analysis)
 ├── tests/                    # Unit tests (when added)
-├── .agent/                   # Project configuration
+├── .agent/                   # Project configuration and rules
 ├── mypy.ini                  # Type checking config
-└── pyproject.toml           # Project metadata & dependencies
+└── pyproject.toml            # Project metadata & dependencies
 ```
 
 ### Module Organization

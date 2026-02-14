@@ -5,7 +5,7 @@
 ---
 
 ## 🚀 Current Status: Mission 2 Complete
-The Waiver Engine is now live! You can authenticate with Yahoo Fantasy and generate AI-powered "Morning Scout Reports" that analyze your roster against available free agents using Gemini.
+The Waiver Engine is now live! **Refactored for Modularity**: The codebase has been transitioned to a modular architecture (Config, AI, Providers) for better scalability.
 
 ---
 
@@ -24,14 +24,15 @@ The Waiver Engine is now live! You can authenticate with Yahoo Fantasy and gener
 the-front-office/
 ├── src/
 │   └── the_front_office/
-│       ├── auth/           # OAuth2 Handshake (Yahoo)
+│       ├── ai/             # AI Intelligence layer (Gemini wrapper)
+│       ├── config/         # Configuration layer (constants, settings)
+│       ├── providers/      # Data provider layer (Yahoo API, Auth)
 │       ├── main.py         # Entry point & CLI handler
-│       └── scout.py        # Waiver Engine & AI Intelligence
+│       └── scout.py        # Scout orchestrator (AI waiver analysis)
 ├── .agent/                 # Project rules & Assistant guidelines
 ├── .env                    # Local secrets (Client IDs/Secrets)
 ├── mypy.ini                # Type checking configuration
-├── pyproject.toml          # Package metadata & Dependencies
-└── requirements.txt        # Pinned dependencies
+└── pyproject.toml          # Package metadata & Dependencies
 ```
 
 ---

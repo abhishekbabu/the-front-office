@@ -20,14 +20,17 @@ An all-encompassing NBA Fantasy command center that transforms raw league data i
 
 ## 3. Architecture & Core Modules
 
-### A. Auth Manager (`auth_manager.py`)
-* **Goal:** Handle the OAuth2 handshake for Yahoo and ESPN.
-* **Workflow:** Stores credentials securely in `.env` and tokens in `.yahoofantasy`.
+### A. Data Providers (`src/the_front_office/providers/`)
+* **Goal:** Centralize external API interactions (Yahoo/ESPN).
+* **Yahoo Integration:** Handles OAuth2 handshake and fetches rosters/stats. Tokens stored in `.yahoofantasy`.
 
-### B. The AI Waiver Scanner (`scout.py`)
-* **Goal:** Automatically scan available free agents.
-* **Logic:** Compares roster against available free agents to suggest "Best Value" additions.
-* **Context:** Ingests current roster (including players like **Kawhi Leonard**, **Naji Marshall**, **Jaylon Tyson**, and **Collin Murray-Boyles**) to avoid positional redundancy.
+### B. AI Intelligence (`src/the_front_office/ai/`)
+* **Goal:** Encapsulate LLM logic (Gemini).
+* **Wrapper:** `GeminiClient` handles initialization, prompt generation, and model selection.
+
+### C. The AI Waiver Scanner (`src/the_front_office/scout.py`)
+* **Goal:** Orchestrate data and AI to generate "Morning Scout Reports."
+* **Logics:** Coordinates `YahooProvider` and `GeminiClient` using `config/constants.py` templates.
 
 ### C. Trade War Room (`trade_analyzer.py`)
 * **Goal:** Natural language trade evaluation (Planned).
@@ -39,7 +42,7 @@ An all-encompassing NBA Fantasy command center that transforms raw league data i
 
 ### Milestone 1: Connectivity
 - [x] Create `.env` for Client ID and Client Secret.
-- [x] Implement `auth_manager.py` using the `yahoofantasy` library.
+- [x] Implement OAuth2 flow and session retrieval in `YahooProvider`.
 - [x] Verify connection by printing current league standings and roster.
 
 ### Milestone 2: The Waiver Engine
