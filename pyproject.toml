@@ -17,6 +17,11 @@ dependencies = [
 [project.scripts]
 front-office = "the_front_office.main:main"
 
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.0.0",
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["the_front_office*"]

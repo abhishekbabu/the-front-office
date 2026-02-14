@@ -1,9 +1,8 @@
 import os
 import logging
 from google import genai
-from google.genai import types
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Any, Optional
 
 from the_front_office.auth import get_context
 
@@ -36,7 +35,7 @@ class Scout:
             # Attempt to fetch all available players
             # The library doesn't expose 'count' directly to the user in the players() signature
             # but it uses COUNT=25 internally.
-            players = league.players(status='A')
+            players: List[Any] = league.players(status='A')
             return players[:count]
         except Exception as e:
             logger.error(f"Error fetching players: {e}")
@@ -96,7 +95,7 @@ INSTRUCTIONS:
                 model='gemini-2.5-flash',
                 contents=prompt
             )
-            return response.text
+            return response.text or "❌ No response from AI"
         except Exception as e:
             return f"❌ Error generating AI report: {e}"
 
