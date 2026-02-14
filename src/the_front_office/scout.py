@@ -69,12 +69,41 @@ class Scout:
             is_team1 = my_matchup.team1.team_key == my_team.team_key
             opponent = my_matchup.team2 if is_team1 else my_matchup.team1
             
-            # Scores
+            # Scores & Stats
             team1_data = as_list(my_matchup.teams.team)[0]
             team2_data = as_list(my_matchup.teams.team)[1]
             
-            my_score = team1_data.team_points.total if is_team1 else team2_data.team_points.total
-            opp_score = team2_data.team_points.total if is_team1 else team1_data.team_points.total
+            my_data = team1_data if is_team1 else team2_data
+            opp_data = team2_data if is_team1 else team1_data
+            
+            my_score = my_data.team_points.total
+            opp_score = opp_data.team_points.total
+            
+            # Map Stat IDs to human-readable names
+            # From yahoofantasy/stats/nba.py
+            STAT_MAP = {
+                "5": "FG%", "8": "FT%", "10": "3PTM", "12": "PTS",
+                "15": "REB", "16": "AST", "17": "ST", "18": "BLK", "19": "TO"
+            }
+            
+            def format_stats(team_stats_obj):
+                stats_list = as_list(team_stats_obj.stats.stat)
+                formatted = {}
+                for s in stats_list:
+                    sid = str(s.stat_id)
+                    if sid in STAT_MAP:
+                        formatted[STAT_MAP[sid]] = s.value
+                return formatted
+
+            my_stats = format_stats(my_data.team_stats)
+            opp_stats = format_stats(opp_data.team_stats)
+            
+            # Build Category Breakdown
+            breakdown = "\nCATEGORY BREAKDOWN (Us vs Opponent):"
+            for cat in STAT_MAP.values():
+                val1 = my_stats.get(cat, "N/A")
+                val2 = opp_stats.get(cat, "N/A")
+                breakdown += f"\n- {cat}: {val1} vs {val2}"
             
             # Opponent Roster
             opp_roster: List[Player] = opponent.players()
@@ -82,6 +111,7 @@ class Scout:
             
             context = f"\nCURRENT MATCHUP: Playing against {opponent.name}"
             context += f"\nMATCHUP SCORE: You {my_score} - {opp_score} Opponent"
+            context += breakdown
             context += f"\nOPPONENT KEY PLAYERS: {opp_roster_str}"
             
             return context
@@ -142,7 +172,7 @@ TOP AVAILABLE FREE AGENTS:
 
 INSTRUCTIONS:
 1. Start with a "Morning Scout Report" header.
-2. Provide a "Matchup Insight" section. **EXPLICITLY mention the current matchup score** (e.g., "Current Score: 5-4") and discuss where we can beat the opponent based on their build.
+2. Provide a "Matchup Insight" section. **EXPLICITLY mention the current matchup score** (e.g., "Current Score: 5-4") and **analyze the Category Breakdown** to identify which specific categories (e.g., Assists, Blocks) need the most help to win the week.
 3. Provide a "Top Target" section with details on which specific categories they boost and why they should be added.
 4. Suggest a "Drop Candidate" if applicable.
 5. Keep it under 250 words.
