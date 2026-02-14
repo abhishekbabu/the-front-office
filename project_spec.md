@@ -44,7 +44,7 @@ An all-encompassing NBA Fantasy command center that transforms raw league data i
 
 ### Milestone 2: The Waiver Engine
 - [x] Script to fetch the top 20 available Free Agents by 7-day performance.
-- [x] Integrate Gemini 2.5 Pro to summarize the "Best Value" pickup for the current week.
+- [x] Integrate Gemini 2.5 Pro to summarize the "Best Value" pickup for the current week, informed by **Matchup Context**.
 
 ### Milestone 3: Dashboard MVP
 - [ ] Launch a Streamlit app that displays the AI-generated "Morning Scout Report."
@@ -55,4 +55,5 @@ An all-encompassing NBA Fantasy command center that transforms raw league data i
 * **Privacy:** Never commit `.env` or `.yahoofantasy` (token) files to version control.
 * **Rate Limiting:** Implement 1-second delays between `nba_api` calls to avoid IP blocks.
 * **Model Usage:** Use **Gemini 2.5 Pro** for strategic analysis and **Gemini 2.5 Flash** for high-volume data parsing.
+* **League Focus:** Optimized specifically for **Category Leagues** (analyzing individual stat contributions like BLK, AST, FG%) rather than points or dynasty value.
 * **Type Safety:** Maintain strict type checking with `mypy` and avoid `Any` types.

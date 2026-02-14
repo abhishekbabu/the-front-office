@@ -3,7 +3,7 @@ import logging
 from google import genai
 from datetime import datetime
 from typing import List, Optional
-from yahoofantasy import Player, League, Team  # type: ignore[import-untyped]
+from yahoofantasy import Player, League, Team, Week  # type: ignore[import-untyped]
 
 from the_front_office.auth import get_context
 
@@ -43,6 +43,45 @@ class Scout:
             # Fallback: maybe try without status or just return empty
             return []
 
+    def _get_matchup_context(self, league: League, my_team: Team) -> str:
+        """
+        Fetch current week matchup, scores, and opponent roster.
+        """
+        try:
+            current_week = getattr(league, "current_week", None)
+            if not current_week:
+                return ""
+            
+            logger.info(f"Fetching matchup context for week {current_week}")
+            week = Week(league.ctx, league, current_week)
+            week.sync()
+            
+            my_matchup = None
+            for m in week.matchups:
+                if m.team1.team_key == my_team.team_key or m.team2.team_key == my_team.team_key:
+                    my_matchup = m
+                    break
+            
+            if not my_matchup:
+                return ""
+
+            is_team1 = my_matchup.team1.team_key == my_team.team_key
+            opponent = my_matchup.team2 if is_team1 else my_matchup.team1
+            
+            # Opponent Roster
+            opp_roster: List[Player] = opponent.players()
+            opp_roster_str = ", ".join([f"{p.name.full} ({p.display_position})" for p in opp_roster[:12]])
+            
+            # Matchup Score (if available)
+            # Yahoo returns stats for matchups. We'll simplify for the prompt.
+            context = f"\nCURRENT MATCHUP: Playing against {opponent.name}"
+            context += f"\nOPPONENT KEY PLAYERS: {opp_roster_str}"
+            
+            return context
+        except Exception as e:
+            logger.warning(f"Could not fetch matchup context: {e}")
+            return ""
+
     def get_morning_report(self, league: League) -> str:
         """
         Generate a morning scout report for the given league.
@@ -61,34 +100,45 @@ class Scout:
         roster: List[Player] = my_team_typed.players()
         roster_str = "\n".join([f"- {p.name.full} ({p.display_position})" for p in roster])
 
-        # 2. Get Free Agents
+        # 2. Get Matchup Context
+        matchup_context = self._get_matchup_context(league, my_team_typed)
+
+        # 3. Get Free Agents
         fas = self.fetch_free_agents(league, count=15)
         fas_str = "\n".join([f"- {p.name.full} ({p.display_position})" for p in fas])
 
         if not self.client:
             return "⚠️ AI Report Unavailable: GOOGLE_API_KEY not set. (Data retrieval verified!)"
 
-        # 3. Prompt Gemini
+        # 4. Prompt Gemini
         prompt = f"""
 You are "The Front Office" AI General Manager for an NBA Fantasy team.
 Your goal is to analyze the waiver wire and suggest the best additions to the team.
 
+CONTEXT:
+- **LEAGUE TYPE**: Category League (9-cat or similar). Focus on winning individual categories, not total points.
+- **STRATEGY**: Prioritize categorical balance. Identify if the team is strong or weak in specific areas (e.g., Assists, Blocks, FG%, etc.).
+
 CONSTRAINTS:
 - Identify the best player to pick up based on the roster provided.
-- Look for statistical categories that might be missing or could be bolstered.
+- Consider the current matchup context to suggest players who can help win this week's categories.
+- Look for statistical categories that might be missing or could be bolstered for long-term category dominance.
 - Keep the report punchy, professional, and strategic.
 
 USER'S CURRENT ROSTER:
 {roster_str}
+
+{matchup_context}
 
 TOP AVAILABLE FREE AGENTS:
 {fas_str}
 
 INSTRUCTIONS:
 1. Start with a "Morning Scout Report" header.
-2. Provide a "Top Target" section with details on why they should be added.
-3. Suggest a "Drop Candidate" if applicable.
-4. Keep it under 200 words.
+2. Provide a "Matchup Insight" talking briefly about the opponent's build and where we can beat them.
+3. Provide a "Top Target" section with details on which specific categories they boost and why they should be added.
+4. Suggest a "Drop Candidate" if applicable.
+5. Keep it under 250 words.
 """
 
         try:

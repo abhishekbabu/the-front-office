@@ -83,7 +83,7 @@ python -m the_front_office.main
 
 ## 🗺 Roadmap
 - [x] **Mission 1: Connectivity** — OAuth2 & Roster Sync.
-- [x] **Mission 2: The Waiver Engine** — Scan top free agents and summarize via Gemini 2.5 Pro.
+- [x] **Mission 2: The Waiver Engine** — Scan top free agents and summarize via Gemini 2.5 Pro with **Matchup Context**.
 - [ ] **Mission 3: Dashboard MVP** — Streamlit "Morning Scout Report."
 - [ ] **Mission 4: Trade War Room** — Natural language trade evaluation.
 
