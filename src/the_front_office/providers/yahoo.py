@@ -5,9 +5,22 @@ import logging
 from typing import List, Optional
 from yahoofantasy import Player, League, Team, Week
 from yahoofantasy.api.parse import as_list
-from the_front_office.config.constants import NBA_STAT_MAP
 
 logger = logging.getLogger(__name__)
+
+# Mapping Yahoo Stat IDs to Human-Readable Names
+# From yahoofantasy/stats/nba.py
+NBA_STAT_MAP = {
+    "5": "FG%",
+    "8": "FT%",
+    "10": "3PTM",
+    "12": "PTS",
+    "15": "REB",
+    "16": "AST",
+    "17": "ST",
+    "18": "BLK",
+    "19": "TO"
+}
 
 class YahooProvider:
     def __init__(self, league: League):

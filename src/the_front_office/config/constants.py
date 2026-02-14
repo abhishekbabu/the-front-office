@@ -2,20 +2,6 @@
 Static constants for The Front Office.
 """
 
-# Mapping Yahoo Stat IDs to Human-Readable Names
-# From yahoofantasy/stats/nba.py
-NBA_STAT_MAP = {
-    "5": "FG%",
-    "8": "FT%",
-    "10": "3PTM",
-    "12": "PTS",
-    "15": "REB",
-    "16": "AST",
-    "17": "ST",
-    "18": "BLK",
-    "19": "TO"
-}
-
 # AI Prompt Templates
 SCOUT_PROMPT_TEMPLATE = """
 You are "The Front Office" AI General Manager for an NBA Fantasy team.
