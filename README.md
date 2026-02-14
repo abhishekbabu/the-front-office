@@ -24,9 +24,8 @@ The Waiver Engine is now live! **Refactored for Modularity**: The codebase has b
 the-front-office/
 ├── src/
 │   └── the_front_office/
-│       ├── ai/             # AI Intelligence layer (Gemini wrapper)
+│       ├── clients/        # External API wrappers (Gemini, Yahoo, NBA)
 │       ├── config/         # Configuration layer (constants, settings)
-│       ├── providers/      # Data provider layer (Yahoo API, Auth)
 │       ├── main.py         # Entry point & CLI handler
 │       └── scout.py        # Scout orchestrator (AI waiver analysis)
 ├── .agent/rules/rules.md    # Project rules & Assistant guidelines

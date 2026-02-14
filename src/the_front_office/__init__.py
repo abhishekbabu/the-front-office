@@ -2,6 +2,6 @@
 
 __version__ = "0.1.0"
 
-from the_front_office.providers.yahoo import YahooProvider
+from the_front_office.clients.yahoo import YahooFantasyClient
 
-__all__ = ["YahooProvider"]
+__all__ = ["YahooFantasyClient"]

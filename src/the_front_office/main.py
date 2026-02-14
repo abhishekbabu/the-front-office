@@ -10,7 +10,7 @@ import argparse
 from datetime import datetime
 from typing import List
 
-from the_front_office.providers.yahoo import YahooProvider
+from the_front_office.clients.yahoo import YahooFantasyClient
 from the_front_office.scout import Scout
 from yahoofantasy import League, Team  # type: ignore[import-untyped]
 
@@ -57,8 +57,8 @@ def main() -> None:
     print(f"  {datetime.now().strftime('%A, %B %d %Y  •  %I:%M %p')}")
 
     # --- Auth ---
-    YahooProvider.login()
-    ctx = YahooProvider.get_context()
+    YahooFantasyClient.login()
+    ctx = YahooFantasyClient.get_context()
 
     # --- Fetch NBA leagues for the current season ---
     # NBA seasons are identified by their start year (e.g., 2025-26 is '2025')
@@ -78,8 +78,8 @@ def main() -> None:
     for league in leagues:
         if args.scout:
             _print_header(f"Scouting Report: {league.name}")
-            scout = Scout()
-            report = scout.get_morning_report(league)
+            scout = Scout(league)
+            report = scout.get_morning_report()
             print(report)
         else:
             _print_header(f"League: {league.name}")

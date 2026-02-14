@@ -27,9 +27,8 @@ The Front Office is an AI-powered NBA fantasy sports assistant that provides wai
 ```
 the-front-office/
 ├── src/the_front_office/     # All production code goes here
-│   ├── ai/                   # AI Intelligence layer (Gemini wrapper)
+│   ├── clients/              # External API wrappers (Gemini, Yahoo, NBA)
 │   ├── config/               # Configuration layer (constants, settings)
-│   ├── providers/            # Data provider layer (Yahoo API, Auth)
 │   ├── main.py               # CLI entry point (League listing, Scout trigger)
 │   └── scout.py              # Scout orchestrator (AI waiver analysis)
 ├── tests/                    # Unit tests (when added)

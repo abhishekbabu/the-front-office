@@ -1,5 +1,5 @@
 """
-Yahoo Fantasy Data Provider.
+Yahoo Fantasy Data Client.
 """
 import logging
 import subprocess
@@ -28,7 +28,7 @@ NBA_STAT_MAP = {
     "19": "TO"
 }
 
-class YahooProvider:
+class YahooFantasyClient:
     @staticmethod
     def _token_exists() -> bool:
         """Check whether a cached OAuth2 token file already exists."""

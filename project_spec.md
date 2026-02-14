@@ -20,17 +20,15 @@ An all-encompassing NBA Fantasy command center that transforms raw league data i
 
 ## 3. Architecture & Core Modules
 
-### A. Data Providers (`src/the_front_office/providers/`)
-* **Goal:** Centralize external API interactions (Yahoo/ESPN).
-* **Yahoo Integration:** Handles OAuth2 handshake and fetches rosters/stats. Tokens stored in `.yahoofantasy`.
+### A. External Clients (`src/the_front_office/clients/`)
+* **Goal:** Standardize interfaces for external services.
+* **YahooFantasyClient:** Handles OAuth2 handshake and fetches rosters/stats.
+* **NBAClient:** Fetches real-world stats and trends from NBA.com.
+* **GeminiClient:** Encapsulates LLM logic for analysis.
 
-### B. AI Intelligence (`src/the_front_office/ai/`)
-* **Goal:** Encapsulate LLM logic (Gemini).
-* **Wrapper:** `GeminiClient` handles initialization, prompt generation, and model selection.
-
-### C. The AI Waiver Scanner (`src/the_front_office/scout.py`)
-* **Goal:** Orchestrate data and AI to generate "Morning Scout Reports."
-* **Logics:** Coordinates `YahooProvider` and `GeminiClient` using `config/constants.py` templates.
+### B. The AI Waiver Scanner (`src/the_front_office/scout.py`)
+* **Goal:** Orchestrate clients to generate "Morning Scout Reports."
+* **Logics:** Coordinates `YahooFantasyClient`, `NBAClient`, and `GeminiClient`.
 
 ### C. Trade War Room (`trade_analyzer.py`)
 * **Goal:** Natural language trade evaluation (Planned).

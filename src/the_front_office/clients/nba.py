@@ -1,16 +1,16 @@
 """
-NBA.com Data Provider (via nba_api).
+NBA.com Data Client (via nba_api).
 """
 import time
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Optional
 from nba_api.stats.static import players, teams  # type: ignore[import-untyped]
 from nba_api.stats.endpoints import playercareerstats, playerdashboardbygeneralsplits  # type: ignore[import-untyped]
 from the_front_office.config.settings import NBA_API_DELAY
 
 logger = logging.getLogger(__name__)
 
-class NBAProvider:
+class NBAClient:
     """
     Fetches real-world NBA stats using the nba_api library.
     """
