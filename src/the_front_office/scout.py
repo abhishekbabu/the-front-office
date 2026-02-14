@@ -62,7 +62,6 @@ class Scout:
         prompt = SCOUT_PROMPT_TEMPLATE.format(
             roster_str=roster_enriched,
             matchup_context=matchup_context,
-            nba_stats="", # We folded these into the specific player lists
             fas_str=fas_enriched
         )
         
