@@ -6,7 +6,7 @@ import json
 import logging
 from pathlib import Path
 from datetime import datetime, time as dt_time
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 from nba_api.stats.static import players, teams  # type: ignore[import-untyped]
 from nba_api.stats.endpoints import playercareerstats, playerdashboardbygeneralsplits  # type: ignore[import-untyped]
 from the_front_office.config.settings import NBA_API_DELAY, NBA_STATS_CACHE_FILE
@@ -19,7 +19,7 @@ class NBAClient:
     """
     def __init__(self):
         self._last_call_time = 0.0
-        self._cache: Dict[str, str] = {}
+        self._cache: Dict[str, Dict[str, Any]] = {}
         self._cache_file = Path(NBA_STATS_CACHE_FILE)
         self._load_cache()
 
@@ -88,9 +88,10 @@ class NBAClient:
             time.sleep(NBA_API_DELAY - elapsed)
         self._last_call_time = time.time()
 
-    def get_player_stats(self, full_name: str, retries: int = 2) -> Optional[str]:
+    def get_player_stats(self, full_name: str, retries: int = 2) -> Optional[Dict[str, Any]]:
         """
-        Fetch season averages and recent trends for a player with caching and retries.
+        Fetch comprehensive stats for a player with caching and retries.
+        Returns structured dict with season averages and recent splits.
         """
         # Check cache first
         if full_name in self._cache:
@@ -107,35 +108,64 @@ class NBAClient:
                 
                 player_id = player_matches[0]['id']
                 
-                # 2. Fetch Season Averages
+                # 2. Fetch Season Averages (All 9-cat stats)
                 self._wait_for_rate_limit()
                 career = playercareerstats.PlayerCareerStats(player_id=player_id)
                 career_df = career.get_data_frames()[0]
                 
-                # Get latest season row
                 if career_df.empty:
                     return None
                 
                 latest_season = career_df.iloc[-1]
-                avg_stats = f"Season: {latest_season['PTS']} PTS, {latest_season['REB']} REB, {latest_season['AST']} AST"
-
-                # 3. Fetch Recent Trends (Last 5 Games)
-                self._wait_for_rate_limit()
-                splits = playerdashboardbygeneralsplits.PlayerDashboardByGeneralSplits(
-                    player_id=player_id, 
-                    last_n_games=5
-                )
-                splits_df = splits.get_data_frames()[0]
                 
-                if not splits_df.empty:
-                    recent = splits_df.iloc[0]
-                    avg_stats += f" | L5: {recent['PTS']} PTS, {recent['REB']} REB, {recent['AST']} AST"
+                # Build season stats dict with all categories
+                season_stats = {
+                    "GP": int(latest_season.get('GP', 0)),
+                    "PTS": round(float(latest_season.get('PTS', 0)), 1),
+                    "REB": round(float(latest_season.get('REB', 0)), 1),
+                    "AST": round(float(latest_season.get('AST', 0)), 1),
+                    "STL": round(float(latest_season.get('STL', 0)), 1),
+                    "BLK": round(float(latest_season.get('BLK', 0)), 1),
+                    "TOV": round(float(latest_season.get('TOV', 0)), 1),
+                    "FG3M": round(float(latest_season.get('FG3M', 0)), 1),
+                    "FG_PCT": round(float(latest_season.get('FG_PCT', 0)), 3),
+                    "FT_PCT": round(float(latest_season.get('FT_PCT', 0)), 3)
+                }
+
+                # 3. Fetch Recent Trends (Last 5, 10, 15 games)
+                stats_dict = {"season_stats": season_stats}
+                
+                for n_games, key in [(5, "last_5"), (10, "last_10"), (15, "last_15")]:
+                    self._wait_for_rate_limit()
+                    try:
+                        splits = playerdashboardbygeneralsplits.PlayerDashboardByGeneralSplits(
+                            player_id=player_id, 
+                            last_n_games=n_games
+                        )
+                        splits_df = splits.get_data_frames()[0]
+                        
+                        if not splits_df.empty:
+                            recent = splits_df.iloc[0]
+                            stats_dict[key] = {
+                                "PTS": round(float(recent.get('PTS', 0)), 1),
+                                "REB": round(float(recent.get('REB', 0)), 1),
+                                "AST": round(float(recent.get('AST', 0)), 1),
+                                "STL": round(float(recent.get('STL', 0)), 1),
+                                "BLK": round(float(recent.get('BLK', 0)), 1),
+                                "TOV": round(float(recent.get('TOV', 0)), 1),
+                                "FG3M": round(float(recent.get('FG3M', 0)), 1),
+                                "FG_PCT": round(float(recent.get('FG_PCT', 0)), 3),
+                                "FT_PCT": round(float(recent.get('FT_PCT', 0)), 3)
+                            }
+                    except Exception as e:
+                        logger.debug(f"Could not fetch L{n_games} stats for {full_name}: {e}")
+                        # Continue even if one split fails
 
                 # Cache the result
-                self._cache[full_name] = avg_stats
+                self._cache[full_name] = stats_dict
                 self._save_cache()
                 
-                return avg_stats
+                return stats_dict
 
             except Exception as e:
                 if attempt < retries:
