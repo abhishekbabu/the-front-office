@@ -92,9 +92,9 @@ INSTRUCTIONS:
 """
 
         try:
-            # Using new google.genai API
+            # Using new google.genai API with gemini-2.5-pro for strategy tasks
             response = self.client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-2.5-pro',
                 contents=prompt
             )
             return response.text or "❌ No response from AI"

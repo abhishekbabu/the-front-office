@@ -81,7 +81,10 @@ the-front-office/
 
 ### Google Gemini AI
 - Use `google-genai` package (NOT deprecated `google-generativeai`)
-- Model: `gemini-2.5-flash` (best price/performance)
+- **Model Selection**:
+    - Use `gemini-2.5-pro` for strategy, analysis, and natural language insights.
+    - Use `gemini-2.5-flash` only for large-scale data parsing tasks where high speed is required.
+    - **AVOID** using preview versions (e.g., `-preview`) unless explicitly required.
 - Check for `GOOGLE_API_KEY` before making API calls
 - Provide fallback messages when API key is missing
 

@@ -14,7 +14,7 @@ The Waiver Engine is now live! You can authenticate with Yahoo Fantasy and gener
 - **APIs:** 
     - **Yahoo Fantasy Sports API** (via `yahoofantasy` SDK)
     - **Google Gemini API** (via `google-genai` SDK)
-- **AI Engine:** Gemini 2.5 Flash (Optimized for strategic waiver analysis)
+- **AI Engine:** Gemini 2.5 (Pro for strategy, Flash for high-speed parsing)
 - **Dev Tools:** Mypy (Typesafety), Flake8 (Hygiene)
 
 ---
@@ -83,7 +83,7 @@ python -m the_front_office.main
 
 ## 🗺 Roadmap
 - [x] **Mission 1: Connectivity** — OAuth2 & Roster Sync.
-- [x] **Mission 2: The Waiver Engine** — Scan top free agents and summarize via Gemini 2.5 Flash.
+- [x] **Mission 2: The Waiver Engine** — Scan top free agents and summarize via Gemini 2.5 Pro.
 - [ ] **Mission 3: Dashboard MVP** — Streamlit "Morning Scout Report."
 - [ ] **Mission 4: Trade War Room** — Natural language trade evaluation.
 
