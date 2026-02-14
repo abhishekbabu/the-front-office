@@ -18,8 +18,8 @@ class Scout:
     """
     Orchestrates data retrieval and AI analysis to generate scouting reports.
     """
-    def __init__(self, league: League):
-        self.ai = GeminiClient()
+    def __init__(self, league: League, mock_ai: bool = False):
+        self.ai = GeminiClient(mock_mode=mock_ai)
         self.nba = NBAClient()
         self.yahoo = YahooFantasyClient(league)
 

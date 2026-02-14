@@ -51,6 +51,7 @@ def main() -> None:
     """Authenticate and print the current NBA fantasy roster or run scout report."""
     parser = argparse.ArgumentParser(description="The Front Office — NBA Fantasy Intelligence")
     parser.add_argument("--scout", action="store_true", help="Run the Morning Scout Report (AI waiver analysis)")
+    parser.add_argument("--mock-ai", action="store_true", help="Use mock AI responses (for testing without API calls)")
     args = parser.parse_args()
 
     _print_header("🏀 The Front Office — NBA Fantasy Intelligence")
@@ -73,7 +74,7 @@ def main() -> None:
     for league in leagues:
         if args.scout:
             _print_header(f"Scouting Report: {league.name}")
-            scout = Scout(league)
+            scout = Scout(league, mock_ai=args.mock_ai)
             report = scout.get_report()
             print(report)
         else:
