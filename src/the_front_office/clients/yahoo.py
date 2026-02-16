@@ -5,9 +5,9 @@ import logging
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 from yahoofantasy import Player, League, Team, Week, Context
-from yahoofantasy.api.parse import as_list
+from yahoofantasy.api.parse import as_list, from_response_object
 from the_front_office.config.settings import (
     YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET, YAHOO_REDIRECT_URI, YAHOO_TOKEN_FILE
 )
@@ -80,16 +80,71 @@ class YahooFantasyClient:
     def __init__(self, league: League):
         self.league = league
 
-    def fetch_free_agents(self, count: int = 25) -> List[Player]:
+    def _fetch_players_raw(
+        self,
+        count: int = 25,
+        status: Optional[str] = None,
+        sort: Optional[str] = None,
+        position: Optional[str] = None,
+        **extra_params: str,
+    ) -> List[Player]:
         """
-        Fetch the top available free agents.
+        Fetch players from the Yahoo API with arbitrary query parameters.
+
+        This is a low-level wrapper around the Yahoo Fantasy API's players
+        resource. It builds the query string directly, bypassing the
+        yahoofantasy library's limited ``league.players()`` method.
+
+        Args:
+            count: Max number of players to return.
+            status: Player status filter (A=Available, FA=Free Agent, W=Waivers, T=Taken).
+            sort: Sort field (e.g. 'AR' for Most Added, 'PTS' for Points, 'OR' for Ownership %).
+            position: Position filter (e.g. 'PG', 'C', 'PF', 'SG', 'SF').
+            **extra_params: Any additional Yahoo API query params (e.g. sort_type='lastweek').
+
+        Returns:
+            List of Player objects, up to ``count``.
         """
+        # Build the query params dict
+        params: Dict[str, str] = {"count": str(count)}
+        if status is not None:
+            params["status"] = status
+        if sort is not None:
+            params["sort"] = sort
+        if position is not None:
+            params["position"] = position
+        params.update(extra_params)
+
+        # Build query string and cache key
+        params_str = ";".join(f"{k}={v}" for k, v in params.items())
+        query = f"players;{params_str}"
+        cache_key = f"players.{self.league.id}.{'.'.join(params.values())}"
+
+        logger.debug(f"Fetching players with query: {query}")
+
         try:
-            players: List[Player] = self.league.players(status='A')
+            data = self.league.ctx._load_or_fetch(cache_key, query, league=self.league.id)
+
+            players: List[Player] = []
+            if "player" in data["fantasy_content"]["league"]["players"]:
+                for player_data in data["fantasy_content"]["league"]["players"]["player"]:
+                    p = Player(self.league)
+                    from_response_object(p, player_data)
+                    players.append(p)
+
             return players[:count]
         except Exception as e:
-            logger.error(f"Error fetching free agents: {e}")
+            logger.error(f"Error fetching players (query={query}): {e}")
             return []
+
+    def fetch_free_agents(self, count: int = 25) -> List[Player]:
+        """Fetch top available free agents sorted by ownership %."""
+        return self._fetch_players_raw(count=count, status="A")
+
+    def fetch_trending_adds(self, count: int = 25) -> List[Player]:
+        """Fetch available players sorted by most adds in the last 24 hours."""
+        return self._fetch_players_raw(count=count, status="A", sort="AR")
+
 
     def get_user_team(self) -> Optional[Team]:
         """
