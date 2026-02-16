@@ -8,7 +8,7 @@ from pathlib import Path
 from datetime import datetime, time as dt_time
 from typing import Optional, Dict, Any
 from nba_api.stats.static import players, teams  # type: ignore[import-untyped]
-from nba_api.stats.endpoints import playercareerstats, playerdashboardbygeneralsplits  # type: ignore[import-untyped]
+from nba_api.stats.endpoints import playercareerstats, playergamelog  # type: ignore[import-untyped]
 from the_front_office.config.settings import NBA_API_DELAY, NBA_STATS_CACHE_FILE
 
 logger = logging.getLogger(__name__)
@@ -81,17 +81,32 @@ class NBAClient:
         
         return True
 
-    def _wait_for_rate_limit(self):
+    def _wait_for_rate_limit(self) -> None:
         """Ensures at least NBA_API_DELAY seconds between calls."""
         elapsed = time.time() - self._last_call_time
         if elapsed < NBA_API_DELAY:
             time.sleep(NBA_API_DELAY - elapsed)
         self._last_call_time = time.time()
 
+    def _extract_9cat(self, row: Any) -> Dict[str, float]:
+        """Extract 9-cat stats from a DataFrame row or aggregated Series."""
+        return {
+            "PTS": round(float(row.get('PTS', 0)), 1),
+            "REB": round(float(row.get('REB', 0)), 1),
+            "AST": round(float(row.get('AST', 0)), 1),
+            "STL": round(float(row.get('STL', 0)), 1),
+            "BLK": round(float(row.get('BLK', 0)), 1),
+            "TOV": round(float(row.get('TOV', 0)), 1),
+            "FG3M": round(float(row.get('FG3M', 0)), 1),
+            "FG_PCT": round(float(row.get('FG_PCT', 0)), 3),
+            "FT_PCT": round(float(row.get('FT_PCT', 0)), 3),
+        }
+
     def get_player_stats(self, full_name: str, retries: int = 2) -> Optional[Dict[str, Any]]:
         """
         Fetch comprehensive stats for a player with caching and retries.
-        Returns structured dict with season averages and recent splits.
+        Uses only 2 API calls: career stats + game log.
+        Computes L5/L10/L15 splits locally from the game log.
         """
         # Check cache first
         if full_name in self._cache:
@@ -108,7 +123,7 @@ class NBAClient:
                 
                 player_id = player_matches[0]['id']
                 
-                # 2. Fetch Season Averages (All 9-cat stats)
+                # 2. Fetch Season Averages (Call 1 of 2)
                 self._wait_for_rate_limit()
                 career = playercareerstats.PlayerCareerStats(player_id=player_id)
                 career_df = career.get_data_frames()[0]
@@ -117,49 +132,25 @@ class NBAClient:
                     return None
                 
                 latest_season = career_df.iloc[-1]
-                
-                # Build season stats dict with all categories
-                season_stats = {
-                    "GP": int(latest_season.get('GP', 0)),
-                    "PTS": round(float(latest_season.get('PTS', 0)), 1),
-                    "REB": round(float(latest_season.get('REB', 0)), 1),
-                    "AST": round(float(latest_season.get('AST', 0)), 1),
-                    "STL": round(float(latest_season.get('STL', 0)), 1),
-                    "BLK": round(float(latest_season.get('BLK', 0)), 1),
-                    "TOV": round(float(latest_season.get('TOV', 0)), 1),
-                    "FG3M": round(float(latest_season.get('FG3M', 0)), 1),
-                    "FG_PCT": round(float(latest_season.get('FG_PCT', 0)), 3),
-                    "FT_PCT": round(float(latest_season.get('FT_PCT', 0)), 3)
-                }
+                season_stats = self._extract_9cat(latest_season)
+                season_stats["GP"] = int(latest_season.get('GP', 0))
 
-                # 3. Fetch Recent Trends (Last 5, 10, 15 games)
-                stats_dict = {"season_stats": season_stats}
+                # 3. Fetch Game Log (Call 2 of 2) — replaces 3 separate split calls
+                stats_dict: Dict[str, Any] = {"season_stats": season_stats}
                 
-                for n_games, key in [(5, "last_5"), (10, "last_10"), (15, "last_15")]:
-                    self._wait_for_rate_limit()
-                    try:
-                        splits = playerdashboardbygeneralsplits.PlayerDashboardByGeneralSplits(
-                            player_id=player_id, 
-                            last_n_games=n_games
-                        )
-                        splits_df = splits.get_data_frames()[0]
-                        
-                        if not splits_df.empty:
-                            recent = splits_df.iloc[0]
-                            stats_dict[key] = {
-                                "PTS": round(float(recent.get('PTS', 0)), 1),
-                                "REB": round(float(recent.get('REB', 0)), 1),
-                                "AST": round(float(recent.get('AST', 0)), 1),
-                                "STL": round(float(recent.get('STL', 0)), 1),
-                                "BLK": round(float(recent.get('BLK', 0)), 1),
-                                "TOV": round(float(recent.get('TOV', 0)), 1),
-                                "FG3M": round(float(recent.get('FG3M', 0)), 1),
-                                "FG_PCT": round(float(recent.get('FG_PCT', 0)), 3),
-                                "FT_PCT": round(float(recent.get('FT_PCT', 0)), 3)
-                            }
-                    except Exception as e:
-                        logger.debug(f"Could not fetch L{n_games} stats for {full_name}: {e}")
-                        # Continue even if one split fails
+                self._wait_for_rate_limit()
+                try:
+                    gamelog = playergamelog.PlayerGameLog(player_id=player_id)
+                    gamelog_df = gamelog.get_data_frames()[0]
+                    
+                    if not gamelog_df.empty:
+                        # Compute L5, L10, L15 from the game log locally
+                        for n_games, key in [(5, "last_5"), (10, "last_10"), (15, "last_15")]:
+                            if len(gamelog_df) >= n_games:
+                                recent = gamelog_df.head(n_games)  # Most recent games first
+                                stats_dict[key] = self._extract_9cat(recent.mean())
+                except Exception as e:
+                    logger.debug(f"Could not fetch game log for {full_name}: {e}")
 
                 # Cache the result
                 self._cache[full_name] = stats_dict
