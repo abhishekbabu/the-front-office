@@ -131,7 +131,7 @@ class YahooFantasyClient:
         # Build query string and cache key
         params_str = ";".join(f"{k}={v}" for k, v in params.items())
         query = f"players;{params_str}"
-        cache_key = f"players.{self.league.id}.{'.'.join(params.values())}"
+        cache_key = f"players_{self.league.id}_{'_'.join(params.values())}"
 
         logger.debug(f"Fetching players with query: {query}")
 
