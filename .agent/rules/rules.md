@@ -46,7 +46,7 @@ the-front-office/
 ### Dependencies
 - **Production**: Add to `dependencies` in `pyproject.toml`
 - **Development**: Add to `[project.optional-dependencies.dev]`
-- Always update both `pyproject.toml` AND `requirements.txt`
+- **ALWAYS** update `requirements.txt` (production) and `requirements-dev.txt` (development) when dependencies change.
 - Pin minimum versions: `package>=X.Y.Z`
 
 ### Environment Variables
@@ -94,6 +94,7 @@ Before committing:
 - [ ] `mypy src/the_front_office` passes
 - [ ] No debug print statements (use `logger` instead)
 - [ ] No hardcoded credentials
+- [ ] Updated `requirements.txt` and `requirements-dev.txt` if dependencies changed
 - [ ] Updated `.env.template` if new env vars added
 - [ ] Type hints on all new functions
 - [ ] Docstrings for public APIs
@@ -112,10 +113,10 @@ logger.error("Error message")
 
 ### Type Annotations
 ```python
-from typing import List, Optional, Any
+from typing import List, Optional
 
-def fetch_players(league, count: int = 20) -> List[Any]:
-    players: List[Any] = league.players(status='A')
+def fetch_players(league, count: int = 20) -> List[object]:
+    players: List[object] = league.players(status='A')
     return players[:count]
 ```
 
