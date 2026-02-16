@@ -6,10 +6,12 @@ import json
 import logging
 from pathlib import Path
 from datetime import datetime, time as dt_time
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
+import pandas as pd
 from nba_api.stats.static import players, teams  # type: ignore[import-untyped]
 from nba_api.stats.endpoints import playercareerstats, playergamelog  # type: ignore[import-untyped]
 from the_front_office.config.settings import NBA_API_DELAY, NBA_STATS_CACHE_FILE
+from the_front_office.types import NineCatStats, SeasonStats, PlayerStats
 
 logger = logging.getLogger(__name__)
 
@@ -17,10 +19,10 @@ class NBAClient:
     """
     Fetches real-world NBA stats using the nba_api library with local caching.
     """
-    def __init__(self):
-        self._last_call_time = 0.0
-        self._cache: Dict[str, Dict[str, Any]] = {}
-        self._cache_file = Path(NBA_STATS_CACHE_FILE)
+    def __init__(self) -> None:
+        self._last_call_time: float = 0.0
+        self._cache: Dict[str, PlayerStats] = {}
+        self._cache_file: Path = Path(NBA_STATS_CACHE_FILE)
         self._load_cache()
 
     def _load_cache(self) -> None:
@@ -88,21 +90,21 @@ class NBAClient:
             time.sleep(NBA_API_DELAY - elapsed)
         self._last_call_time = time.time()
 
-    def _extract_9cat(self, row: Any) -> Dict[str, float]:
-        """Extract 9-cat stats from a DataFrame row or aggregated Series."""
-        return {
-            "PTS": round(float(row.get('PTS', 0)), 1),
-            "REB": round(float(row.get('REB', 0)), 1),
-            "AST": round(float(row.get('AST', 0)), 1),
-            "STL": round(float(row.get('STL', 0)), 1),
-            "BLK": round(float(row.get('BLK', 0)), 1),
-            "TOV": round(float(row.get('TOV', 0)), 1),
-            "FG3M": round(float(row.get('FG3M', 0)), 1),
-            "FG_PCT": round(float(row.get('FG_PCT', 0)), 3),
-            "FT_PCT": round(float(row.get('FT_PCT', 0)), 3),
-        }
+    def _extract_9cat(self, row: "pd.Series[float]") -> NineCatStats:
+        """Extract 9-cat stats from a pandas Series (row or aggregated mean)."""
+        return NineCatStats(
+            PTS=round(float(row.get('PTS', 0)), 1),
+            REB=round(float(row.get('REB', 0)), 1),
+            AST=round(float(row.get('AST', 0)), 1),
+            STL=round(float(row.get('STL', 0)), 1),
+            BLK=round(float(row.get('BLK', 0)), 1),
+            TOV=round(float(row.get('TOV', 0)), 1),
+            FG3M=round(float(row.get('FG3M', 0)), 1),
+            FG_PCT=round(float(row.get('FG_PCT', 0)), 3),
+            FT_PCT=round(float(row.get('FT_PCT', 0)), 3),
+        )
 
-    def get_player_stats(self, full_name: str, retries: int = 2) -> Optional[Dict[str, Any]]:
+    def get_player_stats(self, full_name: str, retries: int = 2) -> Optional[PlayerStats]:
         """
         Fetch comprehensive stats for a player with caching and retries.
         Uses only 2 API calls: career stats + game log.
@@ -121,34 +123,45 @@ class NBAClient:
                 if not player_matches:
                     return None
                 
-                player_id = player_matches[0]['id']
+                player_id: int = player_matches[0]['id']
                 
                 # 2. Fetch Season Averages (Call 1 of 2)
                 self._wait_for_rate_limit()
                 career = playercareerstats.PlayerCareerStats(player_id=player_id)
-                career_df = career.get_data_frames()[0]
+                career_df: pd.DataFrame = career.get_data_frames()[0]
                 
                 if career_df.empty:
                     return None
                 
-                latest_season = career_df.iloc[-1]
-                season_stats = self._extract_9cat(latest_season)
-                season_stats["GP"] = int(latest_season.get('GP', 0))
+                latest_season: pd.Series[float] = career_df.iloc[-1]
+                nine_cat = self._extract_9cat(latest_season)
+                season_stats = SeasonStats(
+                    GP=int(latest_season.get('GP', 0)),
+                    **nine_cat,
+                )
 
                 # 3. Fetch Game Log (Call 2 of 2) — replaces 3 separate split calls
-                stats_dict: Dict[str, Any] = {"season_stats": season_stats}
+                stats_dict: PlayerStats = PlayerStats(season_stats=season_stats)
                 
                 self._wait_for_rate_limit()
                 try:
                     gamelog = playergamelog.PlayerGameLog(player_id=player_id)
-                    gamelog_df = gamelog.get_data_frames()[0]
+                    gamelog_df: pd.DataFrame = gamelog.get_data_frames()[0]
                     
                     if not gamelog_df.empty:
                         # Compute L5, L10, L15 from the game log locally
-                        for n_games, key in [(5, "last_5"), (10, "last_10"), (15, "last_15")]:
-                            if len(gamelog_df) >= n_games:
-                                recent = gamelog_df.head(n_games)  # Most recent games first
-                                stats_dict[key] = self._extract_9cat(recent.mean(numeric_only=True))
+                        if len(gamelog_df) >= 5:
+                            stats_dict["last_5"] = self._extract_9cat(
+                                gamelog_df.head(5).mean(numeric_only=True)
+                            )
+                        if len(gamelog_df) >= 10:
+                            stats_dict["last_10"] = self._extract_9cat(
+                                gamelog_df.head(10).mean(numeric_only=True)
+                            )
+                        if len(gamelog_df) >= 15:
+                            stats_dict["last_15"] = self._extract_9cat(
+                                gamelog_df.head(15).mean(numeric_only=True)
+                            )
                 except Exception as e:
                     logger.warning(f"Could not fetch game log for {full_name}: {type(e).__name__}: {e}")
 
@@ -182,3 +195,4 @@ class NBAClient:
         except Exception as e:
             logger.warning(f"Could not fetch team stats for {team_name}: {e}")
             return None
+

@@ -3,7 +3,7 @@ Scout Engine Orchestrator.
 """
 import logging
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from yahoofantasy import League, Team  # type: ignore[import-untyped]
 
 from the_front_office.config.settings import REPORT_FREE_AGENT_LIMIT
@@ -11,6 +11,7 @@ from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
 from the_front_office.clients.yahoo import YahooFantasyClient
 from the_front_office.clients.nba import NBAClient
 from the_front_office.clients.gemini import GeminiClient
+from the_front_office.types import PlayerStats, NineCatStats
 
 logger = logging.getLogger(__name__)
 
@@ -23,23 +24,23 @@ class Scout:
         self.nba = NBAClient()
         self.yahoo = YahooFantasyClient(league)
 
-    def _format_stats(self, stats_dict: Dict[str, Any]) -> str:
+    def _format_stats(self, stats_dict: PlayerStats) -> str:
         """Format structured stats dict into readable string."""
         if not stats_dict:
             return "No stats available"
         
-        parts = []
+        parts: List[str] = []
         
         # Season stats (all 9-cat)
         if "season_stats" in stats_dict:
             s = stats_dict["season_stats"]
-            parts.append(f"Season ({s.get('GP', 0)}GP): {s.get('PTS')}p {s.get('REB')}r {s.get('AST')}a {s.get('STL')}s {s.get('BLK')}b {s.get('TOV')}to {s.get('FG3M')}3pm FG{s.get('FG_PCT'):.1%} FT{s.get('FT_PCT'):.1%}")
+            parts.append(f"Season ({s.get('GP', 0)}GP): {s['PTS']}p {s['REB']}r {s['AST']}a {s['STL']}s {s['BLK']}b {s['TOV']}to {s['FG3M']}3pm FG{s['FG_PCT']:.1%} FT{s['FT_PCT']:.1%}")
         
         # Last 5/10/15
         for key, label in [("last_5", "L5"), ("last_10", "L10"), ("last_15", "L15")]:
             if key in stats_dict:
-                s = stats_dict[key]
-                parts.append(f"{label}: {s.get('PTS')}p {s.get('REB')}r {s.get('AST')}a")
+                trend: NineCatStats = stats_dict[key]  # type: ignore[literal-required]
+                parts.append(f"{label}: {trend['PTS']}p {trend['REB']}r {trend['AST']}a")
         
         return " | ".join(parts)
 
