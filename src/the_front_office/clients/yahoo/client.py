@@ -11,7 +11,7 @@ from yahoofantasy.api.parse import as_list, from_response_object
 from the_front_office.config.settings import (
     YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET, YAHOO_REDIRECT_URI, YAHOO_TOKEN_FILE
 )
-from the_front_office.clients.yahoo.types import PlayerStatus, PlayerSort, SortType, Position
+from the_front_office.clients.yahoo.types import PlayerStatus, PlayerStat, Timeframe, PlayerPosition
 from the_front_office.clients.yahoo.constants import STAT_CATEGORIES, SCOUT_CATEGORIES
 
 logger = logging.getLogger(__name__)
@@ -72,9 +72,9 @@ class YahooFantasyClient:
         self,
         count: int = 25,
         status: PlayerStatus = PlayerStatus.ALL_AVAILABLE,
-        sort: Optional[PlayerSort] = None,
-        sort_type: Optional[SortType] = None,
-        position: Optional[Position] = None,
+        sort: Optional[PlayerStat] = None,
+        sort_type: Optional[Timeframe] = None,
+        position: Optional[PlayerPosition] = None,
         **extra_params: str,
     ) -> List[Player]:
         """
@@ -87,9 +87,9 @@ class YahooFantasyClient:
         Args:
             count: Max number of players to return.
             status: Player availability filter (default: ALL_AVAILABLE).
-            sort: Sort field (e.g. PlayerSort.ACTUAL_RANK, PlayerSort.BLOCKS).
-            sort_type: Time window for sort (e.g. SortType.LAST_WEEK).
-            position: Position filter (e.g. Position.CENTER).
+            sort: Sort field (e.g. PlayerStat.ACTUAL_RANK, PlayerStat.BLOCKS).
+            sort_type: Time window for sort (e.g. Timeframe.LAST_WEEK).
+            position: Position filter (e.g. PlayerPosition.CENTER).
             **extra_params: Any additional Yahoo API query params.
 
         Returns:
@@ -100,7 +100,7 @@ class YahooFantasyClient:
             fetch_players(count=25)
 
             # Available point guards, sorted by fantasy points last week
-            fetch_players(sort=PlayerSort.FANTASY_POINTS, sort_type=SortType.LAST_WEEK, position=Position.POINT_GUARD)
+            fetch_players(sort=PlayerStat.FANTASY_POINTS, sort_type=Timeframe.LAST_WEEK, position=PlayerPosition.POINT_GUARD)
         """
         # Build query params — enums serialize to their .value via str(Enum)
         params: Dict[str, str] = {"count": str(count), "status": status.value}
@@ -137,7 +137,7 @@ class YahooFantasyClient:
     def fetch_top_by_stat(
         self,
         per_stat: int = 5,
-        sort_type: SortType = SortType.LAST_WEEK,
+        sort_type: Timeframe = Timeframe.LAST_WEEK,
     ) -> Dict[str, List[Player]]:
         """
         Fetch the top available players for each scoutable stat category.

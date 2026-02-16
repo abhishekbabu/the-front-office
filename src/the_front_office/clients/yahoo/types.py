@@ -13,8 +13,8 @@ class PlayerStatus(str, Enum):
     KEEPERS = "K"
 
 
-class PlayerSort(str, Enum):
-    """Yahoo API player sort field values."""
+class PlayerStat(str, Enum):
+    """Yahoo API player stat / sort field values."""
     OVERALL_RANK = "OR"
     ACTUAL_RANK = "AR"
     FANTASY_POINTS = "PTS"
@@ -31,15 +31,15 @@ class PlayerSort(str, Enum):
     TURNOVERS = "19"
 
 
-class SortType(str, Enum):
-    """Yahoo API sort time window values."""
+class Timeframe(str, Enum):
+    """Yahoo API time window values for sorting."""
     SEASON = "season"
     DATE = "date"
     LAST_WEEK = "lastweek"
     LAST_MONTH = "lastmonth"
 
 
-class Position(str, Enum):
+class PlayerPosition(str, Enum):
     """NBA player position values."""
     POINT_GUARD = "PG"
     SHOOTING_GUARD = "SG"
