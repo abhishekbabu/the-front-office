@@ -148,9 +148,9 @@ class NBAClient:
                         for n_games, key in [(5, "last_5"), (10, "last_10"), (15, "last_15")]:
                             if len(gamelog_df) >= n_games:
                                 recent = gamelog_df.head(n_games)  # Most recent games first
-                                stats_dict[key] = self._extract_9cat(recent.mean())
+                                stats_dict[key] = self._extract_9cat(recent.mean(numeric_only=True))
                 except Exception as e:
-                    logger.debug(f"Could not fetch game log for {full_name}: {e}")
+                    logger.warning(f"Could not fetch game log for {full_name}: {type(e).__name__}: {e}")
 
                 # Cache the result
                 self._cache[full_name] = stats_dict
