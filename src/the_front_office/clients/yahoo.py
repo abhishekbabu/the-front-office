@@ -26,7 +26,6 @@ NBA_STAT_MAP = {
     "16": "AST",
     "17": "ST",
     "18": "BLK",
-    "19": "TO"
 }
 
 class YahooFantasyClient:
