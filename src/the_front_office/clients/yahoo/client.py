@@ -11,7 +11,7 @@ from yahoofantasy.api.parse import as_list, from_response_object
 from the_front_office.config.settings import (
     YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET, YAHOO_REDIRECT_URI, YAHOO_TOKEN_FILE
 )
-from the_front_office.types import PlayerStatus, PlayerSort, SortType, Position
+from the_front_office.clients.yahoo.types import PlayerStatus, PlayerSort, SortType, Position
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,11 @@ NBA_STAT_MAP = {
     "16": "AST",
     "17": "ST",
     "18": "BLK",
+    "19": "TO",
 }
+
+# Stat categories used for scout free-agent discovery (excludes TO)
+SCOUT_STAT_IDS = {k for k in NBA_STAT_MAP if k != "19"}
 
 class YahooFantasyClient:
     @staticmethod
@@ -111,9 +115,6 @@ class YahooFantasyClient:
             # Top available players by ownership %
             fetch_players(count=25)
 
-            # Trending adds (most added in last 24h)
-            fetch_players(sort=PlayerSort.ACTUAL_RANK)
-
             # Available point guards, sorted by fantasy points last week
             fetch_players(sort=PlayerSort.FANTASY_POINTS, sort_type=SortType.LAST_WEEK, position=Position.POINT_GUARD)
         """
@@ -155,10 +156,10 @@ class YahooFantasyClient:
         sort_type: SortType = SortType.LAST_WEEK,
     ) -> Dict[str, List[Player]]:
         """
-        Fetch the top available players for each 9-cat stat category.
+        Fetch the top available players for each scoutable stat category.
 
-        Makes one API call per stat category, returning a dict mapping
-        stat names (e.g. 'PTS', 'REB') to the top players in that stat.
+        Iterates over SCOUT_STAT_IDS (all 9-cat stats except turnovers),
+        making one API call per category.
 
         Args:
             per_stat: Number of players to fetch per stat category.
@@ -168,7 +169,8 @@ class YahooFantasyClient:
             Dict mapping stat display name → list of Player objects.
         """
         results: Dict[str, List[Player]] = {}
-        for stat_id, stat_name in NBA_STAT_MAP.items():
+        for stat_id in SCOUT_STAT_IDS:
+            stat_name = NBA_STAT_MAP[stat_id]
             logger.info(f"Fetching top {per_stat} players by {stat_name}...")
             players = self.fetch_players(
                 count=per_stat,

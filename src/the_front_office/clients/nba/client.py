@@ -11,7 +11,7 @@ import pandas as pd
 from nba_api.stats.static import players, teams  # type: ignore[import-untyped]
 from nba_api.stats.endpoints import playercareerstats, playergamelog  # type: ignore[import-untyped]
 from the_front_office.config.settings import NBA_API_DELAY, NBA_STATS_CACHE_FILE
-from the_front_office.types import NineCatStats, SeasonStats, PlayerStats
+from the_front_office.clients.nba.types import NineCatStats, SeasonStats, PlayerStats
 
 logger = logging.getLogger(__name__)
 
@@ -195,4 +195,3 @@ class NBAClient:
         except Exception as e:
             logger.warning(f"Could not fetch team stats for {team_name}: {e}")
             return None
-

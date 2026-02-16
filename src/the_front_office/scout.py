@@ -11,7 +11,7 @@ from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
 from the_front_office.clients.yahoo import YahooFantasyClient
 from the_front_office.clients.nba import NBAClient
 from the_front_office.clients.gemini import GeminiClient
-from the_front_office.types import PlayerStats, NineCatStats
+from the_front_office.clients.nba.types import PlayerStats, NineCatStats
 
 logger = logging.getLogger(__name__)
 
