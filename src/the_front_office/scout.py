@@ -3,15 +3,15 @@ Scout Engine Orchestrator.
 """
 import logging
 from datetime import datetime
-from typing import List, Optional
-from yahoofantasy import League, Team  # type: ignore[import-untyped]
+from typing import Dict, List, Optional
+from yahoofantasy import League, Player, Team  # type: ignore[import-untyped]
 
 from the_front_office.config.settings import REPORT_FREE_AGENT_LIMIT
 from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
 from the_front_office.clients.yahoo import YahooFantasyClient
 from the_front_office.clients.nba import NBAClient
 from the_front_office.clients.gemini import GeminiClient
-from the_front_office.types import PlayerStats, NineCatStats, PlayerSort
+from the_front_office.types import PlayerStats, NineCatStats
 
 logger = logging.getLogger(__name__)
 
@@ -66,15 +66,31 @@ class Scout:
                 roster_enriched += f": {self._format_stats(stats_dict)}"
             roster_enriched += "\n"
 
-        # 3. Fetch & Enrich 25 Free Agents
-        fas = self.yahoo.fetch_players(count=25, sort=PlayerSort.ACTUAL_RANK)
-        logger.info(f"Fetching stats for top {len(fas)} free agents...")
+        # 3. Fetch Top Free Agents by Category (Last 7 Days)
+        stat_leaders = self.yahoo.fetch_top_by_stat(per_stat=5)
+
+        # Deduplicate: track which stats each player appears in
+        seen: Dict[str, List[str]] = {}  # player_key → [stat_names]
+        player_map: Dict[str, Player] = {}  # player_key → Player object
+        for stat_name, players in stat_leaders.items():
+            for p in players:
+                key = p.player_key
+                if key not in seen:
+                    seen[key] = []
+                    player_map[key] = p
+                seen[key].append(stat_name)
+
+        # Build enriched free agent string sorted by number of categories (most versatile first)
+        unique_players = sorted(seen.items(), key=lambda x: len(x[1]), reverse=True)
+        logger.info(f"Fetching NBA stats for {len(unique_players)} unique free agents...")
         fas_enriched = ""
-        for i, p in enumerate(fas):
+        for i, (key, stat_names) in enumerate(unique_players):
+            p = player_map[key]
             if (i + 1) % 5 == 0:
-                logger.info(f"Progress: {i+1}/{len(fas)} free agents...")
+                logger.info(f"Progress: {i+1}/{len(unique_players)} free agents...")
             stats_dict = self.nba.get_player_stats(p.name.full)
-            fas_enriched += f"- {p.name.full} ({p.display_position})"
+            categories = ", ".join(stat_names)
+            fas_enriched += f"- {p.name.full} ({p.display_position}) [Top in: {categories}]"
             if stats_dict:
                 fas_enriched += f": {self._format_stats(stats_dict)}"
             fas_enriched += "\n"

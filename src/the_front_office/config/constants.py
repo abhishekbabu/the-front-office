@@ -21,7 +21,7 @@ CURRENT ROSTER (with Real-World Stats):
 MATCHUP CONTEXT:
 {matchup_context}
 
-TOP AVAILABLE FREE AGENTS (with Real-World Stats):
+TOP FREE AGENTS BY CATEGORY (Last 7 Days):
 {fas_str}
 
 YOUR TASK:

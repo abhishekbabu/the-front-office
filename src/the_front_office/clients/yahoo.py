@@ -100,7 +100,7 @@ class YahooFantasyClient:
         Args:
             count: Max number of players to return.
             status: Player availability filter (default: ALL_AVAILABLE).
-            sort: Sort field (e.g. PlayerSort.ACTUAL_RANK for trending adds).
+            sort: Sort field (e.g. PlayerSort.ACTUAL_RANK, PlayerSort.BLOCKS).
             sort_type: Time window for sort (e.g. SortType.LAST_WEEK).
             position: Position filter (e.g. Position.CENTER).
             **extra_params: Any additional Yahoo API query params.
@@ -150,7 +150,34 @@ class YahooFantasyClient:
             logger.error(f"Error fetching players (query={query}): {e}")
             return []
 
+    def fetch_top_by_stat(
+        self,
+        per_stat: int = 5,
+        sort_type: SortType = SortType.LAST_WEEK,
+    ) -> Dict[str, List[Player]]:
+        """
+        Fetch the top available players for each 9-cat stat category.
 
+        Makes one API call per stat category, returning a dict mapping
+        stat names (e.g. 'PTS', 'REB') to the top players in that stat.
+
+        Args:
+            per_stat: Number of players to fetch per stat category.
+            sort_type: Time window for sorting (default: last week).
+
+        Returns:
+            Dict mapping stat display name → list of Player objects.
+        """
+        results: Dict[str, List[Player]] = {}
+        for stat_id, stat_name in NBA_STAT_MAP.items():
+            logger.info(f"Fetching top {per_stat} players by {stat_name}...")
+            players = self.fetch_players(
+                count=per_stat,
+                sort_type=sort_type,
+                sort=PlayerSort(stat_id),
+            )
+            results[stat_name] = players
+        return results
 
     def get_user_team(self) -> Optional[Team]:
         """

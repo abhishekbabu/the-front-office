@@ -24,6 +24,16 @@ class PlayerSort(str, Enum):
     ACTUAL_RANK = "AR"
     FANTASY_POINTS = "PTS"
     NAME = "NAME"
+    # Stat category IDs (sort by individual stat)
+    FG_PCT = "5"
+    FT_PCT = "8"
+    THREE_PTM = "10"
+    POINTS = "12"
+    REBOUNDS = "15"
+    ASSISTS = "16"
+    STEALS = "17"
+    BLOCKS = "18"
+    TURNOVERS = "19"
 
 
 class SortType(str, Enum):
