@@ -67,7 +67,7 @@ class Scout:
             roster_enriched += "\n"
 
         # 3. Fetch & Enrich 25 Free Agents
-        fas = self.yahoo.fetch_free_agents(count=25)
+        fas = self.yahoo.fetch_players(count=25)
         logger.info(f"Fetching stats for top {len(fas)} free agents...")
         fas_enriched = ""
         for i, p in enumerate(fas):

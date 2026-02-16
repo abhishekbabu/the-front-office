@@ -1,7 +1,51 @@
 """
 Type definitions for The Front Office.
 """
+from enum import Enum
 from typing import TypedDict
+
+
+# ---------------------------------------------------------------------------
+# Yahoo Fantasy API Enums
+# ---------------------------------------------------------------------------
+
+class PlayerStatus(str, Enum):
+    """Yahoo API player status filter values."""
+    ALL_AVAILABLE = "A"
+    FREE_AGENT = "FA"
+    WAIVERS = "W"
+    TAKEN = "T"
+    KEEPERS = "K"
+
+
+class PlayerSort(str, Enum):
+    """Yahoo API player sort field values."""
+    OVERALL_RANK = "OR"
+    ACTUAL_RANK = "AR"
+    FANTASY_POINTS = "PTS"
+    NAME = "NAME"
+
+
+class SortType(str, Enum):
+    """Yahoo API sort time window values."""
+    SEASON = "season"
+    DATE = "date"
+    LAST_WEEK = "lastweek"
+    LAST_MONTH = "lastmonth"
+
+
+class Position(str, Enum):
+    """NBA player position values."""
+    POINT_GUARD = "PG"
+    SHOOTING_GUARD = "SG"
+    SMALL_FORWARD = "SF"
+    POWER_FORWARD = "PF"
+    CENTER = "C"
+    GUARD = "G"
+    FORWARD = "F"
+    UTILITY = "Util"
+
+
 
 
 class NineCatStats(TypedDict):

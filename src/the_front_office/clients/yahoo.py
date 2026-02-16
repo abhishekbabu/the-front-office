@@ -11,6 +11,7 @@ from yahoofantasy.api.parse import as_list, from_response_object
 from the_front_office.config.settings import (
     YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET, YAHOO_REDIRECT_URI, YAHOO_TOKEN_FILE
 )
+from the_front_office.types import PlayerStatus, PlayerSort, SortType, Position
 
 logger = logging.getLogger(__name__)
 
@@ -80,39 +81,51 @@ class YahooFantasyClient:
     def __init__(self, league: League):
         self.league = league
 
-    def _fetch_players_raw(
+    def fetch_players(
         self,
         count: int = 25,
-        status: Optional[str] = None,
-        sort: Optional[str] = None,
-        position: Optional[str] = None,
+        status: PlayerStatus = PlayerStatus.ALL_AVAILABLE,
+        sort: Optional[PlayerSort] = None,
+        sort_type: Optional[SortType] = None,
+        position: Optional[Position] = None,
         **extra_params: str,
     ) -> List[Player]:
         """
-        Fetch players from the Yahoo API with arbitrary query parameters.
+        Fetch players from the Yahoo Fantasy API.
 
-        This is a low-level wrapper around the Yahoo Fantasy API's players
-        resource. It builds the query string directly, bypassing the
-        yahoofantasy library's limited ``league.players()`` method.
+        This is the single entry point for all player queries. It builds
+        the API query string directly, bypassing the yahoofantasy library's
+        limited ``league.players()`` method.
 
         Args:
             count: Max number of players to return.
-            status: Player status filter (A=Available, FA=Free Agent, W=Waivers, T=Taken).
-            sort: Sort field (e.g. 'AR' for Most Added, 'PTS' for Points, 'OR' for Ownership %).
-            position: Position filter (e.g. 'PG', 'C', 'PF', 'SG', 'SF').
-            **extra_params: Any additional Yahoo API query params (e.g. sort_type='lastweek').
+            status: Player availability filter (default: ALL_AVAILABLE).
+            sort: Sort field (e.g. PlayerSort.ACTUAL_RANK for trending adds).
+            sort_type: Time window for sort (e.g. SortType.LAST_WEEK).
+            position: Position filter (e.g. Position.CENTER).
+            **extra_params: Any additional Yahoo API query params.
 
         Returns:
             List of Player objects, up to ``count``.
+
+        Examples:
+            # Top available players by ownership %
+            fetch_players(count=25)
+
+            # Trending adds (most added in last 24h)
+            fetch_players(sort=PlayerSort.ACTUAL_RANK)
+
+            # Available point guards, sorted by fantasy points last week
+            fetch_players(sort=PlayerSort.FANTASY_POINTS, sort_type=SortType.LAST_WEEK, position=Position.POINT_GUARD)
         """
-        # Build the query params dict
-        params: Dict[str, str] = {"count": str(count)}
-        if status is not None:
-            params["status"] = status
+        # Build query params — enums serialize to their .value via str(Enum)
+        params: Dict[str, str] = {"count": str(count), "status": status.value}
         if sort is not None:
-            params["sort"] = sort
+            params["sort"] = sort.value
+        if sort_type is not None:
+            params["sort_type"] = sort_type.value
         if position is not None:
-            params["position"] = position
+            params["position"] = position.value
         params.update(extra_params)
 
         # Build query string and cache key
@@ -137,13 +150,6 @@ class YahooFantasyClient:
             logger.error(f"Error fetching players (query={query}): {e}")
             return []
 
-    def fetch_free_agents(self, count: int = 25) -> List[Player]:
-        """Fetch top available free agents sorted by ownership %."""
-        return self._fetch_players_raw(count=count, status="A")
-
-    def fetch_trending_adds(self, count: int = 25) -> List[Player]:
-        """Fetch available players sorted by most adds in the last 24 hours."""
-        return self._fetch_players_raw(count=count, status="A", sort="AR")
 
 
     def get_user_team(self) -> Optional[Team]:
