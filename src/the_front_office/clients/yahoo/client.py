@@ -12,25 +12,9 @@ from the_front_office.config.settings import (
     YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET, YAHOO_REDIRECT_URI, YAHOO_TOKEN_FILE
 )
 from the_front_office.clients.yahoo.types import PlayerStatus, PlayerSort, SortType, Position
+from the_front_office.clients.yahoo.constants import STAT_CATEGORIES, SCOUT_CATEGORIES
 
 logger = logging.getLogger(__name__)
-
-# Mapping Yahoo Stat IDs to Human-Readable Names
-# From yahoofantasy/stats/nba.py
-NBA_STAT_MAP = {
-    "5": "FG%",
-    "8": "FT%",
-    "10": "3PTM",
-    "12": "PTS",
-    "15": "REB",
-    "16": "AST",
-    "17": "ST",
-    "18": "BLK",
-    "19": "TO",
-}
-
-# Stat categories used for scout free-agent discovery (excludes TO)
-SCOUT_STAT_IDS = {k for k in NBA_STAT_MAP if k != "19"}
 
 class YahooFantasyClient:
     @staticmethod
@@ -169,13 +153,12 @@ class YahooFantasyClient:
             Dict mapping stat display name → list of Player objects.
         """
         results: Dict[str, List[Player]] = {}
-        for stat_id in SCOUT_STAT_IDS:
-            stat_name = NBA_STAT_MAP[stat_id]
+        for stat, stat_name in SCOUT_CATEGORIES.items():
             logger.info(f"Fetching top {per_stat} players by {stat_name}...")
             players = self.fetch_players(
                 count=per_stat,
                 sort_type=sort_type,
-                sort=PlayerSort(stat_id),
+                sort=stat,
             )
             results[stat_name] = players
         return results
@@ -227,9 +210,9 @@ class YahooFantasyClient:
             opp_stats = get_stats(opp_data.team_stats)
             
             breakdown = "\nCATEGORY BREAKDOWN (Us vs Opponent):"
-            for sid, cat_name in NBA_STAT_MAP.items():
-                val1 = my_stats.get(sid, "N/A")
-                val2 = opp_stats.get(sid, "N/A")
+            for stat, cat_name in STAT_CATEGORIES.items():
+                val1 = my_stats.get(stat.value, "N/A")
+                val2 = opp_stats.get(stat.value, "N/A")
                 breakdown += f"\n- {cat_name}: {val1} vs {val2}"
             
             # Opponent Roster
