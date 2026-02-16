@@ -10,7 +10,7 @@ import argparse
 from datetime import datetime
 from typing import List
 
-from the_front_office.clients.yahoo import YahooFantasyClient
+from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.scout import Scout
 from yahoofantasy import League, Team  # type: ignore[import-untyped]
 

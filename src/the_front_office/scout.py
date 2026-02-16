@@ -8,9 +8,9 @@ from yahoofantasy import League, Player, Team  # type: ignore[import-untyped]
 
 from the_front_office.config.settings import REPORT_FREE_AGENT_LIMIT
 from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
-from the_front_office.clients.yahoo import YahooFantasyClient
-from the_front_office.clients.nba import NBAClient
-from the_front_office.clients.gemini import GeminiClient
+from the_front_office.clients.yahoo.client import YahooFantasyClient
+from the_front_office.clients.nba.client import NBAClient
+from the_front_office.clients.gemini.client import GeminiClient
 from the_front_office.clients.nba.types import PlayerStats, NineCatStats
 
 logger = logging.getLogger(__name__)
