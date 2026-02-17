@@ -3,13 +3,17 @@ Scout Engine — Orchestrates data retrieval and AI analysis for scouting report
 """
 import logging
 from datetime import date
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING, Union
 from yahoofantasy import League, Player  # type: ignore[import-untyped]
 
 from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
 from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.clients.nba.client import NBAClient
 from the_front_office.clients.nba.types import PlayerStats, NineCatStats
+
+if TYPE_CHECKING:
+    from google.genai.chats import Chat
+    from the_front_office.clients.gemini.types import MockChatSession
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +148,7 @@ class Scout:
         
         return prompt
 
-    def start_analysis(self) -> tuple[str, "Chat | MockChatSession"]:
+    def start_analysis(self) -> tuple[str, Optional[Union["Chat", "MockChatSession"]]]:
         """
         Start an interactive analysis session.
         Returns the initial report text and the chat session object.
@@ -154,7 +158,8 @@ class Scout:
             # Start chat with empty history, then send the prompt as the first message
             chat = self.ai.start_chat()
             response = chat.send_message(prompt)
-            return response.text, chat
+            text = response.text or "❌ No response from AI"
+            return text, chat
         except Exception as e:
             logger.error(f"Error starting analysis: {e}")
             return f"❌ Error: {e}", None

@@ -2,30 +2,13 @@
 Gemini AI Client wrapper.
 """
 import logging
-from typing import Optional, Union
+from typing import Optional, Union, List
 from google import genai
 from google.genai.chats import Chat
 from the_front_office.config.settings import GEMINI_API_KEY, DEFAULT_MODEL
+from .types import ChatSession, MockChatSession, HistoryItem
 
 logger = logging.getLogger(__name__)
-
-class MockResponse:
-    def __init__(self, text: str):
-        self.text = text
-
-class MockChatSession:
-    """Simulates a genai.chats.Chat object for testing."""
-    def send_message(self, content: str) -> MockResponse:
-        return MockResponse(self._get_response(content))
-
-    def _get_response(self, content: str) -> str:
-        content_lower = content.lower()
-        if "why" in content_lower:
-            return "[MOCK] I recommended this player because they fit your punt strategy perfectly."
-        elif "explain" in content_lower:
-            return "[MOCK] The strategy focuses on maximizing FG% and Rebounds."
-        else:
-            return "[MOCK] That's a great question. Based on the stats, we should proceed with the add."
 
 class GeminiClient:
     def __init__(self, api_key: Optional[str] = GEMINI_API_KEY, model: str = DEFAULT_MODEL, mock_mode: bool = False):
@@ -75,7 +58,7 @@ class GeminiClient:
 
 **Final Strategy**: [MOCK] Add efficient, multi-category contributors to secure the win."""
 
-    def start_chat(self, initial_history: list[str] = []) -> Union[Chat, MockChatSession]:
+    def start_chat(self, initial_history: Optional[List[HistoryItem]] = None) -> Union[Chat, MockChatSession]:
         """Start a chat session with the model."""
         if self.mock_mode:
             return MockChatSession()
@@ -83,7 +66,10 @@ class GeminiClient:
         if not self.client:
             raise RuntimeError("Gemini Client not initialized (missing API key)")
 
+        # Cast or transform history if needed, but genai accepts flexible types.
+        # Strict typing here ensures we pass structure. 
+        # For simplicity with genai API which is complex typed, we can assume it accepts our dicts.
         return self.client.chats.create(
             model=self.model,
-            history=initial_history or None
+            history=initial_history  # type: ignore[arg-type] 
         )
