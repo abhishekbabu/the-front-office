@@ -13,6 +13,11 @@ from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.scout import Scout
 from yahoofantasy import League, Team  # type: ignore[import-untyped]
 
+try:
+    import readline  # noqa: F401 — enables up/down arrow history in input()
+except ImportError:
+    pass  # Graceful fallback on systems without readline
+
 
 # ---------------------------------------------------------------------------
 # Helpers
