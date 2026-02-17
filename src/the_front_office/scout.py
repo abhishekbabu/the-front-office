@@ -25,24 +25,17 @@ class Scout:
         self.yahoo = YahooFantasyClient(league)
 
     def _format_stats(self, stats_dict: PlayerStats) -> str:
-        """Format structured stats dict into readable string."""
+        """Format recent trend stats into a readable string."""
         if not stats_dict:
             return "No stats available"
         
         parts: List[str] = []
-        
-        # Season stats (all 9-cat)
-        if "season_stats" in stats_dict:
-            s = stats_dict["season_stats"]
-            parts.append(f"Season ({s.get('GP', 0)}GP): {s['PTS']}p {s['REB']}r {s['AST']}a {s['STL']}s {s['BLK']}b {s['TOV']}to {s['FG3M']}3pm FG{s['FG_PCT']:.1%} FT{s['FT_PCT']:.1%}")
-        
-        # Last 5/10/15
         for key, label in [("last_5", "L5"), ("last_10", "L10"), ("last_15", "L15")]:
             if key in stats_dict:
-                trend: NineCatStats = stats_dict[key]  # type: ignore[literal-required]
-                parts.append(f"{label}: {trend['PTS']}p {trend['REB']}r {trend['AST']}a")
+                s: NineCatStats = stats_dict[key]  # type: ignore[literal-required]
+                parts.append(f"{label}: {s['PTS']}p {s['REB']}r {s['AST']}a {s['STL']}s {s['BLK']}b {s['TOV']}to {s['FG3M']}3pm FG{s['FG_PCT']:.1%} FT{s['FT_PCT']:.1%}")
         
-        return " | ".join(parts)
+        return " | ".join(parts) if parts else "No recent stats"
 
     def get_report(self) -> str:
         """

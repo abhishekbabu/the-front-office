@@ -9,9 +9,9 @@ from datetime import datetime, time as dt_time
 from typing import Optional, Dict
 import pandas as pd
 from nba_api.stats.static import players, teams  # type: ignore[import-untyped]
-from nba_api.stats.endpoints import playercareerstats, playergamelog  # type: ignore[import-untyped]
+from nba_api.stats.endpoints import playergamelog  # type: ignore[import-untyped]
 from the_front_office.config.settings import NBA_API_DELAY, NBA_STATS_CACHE_FILE
-from the_front_office.clients.nba.types import NineCatStats, SeasonStats, PlayerStats
+from the_front_office.clients.nba.types import NineCatStats, PlayerStats
 
 logger = logging.getLogger(__name__)
 
@@ -106,9 +106,8 @@ class NBAClient:
 
     def get_player_stats(self, full_name: str, retries: int = 2) -> Optional[PlayerStats]:
         """
-        Fetch comprehensive stats for a player with caching and retries.
-        Uses only 2 API calls: career stats + game log.
-        Computes L5/L10/L15 splits locally from the game log.
+        Fetch recent stats for a player with caching and retries.
+        Uses 1 API call (game log) to compute L5/L10/L15 splits.
         """
         # Check cache first
         if full_name in self._cache:
@@ -125,45 +124,26 @@ class NBAClient:
                 
                 player_id: int = player_matches[0]['id']
                 
-                # 2. Fetch Season Averages (Call 1 of 2)
-                self._wait_for_rate_limit()
-                career = playercareerstats.PlayerCareerStats(player_id=player_id)
-                career_df: pd.DataFrame = career.get_data_frames()[0]
-                
-                if career_df.empty:
-                    return None
-                
-                latest_season: pd.Series[float] = career_df.iloc[-1]
-                nine_cat = self._extract_9cat(latest_season)
-                season_stats = SeasonStats(
-                    GP=int(latest_season.get('GP', 0)),
-                    **nine_cat,
-                )
-
-                # 3. Fetch Game Log (Call 2 of 2) — replaces 3 separate split calls
-                stats_dict: PlayerStats = PlayerStats(season_stats=season_stats)
+                # 2. Fetch Game Log (1 API call)
+                stats_dict: PlayerStats = PlayerStats()
                 
                 self._wait_for_rate_limit()
-                try:
-                    gamelog = playergamelog.PlayerGameLog(player_id=player_id)
-                    gamelog_df: pd.DataFrame = gamelog.get_data_frames()[0]
-                    
-                    if not gamelog_df.empty:
-                        # Compute L5, L10, L15 from the game log locally
-                        if len(gamelog_df) >= 5:
-                            stats_dict["last_5"] = self._extract_9cat(
-                                gamelog_df.head(5).mean(numeric_only=True)
-                            )
-                        if len(gamelog_df) >= 10:
-                            stats_dict["last_10"] = self._extract_9cat(
-                                gamelog_df.head(10).mean(numeric_only=True)
-                            )
-                        if len(gamelog_df) >= 15:
-                            stats_dict["last_15"] = self._extract_9cat(
-                                gamelog_df.head(15).mean(numeric_only=True)
-                            )
-                except Exception as e:
-                    logger.warning(f"Could not fetch game log for {full_name}: {type(e).__name__}: {e}")
+                gamelog = playergamelog.PlayerGameLog(player_id=player_id)
+                gamelog_df: pd.DataFrame = gamelog.get_data_frames()[0]
+                
+                if not gamelog_df.empty:
+                    if len(gamelog_df) >= 5:
+                        stats_dict["last_5"] = self._extract_9cat(
+                            gamelog_df.head(5).mean(numeric_only=True)
+                        )
+                    if len(gamelog_df) >= 10:
+                        stats_dict["last_10"] = self._extract_9cat(
+                            gamelog_df.head(10).mean(numeric_only=True)
+                        )
+                    if len(gamelog_df) >= 15:
+                        stats_dict["last_15"] = self._extract_9cat(
+                            gamelog_df.head(15).mean(numeric_only=True)
+                        )
 
                 # Cache the result
                 self._cache[full_name] = stats_dict

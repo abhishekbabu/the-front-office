@@ -17,18 +17,12 @@ class NineCatStats(TypedDict):
     FT_PCT: float
 
 
-class SeasonStats(NineCatStats):
-    """Season stats including games played."""
-    GP: int
-
-
 class PlayerStats(TypedDict, total=False):
-    """Full player stats structure stored in cache.
-    
-    season_stats is always present; last_5/10/15 are optional 
-    (only present if the player has enough games).
+    """Recent player stats structure stored in cache.
+
+    Each key represents a rolling window of game averages.
+    Only present if the player has enough games in the log.
     """
-    season_stats: SeasonStats
     last_5: NineCatStats
     last_10: NineCatStats
     last_15: NineCatStats
