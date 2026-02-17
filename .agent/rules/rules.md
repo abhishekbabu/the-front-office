@@ -138,3 +138,4 @@ When working on this project:
 4. Create PRs with descriptive titles and bodies
 5. Keep commits atomic and well-described
 6. Never commit secrets or tokens
+7. **ALWAYS** run all Python-related commands (scripts, tests, type checking) using the project's virtual environment: `./.venv/Scripts/python` (Windows) or `./.venv/bin/python` (UNIX).
