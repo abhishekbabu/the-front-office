@@ -22,8 +22,7 @@ YAHOO_TOKEN_FILE = ".yahoofantasy"
 DEFAULT_FREE_AGENT_COUNT = 20
 REPORT_FREE_AGENT_LIMIT = 15
 NBA_API_DELAY = 1.0  # Seconds to wait between nba_api calls
-NBA_STATS_CACHE_FILE = ".nba_stats_cache.json"  # Local cache for NBA stats
-NBA_SCHEDULE_CACHE_FILE = ".nba_schedule_cache.json"  # Local cache for NBA schedule
+NBA_CACHE_FILE = ".nba_cache.json"  # Unified cache for all NBA data (stats + schedule)
 
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

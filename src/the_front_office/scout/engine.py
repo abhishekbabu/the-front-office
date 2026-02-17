@@ -9,7 +9,6 @@ from yahoofantasy import League, Player  # type: ignore[import-untyped]
 from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
 from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.clients.nba.client import NBAClient
-from the_front_office.clients.nba.schedule import NBAScheduleClient
 from the_front_office.clients.nba.types import PlayerStats, NineCatStats
 
 logger = logging.getLogger(__name__)
@@ -23,7 +22,6 @@ class Scout:
         from the_front_office.clients.gemini.client import GeminiClient
         self.ai = GeminiClient(mock_mode=mock_ai)
         self.nba = NBAClient()
-        self.schedule = NBAScheduleClient()
         self.yahoo = YahooFantasyClient(league)
 
     def _format_stats(self, stats_dict: PlayerStats) -> str:
@@ -45,7 +43,7 @@ class Scout:
         """Get remaining games for a player's team in the matchup period."""
         if not matchup_start or not matchup_end:
             return None
-        return self.schedule.get_remaining_games(team_abbr, matchup_start, matchup_end)
+        return self.nba.get_remaining_games(team_abbr, matchup_start, matchup_end)
 
     def get_report(self) -> str:
         """
@@ -71,7 +69,7 @@ class Scout:
         if matchup_start and matchup_end:
             # Collect all team abbrs from roster + free agents
             roster_teams = [p.editorial_team_abbr for p in my_team.players()]
-            remaining_games = self.schedule.get_remaining_games_bulk(
+            remaining_games = self.nba.get_remaining_games_bulk(
                 roster_teams, matchup_start, matchup_end
             )
         
@@ -105,7 +103,7 @@ class Scout:
         # Pre-fetch remaining games for free agent teams too
         if matchup_start and matchup_end:
             fa_teams = [player_map[k].editorial_team_abbr for k in seen]
-            fa_remaining = self.schedule.get_remaining_games_bulk(
+            fa_remaining = self.nba.get_remaining_games_bulk(
                 fa_teams, matchup_start, matchup_end
             )
             remaining_games.update(fa_remaining)
