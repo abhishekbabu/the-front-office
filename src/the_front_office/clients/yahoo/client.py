@@ -154,7 +154,7 @@ class YahooFantasyClient:
         """
         results: Dict[str, List[Player]] = {}
         for stat, stat_name in SCOUT_CATEGORIES.items():
-            logger.info(f"Fetching top {per_stat} players by {stat_name}...")
+            logger.debug(f"Fetching top {per_stat} players by {stat_name}...")
             players = self.fetch_players(
                 count=per_stat,
                 sort_type=sort_type,

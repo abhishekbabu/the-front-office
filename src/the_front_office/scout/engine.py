@@ -50,7 +50,7 @@ class Scout:
         # 2. Enrich Roster with NBA Stats
         roster_enriched = ""
         players_list = my_team.players()
-        logger.info(f"Fetching stats for {len(players_list)} rostered players...")
+        logger.debug(f"Fetching stats for {len(players_list)} rostered players...")
         for p in players_list:
             stats_dict = self.nba.get_player_stats(p.name.full)
             roster_enriched += f"- {p.name.full} ({p.display_position})"
@@ -74,12 +74,12 @@ class Scout:
 
         # Build enriched free agent string sorted by number of categories (most versatile first)
         unique_players = sorted(seen.items(), key=lambda x: len(x[1]), reverse=True)
-        logger.info(f"Fetching NBA stats for {len(unique_players)} unique free agents...")
+        logger.debug(f"Fetching NBA stats for {len(unique_players)} unique free agents...")
         fas_enriched = ""
         for i, (key, stat_names) in enumerate(unique_players):
             p = player_map[key]
             if (i + 1) % 5 == 0:
-                logger.info(f"Progress: {i+1}/{len(unique_players)} free agents...")
+                logger.debug(f"Progress: {i+1}/{len(unique_players)} free agents...")
             stats_dict = self.nba.get_player_stats(p.name.full)
             categories = ", ".join(stat_names)
             fas_enriched += f"- {p.name.full} ({p.display_position}) [Top in: {categories}]"

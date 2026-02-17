@@ -14,7 +14,7 @@ class GeminiClient:
         self.mock_mode = mock_mode
         
         if self.mock_mode:
-            logger.info("🎭 Mock AI mode enabled - using canned responses")
+            logger.debug("🎭 Mock AI mode enabled - using canned responses")
             self.client = None
         elif not api_key:
             logger.warning("GOOGLE_API_KEY not found. AI features will be disabled.")

@@ -28,7 +28,7 @@ class NBAClient:
     def _load_cache(self) -> None:
         """Load cache from JSON file if it exists and is valid."""
         if not self._cache_file.exists():
-            logger.info("No cache file found. Starting fresh.")
+            logger.debug("No cache file found. Starting fresh.")
             return
         
         try:
@@ -37,11 +37,11 @@ class NBAClient:
             
             # Check if cache should be invalidated
             if not self._is_cache_valid():
-                logger.info("Cache is stale. Clearing cache.")
+                logger.debug("Cache is stale. Clearing cache.")
                 self._cache = {}
                 self._save_cache()
             else:
-                logger.info(f"Loaded {len(self._cache)} cached player stats.")
+                logger.debug(f"Loaded {len(self._cache)} cached player stats.")
         except Exception as e:
             logger.warning(f"Failed to load cache: {e}. Starting fresh.")
             self._cache = {}
