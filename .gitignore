@@ -31,5 +31,6 @@ oauth2.json
 .yahoofantasy
 token.json
 
-# NBA Stats Cache
+# NBA Caches
 .nba_stats_cache.json
+.nba_schedule_cache.json

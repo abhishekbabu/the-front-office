@@ -21,6 +21,8 @@ CURRENT ROSTER (with Real-World Stats):
 MATCHUP CONTEXT:
 {matchup_context}
 
+{schedule_context}
+
 TOP FREE AGENTS BY CATEGORY (Last 7 Days):
 {fas_str}
 
@@ -29,8 +31,8 @@ YOUR TASK:
 2. Compare the underperformers on the current roster with the high-upside players on the waiver wire using the provided stats.
 3. Recommend **3 players** to add from the Free Agents list. 
 4. For each recommendation, provide:
-    - **Reasoning**: Why this player helps specifically in the "Close" categories identified.
-    - **Drop Target**: Suggest a specific player from the current roster to drop, with a clear justification (e.g., redundant stats, poor recent form, or non-active status).
+    - **Reasoning**: Why this player helps specifically in the "Close" categories identified. Factor in remaining games — players with MORE games left in the matchup period offer more stat production potential.
+    - **Drop Target**: Suggest a specific player from the current roster to drop, with a clear justification (e.g., redundant stats, poor recent form, fewer games remaining, or non-active status).
 5. Use a professional, tactical tone. Avoid flowery prose.
 
 REPORT FORMAT:
@@ -39,9 +41,9 @@ REPORT FORMAT:
 **Matchup Insight**: [Specific category analysis focusing on 5-4 win priority]
 
 **Top Targets**:
-- **ADD [Player Name]**: [Reasoning based on stats/trends] -> **DROP [Roster Player]**: [Justification]
-- **ADD [Player Name]**: [Reasoning based on stats/trends] -> **DROP [Roster Player]**: [Justification]
-- **ADD [Player Name]**: [Reasoning based on stats/trends] -> **DROP [Roster Player]**: [Justification]
+- **ADD [Player Name] ([X]G left)**: [Reasoning based on stats/trends/schedule] -> **DROP [Roster Player]**: [Justification]
+- **ADD [Player Name] ([X]G left)**: [Reasoning based on stats/trends/schedule] -> **DROP [Roster Player]**: [Justification]
+- **ADD [Player Name] ([X]G left)**: [Reasoning based on stats/trends/schedule] -> **DROP [Roster Player]**: [Justification]
 
 **Final Strategy**: [One-sentence tactical summary]
 """

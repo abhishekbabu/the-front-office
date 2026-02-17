@@ -172,6 +172,30 @@ class YahooFantasyClient:
                 return team
         return None
 
+    def get_matchup_dates(self, my_team: Team) -> tuple[str, str]:
+        """
+        Get the start and end dates of the current matchup period.
+
+        Returns:
+            Tuple of (week_start, week_end) as ISO date strings (e.g. "2026-02-09").
+            Returns ("", "") if matchup info is unavailable.
+        """
+        try:
+            current_week = getattr(self.league, "current_week", None)
+            if not current_week:
+                return ("", "")
+
+            week = Week(self.league.ctx, self.league, current_week)
+            week.sync()
+
+            for m in week.matchups:
+                if m.team1.team_key == my_team.team_key or m.team2.team_key == my_team.team_key:
+                    return (str(m.week_start), str(m.week_end))
+            return ("", "")
+        except Exception as e:
+            logger.warning(f"Could not fetch matchup dates: {e}")
+            return ("", "")
+
     def get_matchup_context(self, my_team: Team) -> str:
         """
         Fetch current week matchup, scores, and opponent roster.

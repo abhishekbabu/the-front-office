@@ -2,13 +2,14 @@
 Scout Engine — Orchestrates data retrieval and AI analysis for scouting reports.
 """
 import logging
-from typing import Dict, List
+from datetime import date
+from typing import Dict, List, Optional
 from yahoofantasy import League, Player  # type: ignore[import-untyped]
 
 from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
 from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.clients.nba.client import NBAClient
-from the_front_office.clients.gemini.client import GeminiClient
+from the_front_office.clients.nba.schedule import NBAScheduleClient
 from the_front_office.clients.nba.types import PlayerStats, NineCatStats
 
 logger = logging.getLogger(__name__)
@@ -19,8 +20,10 @@ class Scout:
     Orchestrates data retrieval and AI analysis to generate scouting reports.
     """
     def __init__(self, league: League, mock_ai: bool = False):
+        from the_front_office.clients.gemini.client import GeminiClient
         self.ai = GeminiClient(mock_mode=mock_ai)
         self.nba = NBAClient()
+        self.schedule = NBAScheduleClient()
         self.yahoo = YahooFantasyClient(league)
 
     def _format_stats(self, stats_dict: PlayerStats) -> str:
@@ -36,6 +39,14 @@ class Scout:
         
         return " | ".join(parts) if parts else "No recent stats"
 
+    def _get_remaining_games(
+        self, team_abbr: str, matchup_start: Optional[date], matchup_end: Optional[date]
+    ) -> Optional[int]:
+        """Get remaining games for a player's team in the matchup period."""
+        if not matchup_start or not matchup_end:
+            return None
+        return self.schedule.get_remaining_games(team_abbr, matchup_start, matchup_end)
+
     def get_report(self) -> str:
         """
         Generate a scout report for the current league.
@@ -46,14 +57,33 @@ class Scout:
             return "⚠️ Could not identify your team in this league."
 
         matchup_context = self.yahoo.get_matchup_context(my_team)
+
+        # 1b. Get matchup dates for remaining games calculation
+        week_start_str, week_end_str = self.yahoo.get_matchup_dates(my_team)
+        matchup_start: Optional[date] = None
+        matchup_end: Optional[date] = None
+        if week_start_str and week_end_str:
+            matchup_start = date.fromisoformat(week_start_str)
+            matchup_end = date.fromisoformat(week_end_str)
+
+        # Pre-fetch remaining games for all teams in one pass
+        remaining_games: Dict[str, int] = {}
+        if matchup_start and matchup_end:
+            # Collect all team abbrs from roster + free agents
+            roster_teams = [p.editorial_team_abbr for p in my_team.players()]
+            remaining_games = self.schedule.get_remaining_games_bulk(
+                roster_teams, matchup_start, matchup_end
+            )
         
-        # 2. Enrich Roster with NBA Stats
+        # 2. Enrich Roster with NBA Stats + Remaining Games
         roster_enriched = ""
         players_list = my_team.players()
         logger.debug(f"Fetching stats for {len(players_list)} rostered players...")
         for p in players_list:
             stats_dict = self.nba.get_player_stats(p.name.full)
-            roster_enriched += f"- {p.name.full} ({p.display_position})"
+            games_left = remaining_games.get(p.editorial_team_abbr.upper(), None)
+            games_str = f" [{games_left}G left]" if games_left is not None else ""
+            roster_enriched += f"- {p.name.full} ({p.display_position}){games_str}"
             if stats_dict:
                 roster_enriched += f": {self._format_stats(stats_dict)}"
             roster_enriched += "\n"
@@ -72,6 +102,14 @@ class Scout:
                     player_map[key] = p
                 seen[key].append(stat_name)
 
+        # Pre-fetch remaining games for free agent teams too
+        if matchup_start and matchup_end:
+            fa_teams = [player_map[k].editorial_team_abbr for k in seen]
+            fa_remaining = self.schedule.get_remaining_games_bulk(
+                fa_teams, matchup_start, matchup_end
+            )
+            remaining_games.update(fa_remaining)
+
         # Build enriched free agent string sorted by number of categories (most versatile first)
         unique_players = sorted(seen.items(), key=lambda x: len(x[1]), reverse=True)
         logger.debug(f"Fetching NBA stats for {len(unique_players)} unique free agents...")
@@ -82,16 +120,28 @@ class Scout:
                 logger.debug(f"Progress: {i+1}/{len(unique_players)} free agents...")
             stats_dict = self.nba.get_player_stats(p.name.full)
             categories = ", ".join(stat_names)
-            fas_enriched += f"- {p.name.full} ({p.display_position}) [Top in: {categories}]"
+            games_left = remaining_games.get(p.editorial_team_abbr.upper(), None)
+            games_str = f" [{games_left}G left]" if games_left is not None else ""
+            fas_enriched += f"- {p.name.full} ({p.display_position}){games_str} [Top in: {categories}]"
             if stats_dict:
                 fas_enriched += f": {self._format_stats(stats_dict)}"
             fas_enriched += "\n"
         
-        # 4. Analyze with AI
+        # 4. Build schedule context string
+        schedule_context = ""
+        if matchup_start and matchup_end:
+            schedule_context = f"MATCHUP PERIOD: {week_start_str} to {week_end_str}\n"
+            schedule_context += "REMAINING GAMES BY TEAM:\n"
+            # Sort by games remaining (descending) for clarity
+            for team, count in sorted(remaining_games.items(), key=lambda x: x[1], reverse=True):
+                schedule_context += f"- {team}: {count} games left\n"
+
+        # 5. Analyze with AI
         prompt = SCOUT_PROMPT_TEMPLATE.format(
             roster_str=roster_enriched,
             matchup_context=matchup_context,
-            fas_str=fas_enriched
+            fas_str=fas_enriched,
+            schedule_context=schedule_context,
         )
         
         return self.ai.generate(prompt)
