@@ -23,13 +23,15 @@ MATCHUP CONTEXT:
 
 {schedule_context}
 
+{trans_context}
+
 TOP FREE AGENTS BY CATEGORY (Last 7 Days):
 {fas_str}
 
 YOUR TASK:
 1. Analyze the matchup: Identify "Close" categories where a small boost could flip the category in our favor or secure a slim lead. Use specific category names (e.g., "trailing in BLK by 5").
 2. Compare the underperformers on the current roster with the high-upside players on the waiver wire using the provided stats.
-3. Recommend **3 players** to add from the Free Agents list. 
+3. {recommendation_instructions} 
 4. For each recommendation, provide:
     - **Reasoning**: Why this player helps specifically in the "Close" categories identified. Factor in remaining games — players with MORE games left in the matchup period offer more stat production potential.
     - **Drop Target**: Suggest a specific player from the current roster to drop, with a clear justification (e.g., redundant stats, poor recent form, fewer games remaining, or non-active status).

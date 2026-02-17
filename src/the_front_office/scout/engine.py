@@ -7,9 +7,10 @@ from typing import Dict, List, Optional, TYPE_CHECKING, Union
 from yahoofantasy import League, Player  # type: ignore[import-untyped]
 
 from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
-from the_front_office.clients.yahoo.client import YahooFantasyClient
+from the_front_office.config.settings import YAHOO_MAX_WEEKLY_ADDS
 from the_front_office.clients.nba.client import NBAClient
 from the_front_office.clients.nba.types import PlayerStats, NineCatStats
+from the_front_office.clients.yahoo.client import YahooFantasyClient
 
 if TYPE_CHECKING:
     from google.genai.chats import Chat
@@ -68,6 +69,17 @@ class Scout:
             matchup_start = date.fromisoformat(week_start_str)
             matchup_end = date.fromisoformat(week_end_str)
 
+        # 1c. Transaction Context
+        used_adds = my_team.roster_adds.value
+        remaining_adds = max(0, YAHOO_MAX_WEEKLY_ADDS - used_adds)
+        trans_context = f"TRANSACTION CONTEXT:\n- Adds Used: {used_adds}/{YAHOO_MAX_WEEKLY_ADDS}\n- Remaining Adds: {remaining_adds}\n- NOTE: Prioritize aggressive streaming if adds are high, or conservative quality pickups if adds are low."
+
+        # Decide on recommendation task based on remaining adds
+        if remaining_adds > 0:
+            recommendation_instructions = "Recommend **3 players** to add from the Free Agents list."
+        else:
+            recommendation_instructions = "You have **0 adds remaining**. You CANNOT add players. Instead, identify **3 players to MONITOR** for next week who fit the team's needs."
+
         # Pre-fetch remaining games for all teams in one pass
         remaining_games: Dict[str, int] = {}
         if matchup_start and matchup_end:
@@ -85,7 +97,16 @@ class Scout:
             stats_dict = self.nba.get_player_stats(p.name.full)
             games_left = remaining_games.get(p.editorial_team_abbr.upper(), None)
             games_str = f" [{games_left}G left]" if games_left is not None else ""
-            roster_enriched += f"- {p.name.full} ({p.display_position}){games_str}"
+            # Status check (e.g. INJ, GTD, O)
+            status = getattr(p, 'status', None)
+            injury_note = getattr(p, 'injury_note', None)
+            status_str = ""
+            if status:
+                status_str = f" [{status}]"
+                if injury_note:
+                    status_str += f" ({injury_note})"
+            
+            roster_enriched += f"- {p.name.full} ({p.display_position}){status_str}{games_str}"
             if stats_dict:
                 roster_enriched += f": {self._format_stats(stats_dict)}"
             roster_enriched += "\n"
@@ -124,7 +145,11 @@ class Scout:
             categories = ", ".join(stat_names)
             games_left = remaining_games.get(p.editorial_team_abbr.upper(), None)
             games_str = f" [{games_left}G left]" if games_left is not None else ""
-            fas_enriched += f"- {p.name.full} ({p.display_position}){games_str} [Top in: {categories}]"
+            # Status check for Free Agents too
+            status = getattr(p, 'status', None)
+            status_str = f" [{status}]" if status else ""
+
+            fas_enriched += f"- {p.name.full} ({p.display_position}){status_str}{games_str} [Top in: {categories}]"
             if stats_dict:
                 fas_enriched += f": {self._format_stats(stats_dict)}"
             fas_enriched += "\n"
@@ -144,6 +169,8 @@ class Scout:
             matchup_context=matchup_context,
             fas_str=fas_enriched,
             schedule_context=schedule_context,
+            trans_context=trans_context,
+            recommendation_instructions=recommendation_instructions,
         )
         
         return prompt

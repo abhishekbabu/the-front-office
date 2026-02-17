@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "C:\Users\abhid\AppData\Local\Programs\Python\Python310\lib\runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "C:\Users\abhid\AppData\Local\Programs\Python\Python310\lib\runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "C:\Users\abhid\.gemini\antigravity\scratch\the-front-office\src\the_front_office\main.py", line 206, in <module>
+    main()
+  File "C:\Users\abhid\.gemini\antigravity\scratch\the-front-office\src\the_front_office\main.py", line 149, in main
+    _print_header("\U0001f3c0 The Front Office — NBA Fantasy Intelligence")
+  File "C:\Users\abhid\.gemini\antigravity\scratch\the-front-office\src\the_front_office\main.py", line 29, in _print_header
+    print("\n" + "\u2550" * width)
+  File "C:\Users\abhid\AppData\Local\Programs\Python\Python310\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 2-61: character maps to <undefined>

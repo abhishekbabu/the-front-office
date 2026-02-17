@@ -17,6 +17,7 @@ YAHOO_CLIENT_ID = os.getenv("YAHOO_CLIENT_ID")
 YAHOO_CLIENT_SECRET = os.getenv("YAHOO_CLIENT_SECRET")
 YAHOO_REDIRECT_URI = "https://localhost:8080"
 YAHOO_TOKEN_FILE = ".yahoofantasy"
+YAHOO_MAX_WEEKLY_ADDS = int(os.getenv("YAHOO_MAX_WEEKLY_ADDS", "3"))
 
 # Scouting Settings
 DEFAULT_FREE_AGENT_COUNT = 20
