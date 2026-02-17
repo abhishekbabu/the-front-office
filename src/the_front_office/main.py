@@ -9,33 +9,10 @@ import sys
 import argparse
 from datetime import datetime
 from typing import List
-import logging
-from the_front_office.config.settings import LOG_LEVEL
+from the_front_office.config.logging import setup_logging
 from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.scout import Scout
 from yahoofantasy import League, Team  # type: ignore[import-untyped]
-
-# Configure logging
-root_logger = logging.getLogger()
-root_logger.setLevel(LOG_LEVEL)
-
-# Ensure checking if handlers already exist to avoid dupes
-if not root_logger.handlers:
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S"
-    ))
-    root_logger.addHandler(handler)
-
-# Silence noisy libraries
-logging.getLogger("yahoofantasy").setLevel(logging.WARNING)
-logging.getLogger("urllib3").setLevel(logging.WARNING)
-logging.getLogger("oauthlib").setLevel(logging.WARNING)
-logging.getLogger("requests_oauthlib").setLevel(logging.WARNING)
-
-# Debug logging config
-
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +49,7 @@ def _print_roster(team: Team) -> None:
 
 def main() -> None:
     """Authenticate and print the current NBA fantasy roster or run scout report."""
+    setup_logging()
     parser = argparse.ArgumentParser(description="The Front Office — NBA Fantasy Intelligence")
     parser.add_argument("--scout", action="store_true", help="Run the Morning Scout Report (AI waiver analysis)")
     parser.add_argument("--mock-ai", action="store_true", help="Use mock AI responses (for testing without API calls)")
@@ -107,7 +85,7 @@ def main() -> None:
             for team in league.teams():
                 is_mine = "(YOU)" if hasattr(team, "is_owned_by_current_login") and team.is_owned_by_current_login else ""
                 print(f"\n  📋 {team.name} — managed by {team.manager.nickname} {is_mine}")
-                # For roster display, we don't need to be as robust as for FA fetching,
+                # For roster display, we don't need to be as roster as for FA fetching,
                 # but let's keep it consistent.
                 _print_roster(team)
 
