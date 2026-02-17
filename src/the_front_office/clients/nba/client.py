@@ -7,12 +7,19 @@ import json
 import logging
 from pathlib import Path
 from datetime import datetime, date, time as dt_time
-from typing import Optional, Dict, Any, cast
+from typing import Optional, Dict, cast
 import pandas as pd
 from nba_api.stats.static import players, teams  # type: ignore[import-untyped]
 from nba_api.stats.endpoints import playergamelog, scheduleleaguev2  # type: ignore[import-untyped]
 from the_front_office.config.settings import NBA_API_DELAY, NBA_CACHE_FILE
-from the_front_office.clients.nba.types import NineCatStats, PlayerStats
+from the_front_office.clients.nba.types import (
+    NineCatStats, 
+    PlayerStats, 
+    NBACacheData, 
+    PlayerCacheRecord, 
+    ScheduleCache, 
+    GameRecord
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +52,11 @@ class NBAClient:
     def __init__(self) -> None:
         self._last_call_time: float = 0.0
         self._cache_file: Path = Path(NBA_CACHE_FILE)
-        self._cache_data: Dict[str, Any] = {"player_stats": {}, "schedule": {}}
+        # Initialize with empty structure
+        self._cache_data: NBACacheData = {
+            "player_stats": {}, 
+            "schedule": {"teams": {}, "updated_at": ""}
+        }
         self._load_cache()
 
     # ── Cache I/O ──────────────────────────────────────────────────
@@ -56,17 +67,25 @@ class NBAClient:
             return
 
         try:
-            self._cache_data = json.loads(self._cache_file.read_text(encoding="utf-8"))
-            # Ensure structure
-            if "player_stats" not in self._cache_data:
-                self._cache_data["player_stats"] = {}
-            if "schedule" not in self._cache_data:
-                self._cache_data["schedule"] = {}
+            raw_data = json.loads(self._cache_file.read_text(encoding="utf-8"))
+            
+            # Type-safe migration/validation
+            player_stats = cast(dict[str, PlayerCacheRecord], raw_data.get("player_stats", {}))
+            schedule = cast(ScheduleCache, raw_data.get("schedule", {"teams": {}, "updated_at": ""}))
+            
+            self._cache_data = {
+                "player_stats": player_stats,
+                "schedule": schedule
+            }
+            
             logger.debug(f"Loaded NBA cache: {len(self._cache_data['player_stats'])} players, "
                          f"schedule is {self._get_schedule_age_hours():.1f}h old.")
         except Exception as e:
             logger.warning(f"Failed to load cache: {e}. Starting fresh.")
-            self._cache_data = {"player_stats": {}, "schedule": {}}
+            self._cache_data = {
+                "player_stats": {}, 
+                "schedule": {"teams": {}, "updated_at": ""}
+            }
 
     def _save_cache(self) -> None:
         """Persist unified cache to disk."""
@@ -135,7 +154,7 @@ class NBAClient:
         record = self._cache_data["player_stats"].get(full_name)
         if record and not self._is_player_stats_stale(record["updated_at"]):
             logger.debug(f"Cache hit for {full_name}")
-            return cast(PlayerStats, record["stats"])
+            return record["stats"]
 
         for attempt in range(retries + 1):
             try:
@@ -176,7 +195,7 @@ class NBAClient:
 
     def _ensure_schedule_loaded(self) -> None:
         """Fetch full season schedule via nba_api if stale or missing."""
-        if self._cache_data["schedule"] and self._get_schedule_age_hours() < SCHEDULE_TTL_HOURS:
+        if self._cache_data["schedule"]["updated_at"] and self._get_schedule_age_hours() < SCHEDULE_TTL_HOURS:
             return
 
         logger.debug("Refreshing NBA schedule via nba_api...")
@@ -185,19 +204,17 @@ class NBAClient:
             sched = scheduleleaguev2.ScheduleLeagueV2()
             data = sched.get_dict()
 
-            team_games: Dict[str, list[dict[str, Any]]] = {}
+            team_games: Dict[str, list[GameRecord]] = {}
             for game_date_obj in data["leagueSchedule"]["gameDates"]:
                 for game in game_date_obj["games"]:
-                    game_info = {
+                    game_info: GameRecord = {
                         "date": str(game["gameDateEst"])[:10],
                         "status": int(game["gameStatus"]),
                         "home": str(game["homeTeam"]["teamTricode"]),
                         "away": str(game["awayTeam"]["teamTricode"]),
                     }
-                    home_tri = str(game_info["home"])
-                    away_tri = str(game_info["away"])
-                    team_games.setdefault(home_tri, []).append(game_info)
-                    team_games.setdefault(away_tri, []).append(game_info)
+                    team_games.setdefault(game_info["home"], []).append(game_info)
+                    team_games.setdefault(game_info["away"], []).append(game_info)
 
             self._cache_data["schedule"] = {
                 "teams": team_games,
@@ -210,13 +227,13 @@ class NBAClient:
     def get_remaining_games(self, team_abbr: str, start_date: date, end_date: date) -> int:
         """Count scheduled/live games for a team in a date range."""
         self._ensure_schedule_loaded()
-        games = self._cache_data["schedule"].get("teams", {}).get(team_abbr.upper(), [])
+        games = self._cache_data["schedule"]["teams"].get(team_abbr.upper(), [])
         count = 0
         today = date.today()
         for g in games:
             game_date = date.fromisoformat(g["date"])
             if start_date <= game_date <= end_date and game_date >= today:
-                if int(g["status"]) in (1, 2):
+                if g["status"] in (1, 2):
                     count += 1
         return count
 

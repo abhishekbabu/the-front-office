@@ -1,11 +1,9 @@
 """
-NBA stats type definitions.
+Shared types for NBA data.
 """
-from typing import TypedDict
-
+from typing import TypedDict, Optional
 
 class NineCatStats(TypedDict):
-    """Stats for the 9 standard fantasy basketball categories."""
     PTS: float
     REB: float
     AST: float
@@ -16,13 +14,28 @@ class NineCatStats(TypedDict):
     FG_PCT: float
     FT_PCT: float
 
-
 class PlayerStats(TypedDict, total=False):
-    """Recent player stats structure stored in cache.
-
-    Each key represents a rolling window of game averages.
-    Only present if the player has enough games in the log.
-    """
     last_5: NineCatStats
     last_10: NineCatStats
     last_15: NineCatStats
+
+
+# --- Cache Specific Types ---
+
+class PlayerCacheRecord(TypedDict):
+    stats: PlayerStats
+    updated_at: str
+
+class GameRecord(TypedDict):
+    date: str
+    status: int
+    home: str
+    away: str
+
+class ScheduleCache(TypedDict):
+    teams: dict[str, list[GameRecord]]
+    updated_at: str
+
+class NBACacheData(TypedDict):
+    player_stats: dict[str, PlayerCacheRecord]
+    schedule: ScheduleCache
