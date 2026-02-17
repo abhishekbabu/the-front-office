@@ -32,5 +32,4 @@ oauth2.json
 token.json
 
 # NBA Caches
-.nba_stats_cache.json
-.nba_schedule_cache.json
+.nba_cache.json
