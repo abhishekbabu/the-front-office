@@ -1,12 +1,11 @@
 """
-main.py — Entry point for The Front Office.
+main.py — Interactive entry point for The Front Office.
 
-Authenticates with Yahoo Fantasy, fetches your NBA leagues,
-and prints your current roster to the terminal.
+Authenticates once with Yahoo Fantasy, then waits for slash commands
+to run scouting reports, view rosters, etc.
 """
 
 import sys
-import argparse
 from datetime import datetime
 from typing import List
 from the_front_office.config.logging import setup_logging
@@ -43,26 +42,88 @@ def _print_roster(team: Team) -> None:
         print(f"  {name:<30} {position:<10} {nba_team:<6}")
 
 
+def _print_help() -> None:
+    """Print available commands."""
+    print()
+    print("  Available commands:")
+    print("  ─────────────────────────────────────")
+    print("  /scout          Run the Morning Scout Report (AI waiver analysis)")
+    print("  /scout --mock   Use mock AI responses (for testing)")
+    print("  /rosters        Show all team rosters in the league")
+    print("  /my-roster      Show only your roster")
+    print("  /matchup        Show current matchup scores")
+    print("  /help           Show this help message")
+    print("  /quit           Exit the program")
+    print()
+
+
 # ---------------------------------------------------------------------------
-# Main
+# Command Handlers
+# ---------------------------------------------------------------------------
+
+def _cmd_scout(leagues: List[League], mock: bool = False) -> None:
+    """Run the scout report for all leagues."""
+    for league in leagues:
+        _print_header(f"Scouting Report: {league.name}")
+        scout = Scout(league, mock_ai=mock)
+        report = scout.get_report()
+        print(report)
+
+
+def _cmd_rosters(leagues: List[League]) -> None:
+    """Show all team rosters."""
+    for league in leagues:
+        _print_header(f"League: {league.name}")
+        print(f"  ID: {league.id}  •  Type: {league.league_type}\n")
+
+        for team in league.teams():
+            is_mine = "(YOU)" if hasattr(team, "is_owned_by_current_login") and team.is_owned_by_current_login else ""
+            print(f"\n  📋 {team.name} — managed by {team.manager.nickname} {is_mine}")
+            _print_roster(team)
+
+
+def _cmd_my_roster(leagues: List[League]) -> None:
+    """Show only the user's roster."""
+    for league in leagues:
+        yahoo = YahooFantasyClient(league)
+        my_team = yahoo.get_user_team()
+        if my_team:
+            _print_header(f"Your Roster: {my_team.name} ({league.name})")
+            _print_roster(my_team)
+        else:
+            print(f"  ⚠️  Could not identify your team in {league.name}")
+
+
+def _cmd_matchup(leagues: List[League]) -> None:
+    """Show current matchup context."""
+    for league in leagues:
+        yahoo = YahooFantasyClient(league)
+        my_team = yahoo.get_user_team()
+        if my_team:
+            _print_header(f"Matchup: {league.name}")
+            context = yahoo.get_matchup_context(my_team)
+            print(f"  {context}")
+        else:
+            print(f"  ⚠️  Could not identify your team in {league.name}")
+
+
+# ---------------------------------------------------------------------------
+# Interactive Loop
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    """Authenticate and print the current NBA fantasy roster or run scout report."""
+    """Authenticate once, then run an interactive command loop."""
     setup_logging()
-    parser = argparse.ArgumentParser(description="The Front Office — NBA Fantasy Intelligence")
-    parser.add_argument("--scout", action="store_true", help="Run the Morning Scout Report (AI waiver analysis)")
-    parser.add_argument("--mock-ai", action="store_true", help="Use mock AI responses (for testing without API calls)")
-    args = parser.parse_args()
 
     _print_header("🏀 The Front Office — NBA Fantasy Intelligence")
     print(f"  {datetime.now().strftime('%A, %B %d %Y  •  %I:%M %p')}")
 
-    # --- Auth ---
+    # --- Auth (once) ---
+    print("\n  🔐 Authenticating with Yahoo Fantasy...")
     YahooFantasyClient.login()
     ctx = YahooFantasyClient.get_context()
 
-    # --- Fetch NBA leagues for the current season ---
+    # --- Fetch leagues (once) ---
     now = datetime.now()
     season_year = now.year if now.month >= 9 else now.year - 1
     leagues: List[League] = ctx.get_leagues("nba", season_year)
@@ -71,23 +132,41 @@ def main() -> None:
         print("  ⚠️  No NBA leagues found for this season.")
         sys.exit(0)
 
-    # --- Process leagues ---
-    for league in leagues:
-        if args.scout:
-            _print_header(f"Scouting Report: {league.name}")
-            scout = Scout(league, mock_ai=args.mock_ai)
-            report = scout.get_report()
-            print(report)
-        else:
-            _print_header(f"League: {league.name}")
-            print(f"  ID: {league.id}  •  Type: {league.league_type}\n")
+    print(f"  ✅ Found {len(leagues)} league(s): {', '.join(l.name for l in leagues)}")
+    _print_help()
 
-            for team in league.teams():
-                is_mine = "(YOU)" if hasattr(team, "is_owned_by_current_login") and team.is_owned_by_current_login else ""
-                print(f"\n  📋 {team.name} — managed by {team.manager.nickname} {is_mine}")
-                # For roster display, we don't need to be as roster as for FA fetching,
-                # but let's keep it consistent.
-                _print_roster(team)
+    # --- REPL ---
+    while True:
+        try:
+            raw = input("  ⚡ ").strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            print("\n")
+            _print_header("Goodbye 👋")
+            break
+
+        if not raw:
+            continue
+
+        parts = raw.split()
+        cmd = parts[0]
+        flags = parts[1:]
+
+        if cmd == "/scout":
+            mock = "--mock" in flags
+            _cmd_scout(leagues, mock=mock)
+        elif cmd == "/rosters":
+            _cmd_rosters(leagues)
+        elif cmd in ("/my-roster", "/roster"):
+            _cmd_my_roster(leagues)
+        elif cmd == "/matchup":
+            _cmd_matchup(leagues)
+        elif cmd == "/help":
+            _print_help()
+        elif cmd in ("/quit", "/exit", "/q"):
+            _print_header("Goodbye 👋")
+            break
+        else:
+            print(f"  ❓ Unknown command: {cmd}. Type /help for available commands.")
 
     _print_header("Done ✅")
 
