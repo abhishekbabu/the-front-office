@@ -7,7 +7,7 @@ import json
 import logging
 from pathlib import Path
 from datetime import datetime, date, time as dt_time
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, cast
 import pandas as pd
 from nba_api.stats.static import players, teams  # type: ignore[import-untyped]
 from nba_api.stats.endpoints import playergamelog, scheduleleaguev2  # type: ignore[import-untyped]
@@ -135,7 +135,7 @@ class NBAClient:
         record = self._cache_data["player_stats"].get(full_name)
         if record and not self._is_player_stats_stale(record["updated_at"]):
             logger.debug(f"Cache hit for {full_name}")
-            return record["stats"]
+            return cast(PlayerStats, record["stats"])
 
         for attempt in range(retries + 1):
             try:
@@ -194,8 +194,10 @@ class NBAClient:
                         "home": str(game["homeTeam"]["teamTricode"]),
                         "away": str(game["awayTeam"]["teamTricode"]),
                     }
-                    team_games.setdefault(game_info["home"], []).append(game_info)
-                    team_games.setdefault(game_info["away"], []).append(game_info)
+                    home_tri = str(game_info["home"])
+                    away_tri = str(game_info["away"])
+                    team_games.setdefault(home_tri, []).append(game_info)
+                    team_games.setdefault(away_tri, []).append(game_info)
 
             self._cache_data["schedule"] = {
                 "teams": team_games,
