@@ -45,9 +45,9 @@ class Scout:
             return None
         return self.nba.get_remaining_games(team_abbr, matchup_start, matchup_end)
 
-    def get_report(self) -> str:
+    def _build_context(self) -> str:
         """
-        Generate a scout report for the current league.
+        Gather all data and build the initial AI prompt.
         """
         # 1. Identify User's Team
         my_team = self.yahoo.get_user_team()
@@ -134,7 +134,7 @@ class Scout:
             for team, count in sorted(remaining_games.items(), key=lambda x: x[1], reverse=True):
                 schedule_context += f"- {team}: {count} games left\n"
 
-        # 5. Analyze with AI
+        # 5. Build Context
         prompt = SCOUT_PROMPT_TEMPLATE.format(
             roster_str=roster_enriched,
             matchup_context=matchup_context,
@@ -142,4 +142,26 @@ class Scout:
             schedule_context=schedule_context,
         )
         
-        return self.ai.generate(prompt)
+        return prompt
+
+    def start_analysis(self) -> tuple[str, "Chat | MockChatSession"]:
+        """
+        Start an interactive analysis session.
+        Returns the initial report text and the chat session object.
+        """
+        prompt = self._build_context()
+        try:
+            # Start chat with empty history, then send the prompt as the first message
+            chat = self.ai.start_chat()
+            response = chat.send_message(prompt)
+            return response.text, chat
+        except Exception as e:
+            logger.error(f"Error starting analysis: {e}")
+            return f"❌ Error: {e}", None
+
+    def get_report(self) -> str:
+        """
+        Generate a scout report (non-interactive wrapper).
+        """
+        report, _ = self.start_analysis()
+        return report

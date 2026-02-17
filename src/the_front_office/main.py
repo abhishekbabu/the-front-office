@@ -71,8 +71,34 @@ def _cmd_scout(leagues: List[League], mock: bool = False) -> None:
     for league in leagues:
         _print_header(f"Scouting Report: {league.name}")
         scout = Scout(league, mock_ai=mock)
-        report = scout.get_report()
-        print(report)
+        
+        print("  ⏳ Analyzing roster, free agents, and schedule... (this may take a moment)")
+        report, chat = scout.start_analysis()
+        print("\n" + report)
+
+        if not chat:
+            continue
+
+        # Interactive Mode
+        print("\n  " + "─" * 60)
+        print("  💬 Interactive Mode: Ask follow-up questions about this report.")
+        print("     Type your question or press Enter to continue to next league.")
+        print("  " + "─" * 60)
+        
+        while True:
+            try:
+                user_input = input("\n  Query > ").strip()
+                if not user_input or user_input.lower() in ("/quit", "/exit", "q"):
+                    break
+                
+                print("  ⏳ Thinking...")
+                response = chat.send_message(user_input)
+                print(f"\n  🤖 {response.text}")
+            except KeyboardInterrupt:
+                break
+            except Exception as e:
+                print(f"  ❌ Error: {e}")
+                break
 
 
 def _cmd_rosters(leagues: List[League]) -> None:
