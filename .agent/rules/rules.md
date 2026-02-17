@@ -29,8 +29,10 @@ the-front-office/
 ├── src/the_front_office/     # All production code goes here
 │   ├── clients/              # External API wrappers (Gemini, Yahoo, NBA)
 │   ├── config/               # Configuration layer (constants, settings)
-│   ├── main.py               # CLI entry point (League listing, Scout trigger)
-│   └── scout.py              # Scout orchestrator (AI waiver analysis)
+│   ├── scout/                # Scout feature (AI waiver analysis)
+│   │   ├── __init__.py       # Re-exports Scout class
+│   │   └── engine.py         # Scout orchestrator
+│   └── main.py               # Interactive REPL entry point
 ├── tests/                    # Unit tests (when added)
 ├── .agent/rules/rules.md     # Project configuration and rules
 ├── mypy.ini                  # Type checking config

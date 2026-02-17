@@ -1,12 +1,10 @@
 """
-Scout Engine Orchestrator.
+Scout Engine — Orchestrates data retrieval and AI analysis for scouting reports.
 """
 import logging
-from datetime import datetime
-from typing import Dict, List, Optional
-from yahoofantasy import League, Player, Team  # type: ignore[import-untyped]
+from typing import Dict, List
+from yahoofantasy import League, Player  # type: ignore[import-untyped]
 
-from the_front_office.config.settings import REPORT_FREE_AGENT_LIMIT
 from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
 from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.clients.nba.client import NBAClient
@@ -14,6 +12,7 @@ from the_front_office.clients.gemini.client import GeminiClient
 from the_front_office.clients.nba.types import PlayerStats, NineCatStats
 
 logger = logging.getLogger(__name__)
+
 
 class Scout:
     """
@@ -96,34 +95,3 @@ class Scout:
         )
         
         return self.ai.generate(prompt)
-
-def scout_league(league_name: Optional[str] = None):
-    """
-    Main entry point for scouting.
-    """
-    ctx = YahooFantasyClient.get_context()
-    now = datetime.now()
-    season_year = now.year if now.month >= 9 else now.year - 1
-    
-    leagues = ctx.get_leagues("nba", season_year)
-    if not leagues:
-        print("No NBA leagues found.")
-        return
-
-    target_leagues = leagues
-    if league_name:
-        target_leagues = [l for l in leagues if league_name.lower() in l.name.lower()]
-    
-    if not target_leagues:
-        print(f"No leagues matching '{league_name}' found.")
-        return
-
-    for league in target_leagues:
-        scout = Scout(league)
-        report = scout.get_report()
-        print("\n" + "="*40)
-        print(report)
-        print("="*40)
-
-if __name__ == "__main__":
-    scout_league()
