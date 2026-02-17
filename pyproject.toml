@@ -10,9 +10,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "yahoofantasy>=1.4.9",
-    "python-dotenv>=1.0.0",
-    "google-genai>=1.0.0",
-    "nba_api>=1.4.1",
+    "python-dotenv>=1.2.0",
+    "google-genai>=1.63.0",
+    "nba_api>=1.11.0",
+    "pandas>=2.2.0",
     "pyreadline3>=3.4; sys_platform == 'win32'",
 ]
 
@@ -21,8 +22,9 @@ front-office = "the_front_office.main:main"
 
 [project.optional-dependencies]
 dev = [
-    "mypy>=1.0.0",
+    "mypy>=1.10.0",
     "flake8>=7.0.0",
+    "pandas-stubs>=2.2.0",
 ]
 
 [tool.setuptools.packages.find]

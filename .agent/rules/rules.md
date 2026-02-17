@@ -45,8 +45,7 @@ the-front-office/
 
 ### Dependencies
 - **Production**: Add to `dependencies` in `pyproject.toml`
-- **Development**: Add to `[project.optional-dependencies.dev]`
-- **ALWAYS** update `requirements.txt` (production) and `requirements-dev.txt` (development) when dependencies change.
+- **Development**: Add to `[project.optional-dependencies.dev]` in `pyproject.toml`
 - Pin minimum versions: `package>=X.Y.Z`
 
 ### Environment Variables
@@ -94,7 +93,7 @@ Before committing:
 - [ ] `mypy src/the_front_office` passes
 - [ ] No debug print statements (use `logger` instead)
 - [ ] No hardcoded credentials
-- [ ] Updated `requirements.txt` and `requirements-dev.txt` if dependencies changed
+- [ ] Updated `pyproject.toml` if dependencies changed
 - [ ] Updated `.env.template` if new env vars added
 - [ ] Type hints on all new functions
 - [ ] Docstrings for public APIs
