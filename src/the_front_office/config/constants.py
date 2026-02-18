@@ -49,3 +49,35 @@ REPORT FORMAT:
 
 **Final Strategy**: [One-sentence tactical summary]
 """
+
+TRADE_PROMPT_TEMPLATE = """
+# 🎭 Trade Evaluation Request
+
+## 1. The Trade
+**Giving Away:**
+{giving_str}
+
+**Receiving:**
+{receiving_str}
+
+## 2. Team Context
+{matchup_context}
+
+## 3. Current Roster
+{roster_str}
+
+## 4. Analysis Instructions
+Act as a ruthless specific NBA Fantasy General Manager. Analyze this trade for my team.
+compare the two sides based on:
+1. **Statistical Impact**: Net change in categories (L15/L30 days).
+2. **Schedule Advantage**: Who has more games in the playoff weeks?
+3. **Shutdown Risk**: Are any of the players receiving at risk of being shut down by tanking teams? Warning if so.
+4. **Roster Awareness**: DO NOT recommend acquiring players that are already on my Current Roster.
+5. **Verdict**: Should I accept, reject, or counter?
+
+Response Format:
+- **Verdict**: [Details]
+- **Impact**: [Details]
+- **Shutdown Risk**: [Details]
+- **Strategy**: [Details]
+"""

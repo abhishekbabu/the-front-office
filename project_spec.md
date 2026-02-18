@@ -31,8 +31,12 @@ An all-encompassing NBA Fantasy command center that transforms raw league data i
 * **Logics:** Coordinates `YahooFantasyClient`, `NBAClient`, and `GeminiClient`.
 
 ### C. Trade War Room (`trade_analyzer.py`)
-* **Goal:** Natural language trade evaluation (Planned).
+* **Goal:** Natural language trade evaluation (Implemented).
 * **Prompting:** Uses Gemini to analyze "Rest of Season" (ROS) value and category impact.
+* **Features:**
+    * **Shutdown Risk Analysis:** Identifies players at risk of resting during fantasy playoffs.
+    * **Roster Awareness:** Contextualizes trades against current roster to avoid redundancy.
+    * **Live Data:** Uses Google Search to fetch real-time injury news and standings.
 
 ---
 

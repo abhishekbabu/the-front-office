@@ -122,9 +122,13 @@ class YahooFantasyClient:
         try:
             data = self.league.ctx._load_or_fetch(cache_key, query, league=self.league.id)
 
+            players_container = data["fantasy_content"]["league"]["players"]
+            if not players_container or isinstance(players_container, str):
+                return []
+
             players: List[Player] = []
-            if "player" in data["fantasy_content"]["league"]["players"]:
-                for player_data in data["fantasy_content"]["league"]["players"]["player"]:
+            if "player" in players_container:
+                for player_data in as_list(players_container["player"]):
                     p = Player(self.league)
                     from_response_object(p, player_data)
                     players.append(p)
@@ -252,3 +256,46 @@ class YahooFantasyClient:
         except Exception as e:
             logger.warning(f"Could not fetch matchup context: {e}")
             return ""
+
+    def search_players(self, query: str) -> List[Player]:
+        """
+        Search for players by name using the league context.
+        Uses league/{id}/players;search={query}
+        """
+        try:
+            # Construct league-specific search query
+            # league/{league_key}/players;search={query}
+            league_key = self.league.league_key
+            query_str = f"league/{league_key}/players;search={query}"
+            cache_key = f"player_search_{league_key}_{query}"
+            
+            logger.debug(f"Searching players in league: {query_str}")
+            
+            # _load_or_fetch expects the relative URL part
+            data = self.league.ctx._load_or_fetch(cache_key, query_str)
+            
+            # Navigate response structure:
+            # fantasy_content -> league -> players -> player
+            try:
+                base = data["fantasy_content"]["league"]
+                players_container = base.get("players", {})
+            except KeyError:
+                logger.warning(f"Unexpected response structure for search '{query}'")
+                return []
+
+            if not players_container or isinstance(players_container, str):
+                return []
+
+            results: List[Player] = []
+            if "player" in players_container:
+                for player_data in as_list(players_container["player"]):
+                    # Create player bound to this league/context
+                    p = Player(self.league) 
+                    from_response_object(p, player_data)
+                    results.append(p)
+            
+            return results
+
+        except Exception as e:
+            logger.error(f"Error searching for player '{query}': {e}")
+            return []

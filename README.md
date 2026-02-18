@@ -7,6 +7,7 @@
 ## 🚀 Current Status: Interactive CLI Mode (v0.1.0)
 The Front Office now operates as an interactive shell for real-time fantasy management.
 - **Scout Report**: Automated waiver wire analysis powered by Gemini 2.5 Pro.
+- **Trade War Room**: Analyze trades with Shutdown Risk, Roster Awareness, and Live Search.
 - **Roster & Matchup Views**: Quickly inspect your team, opponents, and current matchup stats.
 - **Modular Architecture**: Clean separation of concerns (Config, AI, Providers).
 
@@ -90,7 +91,8 @@ Once inside the shell, use the following commands:
 - **/scout --mock**: Test the scout report with mock data (saves API tokens).
 - **/rosters**: View all rosters in your league.
 - **/my-roster**: View your specific team roster.
-- **/matchup**: Analyze your current week's matchup.
+- **/trade <txt>**: Evaluate a trade (natural language).
+- **/trade --mock <txt>**: Evaluate a trade with mock data.
 - **/help**: List all available commands.
 - **/quit**: Exit the application.
 
@@ -100,8 +102,8 @@ Once inside the shell, use the following commands:
 - [x] **Mission 1: Connectivity** — OAuth2 & Roster Sync.
 - [x] **Mission 2: The Waiver Engine** — Scan top free agents and summarize via Gemini 2.5 Pro with **Matchup Context**.
 - [x] **Mission 3: Interactive CLI** — Robust command loop for easy navigation.
-- [ ] **Mission 4: Dashboard MVP** — Web-based "Morning Scout Report" (Streamlit/React).
-- [ ] **Mission 5: Trade War Room** — Natural language trade evaluation.
+- [x] **Mission 4: Trade War Room** — Natural language trade evaluation (Shutdown Risk, Roster Awareness, Live Search).
+- [ ] **Mission 5: Dashboard MVP** — Web-based "Morning Scout Report" (Streamlit/React).
 
 ---
 

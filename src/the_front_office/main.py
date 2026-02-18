@@ -11,6 +11,7 @@ from typing import List
 from the_front_office.config.logging import setup_logging
 from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.scout import Scout
+from the_front_office.trade.engine import TradeEvaluator
 from yahoofantasy import League, Team  # type: ignore[import-untyped]
 
 try:
@@ -52,13 +53,15 @@ def _print_help() -> None:
     print()
     print("  Available commands:")
     print("  ─────────────────────────────────────")
-    print("  /scout          Run the Morning Scout Report (AI waiver analysis)")
-    print("  /scout --mock   Use mock AI responses (for testing)")
-    print("  /rosters        Show all team rosters in the league")
-    print("  /my-roster      Show only your roster")
-    print("  /matchup        Show current matchup scores")
-    print("  /help           Show this help message")
-    print("  /quit           Exit the program")
+    print("  /scout               Run the Morning Scout Report (AI waiver analysis)")
+    print("  /scout --mock        Use mock AI responses (for testing)")
+    print("  /trade <txt>         Evaluate a trade (e.g. '/trade Give LeBron, Get Tatum')")
+    print("  /trade --mock <txt>  Evaluate a trade with mock AI responses")
+    print("  /rosters             Show all team rosters in the league")
+    print("  /my-roster           Show only your roster")
+    print("  /matchup             Show current matchup scores")
+    print("  /help                Show this help message")
+    print("  /quit                Exit the program")
     print()
 
 
@@ -82,6 +85,49 @@ def _cmd_scout(leagues: List[League], mock: bool = False) -> None:
         # Interactive Mode
         print("\n  " + "─" * 60)
         print("  💬 Interactive Mode: Ask follow-up questions about this report.")
+        print("     Type your question or press Enter to continue to next league.")
+        print("  " + "─" * 60)
+        
+        while True:
+            try:
+                user_input = input("\n  Query > ").strip()
+                if not user_input or user_input.lower() in ("/quit", "/exit", "q"):
+                    break
+                
+                print("  ⏳ Thinking...")
+                response = chat.send_message(user_input)
+                print(f"\n  🤖 {response.text}")
+            except KeyboardInterrupt:
+                break
+            except Exception as e:
+                print(f"  ❌ Error: {e}")
+                break
+
+
+def _cmd_trade(leagues: List[League], args: List[str], mock: bool = False) -> None:
+    """Run the trade evaluator."""
+    if not args:
+        print("  ⚠️  Usage: /trade <trade description>")
+        print("  Example: /trade Give LeBron James, Get Jayson Tatum")
+        print("  Mock Example: /trade --mock Give LeBron James, Get Jayson Tatum")
+        return
+
+    trade_text = " ".join(args)
+    
+    for league in leagues:
+        _print_header(f"Trade Evaluation: {league.name}")
+        evaluator = TradeEvaluator(league, mock_ai=mock)
+        
+        print("  ⏳ Analyzing trade... (parsing & enriching data)")
+        report, chat = evaluator.evaluate(trade_text)
+        print("\n" + report)
+
+        if not chat:
+            continue
+
+        # Interactive Mode
+        print("\n  " + "─" * 60)
+        print("  💬 Interactive Mode: Ask follow-up questions about this trade.")
         print("     Type your question or press Enter to continue to next league.")
         print("  " + "─" * 60)
         
@@ -185,6 +231,11 @@ def main() -> None:
         if cmd == "/scout":
             mock = "--mock" in flags
             _cmd_scout(leagues, mock=mock)
+        elif cmd == "/trade":
+            mock = "--mock" in flags
+            # Filter out flags from args text
+            clean_args = [a for a in flags if not a.startswith("--")]
+            _cmd_trade(leagues, clean_args, mock=mock)
         elif cmd == "/rosters":
             _cmd_rosters(leagues)
         elif cmd in ("/my-roster", "/roster"):
