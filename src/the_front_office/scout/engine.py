@@ -10,7 +10,7 @@ from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
 from the_front_office.config.settings import YAHOO_MAX_WEEKLY_ADDS
 from the_front_office.clients.nba.client import NBAClient
 from the_front_office.clients.yahoo.client import YahooFantasyClient
-from the_front_office.services.context_builder import PlayerContextBuilder
+from the_front_office.services import PlayerContextBuilder
 
 if TYPE_CHECKING:
     from google.genai.chats import Chat
