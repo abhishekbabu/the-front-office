@@ -9,8 +9,8 @@ from yahoofantasy import League, Player  # type: ignore[import-untyped]
 from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
 from the_front_office.config.settings import YAHOO_MAX_WEEKLY_ADDS
 from the_front_office.clients.nba.client import NBAClient
-from the_front_office.clients.nba.types import PlayerStats, NineCatStats
 from the_front_office.clients.yahoo.client import YahooFantasyClient
+from the_front_office.services.context_builder import PlayerContextBuilder
 
 if TYPE_CHECKING:
     from google.genai.chats import Chat
@@ -28,27 +28,7 @@ class Scout:
         self.ai = GeminiClient(mock_mode=mock_ai)
         self.nba = NBAClient()
         self.yahoo = YahooFantasyClient(league)
-
-    def _format_stats(self, stats_dict: PlayerStats) -> str:
-        """Format recent trend stats into a readable string."""
-        if not stats_dict:
-            return "No stats available"
-        
-        parts: List[str] = []
-        for key, label in [("last_5", "L5"), ("last_10", "L10"), ("last_15", "L15")]:
-            if key in stats_dict:
-                s: NineCatStats = stats_dict[key]  # type: ignore[literal-required]
-                parts.append(f"{label}: {s['PTS']}p {s['REB']}r {s['AST']}a {s['STL']}s {s['BLK']}b {s['TOV']}to {s['FG3M']}3pm FG{s['FG_PCT']:.1%} FT{s['FT_PCT']:.1%}")
-        
-        return " | ".join(parts) if parts else "No recent stats"
-
-    def _get_remaining_games(
-        self, team_abbr: str, matchup_start: Optional[date], matchup_end: Optional[date]
-    ) -> Optional[int]:
-        """Get remaining games for a player's team in the matchup period."""
-        if not matchup_start or not matchup_end:
-            return None
-        return self.nba.get_remaining_games(team_abbr, matchup_start, matchup_end)
+        self.context_builder = PlayerContextBuilder(self.nba)
 
     def _build_context(self) -> str:
         """
@@ -80,36 +60,12 @@ class Scout:
         else:
             recommendation_instructions = "You have **0 adds remaining**. You CANNOT add players. Instead, identify **3 players to MONITOR** for next week who fit the team's needs."
 
-        # Pre-fetch remaining games for all teams in one pass
-        remaining_games: Dict[str, int] = {}
-        if matchup_start and matchup_end:
-            # Collect all team abbrs from roster + free agents
-            roster_teams = [p.editorial_team_abbr for p in my_team.players()]
-            remaining_games = self.nba.get_remaining_games_bulk(
-                roster_teams, matchup_start, matchup_end
-            )
-        
         # 2. Enrich Roster with NBA Stats + Remaining Games
-        roster_enriched = ""
         players_list = my_team.players()
         logger.debug(f"Fetching stats for {len(players_list)} rostered players...")
-        for p in players_list:
-            stats_dict = self.nba.get_player_stats(p.name.full)
-            games_left = remaining_games.get(p.editorial_team_abbr.upper(), None)
-            games_str = f" [{games_left}G left]" if games_left is not None else ""
-            # Status check (e.g. INJ, GTD, O)
-            status = getattr(p, 'status', None)
-            injury_note = getattr(p, 'injury_note', None)
-            status_str = ""
-            if status:
-                status_str = f" [{status}]"
-                if injury_note:
-                    status_str += f" ({injury_note})"
-            
-            roster_enriched += f"- {p.name.full} ({p.display_position}){status_str}{games_str}"
-            if stats_dict:
-                roster_enriched += f": {self._format_stats(stats_dict)}"
-            roster_enriched += "\n"
+        roster_enriched = self.context_builder.build_context_for_players(
+            players_list, matchup_start, matchup_end
+        )
 
         # 3. Fetch Top Free Agents by Category (Last 7 Days)
         stat_leaders = self.yahoo.fetch_top_by_stat(per_stat=5)
@@ -125,40 +81,38 @@ class Scout:
                     player_map[key] = p
                 seen[key].append(stat_name)
 
-        # Pre-fetch remaining games for free agent teams too
-        if matchup_start and matchup_end:
-            fa_teams = [player_map[k].editorial_team_abbr for k in seen]
-            fa_remaining = self.nba.get_remaining_games_bulk(
-                fa_teams, matchup_start, matchup_end
-            )
-            remaining_games.update(fa_remaining)
-
         # Build enriched free agent string sorted by number of categories (most versatile first)
         unique_players = sorted(seen.items(), key=lambda x: len(x[1]), reverse=True)
         logger.debug(f"Fetching NBA stats for {len(unique_players)} unique free agents...")
-        fas_enriched = ""
-        for i, (key, stat_names) in enumerate(unique_players):
+        
+        # Prepare list of players and annotations
+        fa_players = []
+        fa_annotations = {}
+        for key, stat_names in unique_players:
             p = player_map[key]
-            if (i + 1) % 5 == 0:
-                logger.debug(f"Progress: {i+1}/{len(unique_players)} free agents...")
-            stats_dict = self.nba.get_player_stats(p.name.full)
-            categories = ", ".join(stat_names)
-            games_left = remaining_games.get(p.editorial_team_abbr.upper(), None)
-            games_str = f" [{games_left}G left]" if games_left is not None else ""
-            # Status check for Free Agents too
-            status = getattr(p, 'status', None)
-            status_str = f" [{status}]" if status else ""
+            fa_players.append(p)
+            fa_annotations[key] = f"[Top in: {', '.join(stat_names)}]"
 
-            fas_enriched += f"- {p.name.full} ({p.display_position}){status_str}{games_str} [Top in: {categories}]"
-            if stats_dict:
-                fas_enriched += f": {self._format_stats(stats_dict)}"
-            fas_enriched += "\n"
+        fas_enriched = self.context_builder.build_context_for_players(
+            fa_players, matchup_start, matchup_end, fa_annotations
+        )
         
         # 4. Build schedule context string
         schedule_context = ""
         if matchup_start and matchup_end:
             schedule_context = f"MATCHUP PERIOD: {week_start_str} to {week_end_str}\n"
             schedule_context += "REMAINING GAMES BY TEAM:\n"
+            
+            # Re-fetch remaining games just for the summary (a bit redundant but clean for now)
+            # Optimization: context_builder could return the remaining_games dict too, but let's keep it simple.
+            all_teams = set()
+            for p in players_list:
+                all_teams.add(p.editorial_team_abbr)
+            for p in fa_players:
+                all_teams.add(p.editorial_team_abbr)
+            
+            remaining_games = self.nba.get_remaining_games_bulk(list(all_teams), matchup_start, matchup_end)
+
             # Sort by games remaining (descending) for clarity
             for team, count in sorted(remaining_games.items(), key=lambda x: x[1], reverse=True):
                 schedule_context += f"- {team}: {count} games left\n"
