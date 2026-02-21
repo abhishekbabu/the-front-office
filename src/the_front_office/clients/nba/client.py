@@ -10,13 +10,14 @@ from datetime import datetime, date, time as dt_time
 from typing import Optional, Dict, cast
 import pandas as pd
 from nba_api.stats.static import players, teams  # type: ignore[import-untyped]
-from nba_api.stats.endpoints import playergamelog, scheduleleaguev2  # type: ignore[import-untyped]
+from nba_api.stats.endpoints import leaguegamelog, scheduleleaguev2  # type: ignore[import-untyped]
 from the_front_office.config.settings import NBA_API_DELAY, NBA_CACHE_FILE
 from the_front_office.clients.nba.types import (
     NineCatStats, 
     PlayerStats, 
     NBACacheData, 
-    PlayerCacheRecord, 
+    LeagueGamelogCache,
+    GameLogRecord,
     ScheduleCache, 
     GameRecord
 )
@@ -37,11 +38,9 @@ class NBAClient:
 
     Cache structure (.nba_cache.json):
     {
-        "player_stats": {
-            "<player_name>": {
-                "stats": { "last_5": { ... }, ... },
-                "updated_at": "<ISO timestamp>"
-            }
+        "league_gamelog": {
+            "games": { "<player_name>": [{ "GAME_DATE": ... }, ...] },
+            "updated_at": "<ISO timestamp>"
         },
         "schedule": {
             "teams": { "<TRICODE>": [...], ... },
@@ -54,7 +53,7 @@ class NBAClient:
         self._cache_file: Path = Path(NBA_CACHE_FILE)
         # Initialize with empty structure
         self._cache_data: NBACacheData = {
-            "player_stats": {}, 
+            "league_gamelog": {"games": {}, "updated_at": ""}, 
             "schedule": {"teams": {}, "updated_at": ""}
         }
         self._load_cache()
@@ -70,20 +69,21 @@ class NBAClient:
             raw_data = json.loads(self._cache_file.read_text(encoding="utf-8"))
             
             # Type-safe migration/validation
-            player_stats = cast(dict[str, PlayerCacheRecord], raw_data.get("player_stats", {}))
+            league_gamelog = cast(LeagueGamelogCache, raw_data.get("league_gamelog", {"games": {}, "updated_at": ""}))
             schedule = cast(ScheduleCache, raw_data.get("schedule", {"teams": {}, "updated_at": ""}))
             
             self._cache_data = {
-                "player_stats": player_stats,
+                "league_gamelog": league_gamelog,
                 "schedule": schedule
             }
             
-            logger.debug(f"Loaded NBA cache: {len(self._cache_data['player_stats'])} players, "
+            num_players = len(self._cache_data['league_gamelog']['games'])
+            logger.debug(f"Loaded NBA cache: {num_players} players in gamelog, "
                          f"schedule is {self._get_schedule_age_hours():.1f}h old.")
         except Exception as e:
             logger.warning(f"Failed to load cache: {e}. Starting fresh.")
             self._cache_data = {
-                "player_stats": {}, 
+                "league_gamelog": {"games": {}, "updated_at": ""}, 
                 "schedule": {"teams": {}, "updated_at": ""}
             }
 
@@ -105,8 +105,11 @@ class NBAClient:
         except ValueError:
             return 999.0
 
-    def _is_player_stats_stale(self, updated_at_str: str) -> bool:
-        """Check if a player's stats record has crossed an invalidation boundary (1AM/3PM PT)."""
+    def _is_league_gamelog_stale(self) -> bool:
+        """Check if the league gamelog has crossed an invalidation boundary (1AM/3PM PT)."""
+        updated_at_str = self._cache_data["league_gamelog"]["updated_at"]
+        if not updated_at_str:
+            return True
         try:
             updated_at = datetime.fromisoformat(updated_at_str)
         except ValueError:
@@ -135,61 +138,97 @@ class NBAClient:
 
     # ── Player Stats ───────────────────────────────────────────────
 
-    def _extract_9cat(self, row: "pd.Series[float]") -> NineCatStats:
-        """Extract 9-cat stats from a pandas Series."""
-        return NineCatStats(
-            PTS=round(float(row.get('PTS', 0)), 1),
-            REB=round(float(row.get('REB', 0)), 1),
-            AST=round(float(row.get('AST', 0)), 1),
-            STL=round(float(row.get('STL', 0)), 1),
-            BLK=round(float(row.get('BLK', 0)), 1),
-            TOV=round(float(row.get('TOV', 0)), 1),
-            FG3M=round(float(row.get('FG3M', 0)), 1),
-            FG_PCT=round(float(row.get('FG_PCT', 0)), 3),
-            FT_PCT=round(float(row.get('FT_PCT', 0)), 3),
-        )
+    def _ensure_league_gamelog_loaded(self, retries: int = 2) -> None:
+        if not self._is_league_gamelog_stale():
+            return
 
-    def get_player_stats(self, full_name: str, retries: int = 2) -> Optional[PlayerStats]:
-        """Fetch recent stats (L5/L10/L15) for a player with per-record caching."""
-        record = self._cache_data["player_stats"].get(full_name)
-        if record and not self._is_player_stats_stale(record["updated_at"]):
-            logger.debug(f"Cache hit for {full_name}")
-            return record["stats"]
-
+        logger.debug("Refreshing league gamelog via nba_api...")
         for attempt in range(retries + 1):
             try:
-                player_matches = players.find_players_by_full_name(full_name)
-                if not player_matches:
-                    return None
-
-                player_id: int = player_matches[0]['id']
-                stats_dict: PlayerStats = PlayerStats()
-                
                 self._wait_for_rate_limit()
-                gamelog = playergamelog.PlayerGameLog(player_id=player_id)
-                gamelog_df: pd.DataFrame = gamelog.get_data_frames()[0]
-
-                if not gamelog_df.empty:
-                    for count in [5, 10, 15]:
-                        if len(gamelog_df) >= count:
-                            stats_dict[f"last_{count}"] = self._extract_9cat(  # type: ignore[literal-required]
-                                gamelog_df.head(count).mean(numeric_only=True)
-                            )
-
-                self._cache_data["player_stats"][full_name] = {
-                    "stats": stats_dict,
+                # Fetch full season gamelog for all players. Note that the standard timeout is much larger 
+                # here as we are doing the entire DB table for the season.
+                log = leaguegamelog.LeagueGameLog(player_or_team_abbreviation='P', timeout=60)
+                df = log.get_data_frames()[0]
+                
+                games_by_player: dict[str, list[GameLogRecord]] = {}
+                for row in df.itertuples(index=False):
+                    player_name = row.PLAYER_NAME
+                    record: GameLogRecord = {
+                        "GAME_DATE": row.GAME_DATE,
+                        "PTS": float(row.PTS),
+                        "REB": float(row.REB),
+                        "AST": float(row.AST),
+                        "STL": float(row.STL),
+                        "BLK": float(row.BLK),
+                        "TOV": float(row.TOV),
+                        "FG3M": float(row.FG3M),
+                        "FGA": float(row.FGA),
+                        "FGM": float(row.FGM),
+                        "FTA": float(row.FTA),
+                        "FTM": float(row.FTM)
+                    }
+                    if player_name not in games_by_player:
+                        games_by_player[player_name] = []
+                    games_by_player[player_name].append(record)
+                
+                self._cache_data["league_gamelog"] = {
+                    "games": games_by_player,
                     "updated_at": datetime.now().isoformat()
                 }
                 self._save_cache()
-                return stats_dict
-
+                return
             except Exception as e:
                 if attempt < retries:
-                    logger.warning(f"Retry {attempt+1}/{retries} for {full_name}: {e}")
-                    time.sleep(2)
+                    backoff_time = 2 ** attempt * 5
+                    logger.warning(f"Retry {attempt+1}/{retries} for league gamelog in {backoff_time}s: {e}")
+                    time.sleep(backoff_time)
                     continue
-                logger.warning(f"Failed to fetch stats for {full_name}: {e}")
-        return None
+                logger.warning(f"Failed to fetch league gamelog: {e}")
+
+    def _extract_9cat_from_records(self, records: list[GameLogRecord]) -> NineCatStats:
+        """Extract 9-cat stats from a list of structured game records."""
+        df = pd.DataFrame(records)
+        mean_vals = df.mean(numeric_only=True)
+        # Accurately compute percentages instead of naive average
+        fga_sum = df['FGA'].sum()
+        fgm_sum = df['FGM'].sum()
+        fta_sum = df['FTA'].sum()
+        ftm_sum = df['FTM'].sum()
+        
+        fg_pct = (fgm_sum / fga_sum) if fga_sum > 0 else 0.0
+        ft_pct = (ftm_sum / fta_sum) if fta_sum > 0 else 0.0
+
+        return NineCatStats(
+            PTS=round(float(mean_vals.get('PTS', 0)), 1),
+            REB=round(float(mean_vals.get('REB', 0)), 1),
+            AST=round(float(mean_vals.get('AST', 0)), 1),
+            STL=round(float(mean_vals.get('STL', 0)), 1),
+            BLK=round(float(mean_vals.get('BLK', 0)), 1),
+            TOV=round(float(mean_vals.get('TOV', 0)), 1),
+            FG3M=round(float(mean_vals.get('FG3M', 0)), 1),
+            FG_PCT=round(float(fg_pct), 3),
+            FT_PCT=round(float(ft_pct), 3),
+        )
+
+    def get_player_stats(self, full_name: str, retries: int = 2) -> Optional[PlayerStats]:
+        """Fetch recent stats (L5/L10/L15) for a player using the cached league gamelog."""
+        self._ensure_league_gamelog_loaded(retries)
+        games = self._cache_data["league_gamelog"]["games"].get(full_name)
+        
+        if not games:
+            # Player not found or has no games
+            return None
+
+        # Sort games descending by date
+        games.sort(key=lambda g: g["GAME_DATE"], reverse=True)
+        
+        stats_dict: PlayerStats = PlayerStats()
+        for count in [5, 10, 15]:
+            if len(games) >= count:
+                stats_dict[f"last_{count}"] = self._extract_9cat_from_records(games[:count])  # type: ignore[literal-required]
+
+        return stats_dict if stats_dict else None
 
     # ── Schedule ───────────────────────────────────────────────────
 
@@ -201,7 +240,7 @@ class NBAClient:
         logger.debug("Refreshing NBA schedule via nba_api...")
         try:
             self._wait_for_rate_limit()
-            sched = scheduleleaguev2.ScheduleLeagueV2()
+            sched = scheduleleaguev2.ScheduleLeagueV2(timeout=5)
             data = sched.get_dict()
 
             team_games: Dict[str, list[GameRecord]] = {}

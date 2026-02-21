@@ -22,7 +22,7 @@ YAHOO_MAX_WEEKLY_ADDS = int(os.getenv("YAHOO_MAX_WEEKLY_ADDS", "3"))
 # Scouting Settings
 DEFAULT_FREE_AGENT_COUNT = 20
 REPORT_FREE_AGENT_LIMIT = 15
-NBA_API_DELAY = 1.0  # Seconds to wait between nba_api calls
+NBA_API_DELAY = 4.0  # Seconds to wait between nba_api calls
 NBA_CACHE_FILE = ".nba_cache.json"  # Unified cache for all NBA data (stats + schedule)
 
 # Logging

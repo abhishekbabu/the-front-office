@@ -22,8 +22,22 @@ class PlayerStats(TypedDict, total=False):
 
 # --- Cache Specific Types ---
 
-class PlayerCacheRecord(TypedDict):
-    stats: PlayerStats
+class GameLogRecord(TypedDict):
+    GAME_DATE: str
+    PTS: float
+    REB: float
+    AST: float
+    STL: float
+    BLK: float
+    TOV: float
+    FG3M: float
+    FGA: float
+    FGM: float
+    FTA: float
+    FTM: float
+
+class LeagueGamelogCache(TypedDict):
+    games: dict[str, list[GameLogRecord]]
     updated_at: str
 
 class GameRecord(TypedDict):
@@ -37,5 +51,5 @@ class ScheduleCache(TypedDict):
     updated_at: str
 
 class NBACacheData(TypedDict):
-    player_stats: dict[str, PlayerCacheRecord]
+    league_gamelog: LeagueGamelogCache
     schedule: ScheduleCache
