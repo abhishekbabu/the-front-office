@@ -16,6 +16,7 @@ LEAGUE RULES:
 - Focus on securing a 5-4 or 6-3 win; the exact score doesn't matter as much as the win.
 
 CURRENT ROSTER (with Real-World Stats):
+- NOTE: Players marked with "[IN IL SPOT]" are currently in Injured Reserve slots and DO NOT take up an active roster spot. You can recommend dropping them ONLY if the replacement player is also injured and can be placed in that IL spot.
 {roster_str}
 
 MATCHUP CONTEXT:

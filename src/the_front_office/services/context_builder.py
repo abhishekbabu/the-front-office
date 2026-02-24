@@ -77,12 +77,17 @@ class PlayerContextBuilder:
                 if injury_note:
                     status_str += f" ({injury_note})"
             
+            # IL Spot check for rostered players
+            il_str = ""
+            if hasattr(p, 'selected_position') and getattr(p.selected_position, 'position', '') in ('IL', 'IL+'):
+                il_str = " [IN IL SPOT]"
+            
             # Annotation
             note = ""
             if annotations and p.player_key in annotations:
                 note = f" {annotations[p.player_key]}"
 
-            context_str += f"- {p.name.full} ({p.display_position}){status_str}{games_str}{note}"
+            context_str += f"- {p.name.full} ({p.display_position}){il_str}{status_str}{games_str}{note}"
             if stats_dict:
                 context_str += f": {self._format_stats(stats_dict)}"
             context_str += "\n"

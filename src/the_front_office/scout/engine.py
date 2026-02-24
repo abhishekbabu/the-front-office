@@ -61,7 +61,7 @@ class Scout:
             recommendation_instructions = "You have **0 adds remaining**. You CANNOT add players. Instead, identify **3 players to MONITOR** for next week who fit the team's needs."
 
         # 2. Enrich Roster with NBA Stats + Remaining Games
-        players_list = my_team.players()
+        players_list = my_team.roster().players if hasattr(my_team, 'roster') else my_team.players()
         logger.debug(f"Fetching stats for {len(players_list)} rostered players...")
         roster_enriched = self.context_builder.build_context_for_players(
             players_list, matchup_start, matchup_end
