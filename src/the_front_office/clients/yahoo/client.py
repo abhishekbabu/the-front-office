@@ -140,7 +140,7 @@ class YahooFantasyClient:
 
     def fetch_top_by_stat(
         self,
-        per_stat: int = 5,
+        per_stat: int = 10,
         sort_type: Timeframe = Timeframe.LAST_WEEK,
     ) -> Dict[str, List[Player]]:
         """

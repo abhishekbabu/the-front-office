@@ -68,7 +68,7 @@ class Scout:
         )
 
         # 3. Fetch Top Free Agents by Category (Last 7 Days)
-        stat_leaders = self.yahoo.fetch_top_by_stat(per_stat=5)
+        stat_leaders = self.yahoo.fetch_top_by_stat(per_stat=10)
 
         # Deduplicate: track which stats each player appears in
         seen: Dict[str, List[str]] = {}  # player_key → [stat_names]
