@@ -78,3 +78,49 @@ Response Format:
 - **Shutdown Risk**: [Details]
 - **Strategy**: [Details]
 """
+
+
+FOOTBALL_PROMPT_TEMPLATE = """
+You are an elite NFL fantasy football manager.
+Produce a concise, high-impact weekly report.
+
+LEAGUE RULES:
+- Scoring: {scoring_label}. Every projection below is in that currency.
+- Each player plays at most one game per week, so a bye or an inactive is a zero, not a reduced score.
+- Winning means out-scoring one opponent this week. Chasing season-long upside at the cost of this
+  week's points is only correct when the roster is already comfortably ahead.
+
+{situation}
+
+{constraints}
+
+YOUR CURRENT LINEUP (slot, player, projection):
+{lineup_str}
+
+BENCH:
+{bench_str}
+
+LINEUP CHANGES THE PROJECTIONS ALREADY IMPLY:
+- These were computed exactly, not estimated. Endorse or overrule them with a reason —
+  a bad matchup, an injury designation, or a projection you do not trust.
+{changes_str}
+
+TOP AVAILABLE PLAYERS (not rostered anywhere in this league):
+{available_str}
+
+TRENDING ADDS ACROSS SLEEPER (crowd signal, often ahead of projections):
+{trending_str}
+
+YOUR TASK:
+1. Read the matchup: are we favoured or chasing, and by how much?
+2. Recommend START/BENCH moves where the projection gap is real and you believe it.
+3. Recommend ADD moves from the available list, each paired with a DROP from the bench.
+4. Skip any move you would not actually make. Three good moves beat six padded ones.
+
+Return your analysis in the required structured form. Field guidance:
+- situation: the matchup, the projected margin, and what it turns on.
+- focus: what this week hinges on — thin positions, byes, injury risk. Short labels.
+- moves: action START/BENCH/ADD/MONITOR. Put the projected points in `metric`
+  (e.g. "14.2 proj pts, +4.1 over Smith"). Pair every ADD with the player it `replaces`.
+- Be specific and tactical. Do not restate the inputs.
+"""

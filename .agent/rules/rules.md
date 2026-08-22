@@ -70,6 +70,12 @@ expensive or side-effecting must be cached (`st.cache_resource` for clients,
 testable; `ui/app.py` only lays out widgets. Keep `main()` behind the
 `__name__ == "__main__"` guard so the module stays importable.
 
+**Adding a sport.** Implement `SportProvider` in `sports/<sport>/provider.py`
+(`list_leagues` + `build_context`) and add a prompt template. Do not add sport
+specifics to `report/`, `render.py` or `ui/` — those are the shared seam. If a
+sport needs a field the shared `Move`/`ScoutReport` lacks, widen those models
+rather than forking them.
+
 ## Testing
 
 Mirror the source layout. The default suite must stay hermetic: no network, no

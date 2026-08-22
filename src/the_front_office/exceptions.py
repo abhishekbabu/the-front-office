@@ -26,6 +26,21 @@ class YahooAPIError(FrontOfficeError):
     """
 
 
+class SleeperAPIError(FrontOfficeError):
+    """A Sleeper API call failed.
+
+    Distinct from an empty result: a league with no transactions this week is a
+    valid answer, a failed request is not.
+    """
+
+
+class LeagueNotFoundError(FrontOfficeError):
+    """The configured Sleeper user has no matching league."""
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(f"Could not find your Sleeper league: {detail}")
+
+
 class PlayerNotFoundError(FrontOfficeError):
     """One or more player names in a trade could not be resolved."""
 

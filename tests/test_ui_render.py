@@ -10,7 +10,8 @@ from typing import Any
 
 import pytest
 
-from the_front_office.scout.types import MOCK_SCOUT_REPORT, ScoutReport
+from the_front_office.report.mocks import MOCK_SCOUT_REPORT
+from the_front_office.report.types import ScoutReport
 from the_front_office.trade.types import MOCK_TRADE_VERDICT, TradeVerdict
 
 
@@ -73,40 +74,38 @@ def _app() -> Any:
 
 def test_every_report_field_reaches_the_page(page: Recorder) -> None:
     _app().render_report(MOCK_SCOUT_REPORT)
-    assert MOCK_SCOUT_REPORT.matchup_insight in page.text
-    assert MOCK_SCOUT_REPORT.final_strategy in page.text
-    for cat in MOCK_SCOUT_REPORT.close_categories:
+    assert MOCK_SCOUT_REPORT.situation in page.text
+    assert MOCK_SCOUT_REPORT.strategy in page.text
+    for cat in MOCK_SCOUT_REPORT.focus:
         assert cat in page.text
 
 
 def test_every_recommendation_is_rendered(page: Recorder) -> None:
     _app().render_report(MOCK_SCOUT_REPORT)
-    for rec in MOCK_SCOUT_REPORT.targets:
-        assert rec.player_name in page.text
-        assert rec.reasoning in page.text
-        assert rec.drop_player in page.text
-        assert rec.drop_justification in page.text
+    for rec in MOCK_SCOUT_REPORT.moves:
+        assert rec.player in page.text
+        assert rec.rationale in page.text
+        assert rec.replaces in page.text
+        assert rec.replaces_rationale in page.text
 
 
 def test_empty_target_list_says_so_rather_than_rendering_nothing(page: Recorder) -> None:
-    report = ScoutReport(matchup_insight="x", close_categories=[], targets=[], final_strategy="y")
+    report = ScoutReport(situation="x", focus=[], moves=[], strategy="y")
     _app().render_report(report)
     assert "no recommendations" in page.text
 
 
 def test_monitor_entries_omit_the_drop_section(page: Recorder) -> None:
-    rec = MOCK_SCOUT_REPORT.targets[0].model_copy(
-        update={"action": "MONITOR", "drop_player": "", "drop_justification": ""}
-    )
-    _app().render_recommendation(rec)
+    rec = MOCK_SCOUT_REPORT.moves[0].model_copy(update={"action": "MONITOR", "replaces": "", "replaces_rationale": ""})
+    _app().render_move(rec)
     assert "MONITOR" in page.text
     assert "Drop " not in page.text
 
 
 def test_unknown_schedule_is_labelled_not_shown_as_zero(page: Recorder) -> None:
-    rec = MOCK_SCOUT_REPORT.targets[0].model_copy(update={"games_remaining": 0})
-    _app().render_recommendation(rec)
-    assert "schedule unknown" in page.text
+    rec = MOCK_SCOUT_REPORT.moves[0].model_copy(update={"metric": ""})
+    _app().render_move(rec)
+    assert "no metric" in page.text
     assert "0G left" not in page.text
 
 
@@ -211,6 +210,8 @@ def _page_recorder(monkeypatch: pytest.MonkeyPatch, **extra: Any) -> Recorder:
     rec.sidebar = rec  # type: ignore[attr-defined]
     rec.title = rec._record  # type: ignore[attr-defined]
     rec.toggle = lambda label, help=None: False  # type: ignore[attr-defined]
+    # The sidebar now picks a sport before anything platform-specific happens.
+    rec.radio = lambda label, options: options[0]  # type: ignore[attr-defined]
 
     def _stop() -> None:
         raise Stopped
@@ -259,10 +260,60 @@ def test_scout_page_renders_a_domain_error_instead_of_raising(monkeypatch: pytes
         def __init__(self, *a: Any, **k: Any) -> None:
             pass
 
-        def start_analysis(self) -> Any:
+        def start_analysis(self, league_id: str = "") -> Any:
             raise TeamNotFoundError("Some League")
 
-    monkeypatch.setattr(app, "Scout", Boom)
+    monkeypatch.setattr(app, "ScoutEngine", Boom)
+    monkeypatch.setattr(app, "NBAProvider", lambda *a, **k: None)
     monkeypatch.setattr(app, "_nba_client", lambda: None)
     app.scout_page(object(), mock=True)
     assert "Some League" in rec.text
+
+
+# ── sport routing ───────────────────────────────────────────────────────
+
+
+def test_football_is_reachable_without_any_yahoo_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sleeper needs no auth, so picking football must not block on a Yahoo
+    handshake it does not use."""
+    app = _app()
+    rec = _page_recorder(monkeypatch)
+    rec.radio = lambda label, options: "NFL (Sleeper)"  # type: ignore[attr-defined]
+
+    def _yahoo_must_not_run() -> Any:
+        raise AssertionError("Yahoo was contacted on the football path")
+
+    monkeypatch.setattr(app, "_load_leagues", _yahoo_must_not_run)
+    called: list[bool] = []
+    monkeypatch.setattr(app, "football_page", lambda mock: called.append(True))
+
+    app.main()
+    assert called == [True]
+
+
+def test_football_page_surfaces_a_configuration_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    from the_front_office.exceptions import LeagueNotFoundError
+
+    app = _app()
+    rec = _page_recorder(monkeypatch)
+
+    class NoUsername:
+        def list_leagues(self) -> Any:
+            raise LeagueNotFoundError("SLEEPER_USERNAME is not set in .env")
+
+    monkeypatch.setattr(app, "NFLProvider", lambda *a, **k: NoUsername())
+    app.football_page(mock=True)
+    assert "SLEEPER_USERNAME" in rec.text
+
+
+def test_football_page_warns_when_there_are_no_leagues(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _app()
+    rec = _page_recorder(monkeypatch)
+
+    class NoLeagues:
+        def list_leagues(self) -> Any:
+            return []
+
+    monkeypatch.setattr(app, "NFLProvider", lambda *a, **k: NoLeagues())
+    app.football_page(mock=True)
+    assert "No Sleeper NFL leagues" in rec.text

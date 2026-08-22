@@ -10,17 +10,20 @@ import pytest
 from conftest import FakeAI, FakeNBA, FakeYahoo, make_player
 
 from the_front_office.exceptions import TeamNotFoundError
-from the_front_office.scout.engine import Scout
-from the_front_office.scout.types import MOCK_SCOUT_REPORT, ScoutReport
+from the_front_office.report.engine import ScoutEngine
+from the_front_office.report.mocks import MOCK_SCOUT_REPORT
+from the_front_office.report.types import ScoutReport
+from the_front_office.sports.nba.provider import NBAProvider
 
 
-def _scout(yahoo: FakeYahoo, ai: FakeAI | None = None, nba: FakeNBA | None = None) -> Scout:
-    return Scout(league=None, ai=ai or FakeAI(), nba=nba or FakeNBA(), yahoo=yahoo)  # type: ignore[arg-type]
+def _scout(yahoo: FakeYahoo, ai: FakeAI | None = None, nba: FakeNBA | None = None) -> ScoutEngine:
+    provider = NBAProvider(league=None, nba=nba or FakeNBA(), yahoo=yahoo)  # type: ignore[arg-type]
+    return ScoutEngine(provider, ai=ai or FakeAI())  # type: ignore[arg-type]
 
 
 def test_returns_a_validated_report_and_an_open_chat() -> None:
     ai = FakeAI()
-    report, chat = _scout(FakeYahoo(), ai=ai).start_analysis()
+    report, chat = _scout(FakeYahoo(), ai=ai).start_analysis("")
     assert isinstance(report, ScoutReport)
     assert report == MOCK_SCOUT_REPORT
     assert chat is ai.chat
@@ -29,7 +32,7 @@ def test_returns_a_validated_report_and_an_open_chat() -> None:
 def test_follow_up_chat_is_seeded_with_the_report() -> None:
     """Follow-ups must see the analysis without re-sending the whole context."""
     ai = FakeAI()
-    _scout(FakeYahoo(), ai=ai).start_analysis()
+    _scout(FakeYahoo(), ai=ai).start_analysis("")
     roles = [item["role"] for item in ai.history]
     assert roles == ["user", "model"]
     # The model turn is the report itself, as JSON the follow-up can reason over.
@@ -40,7 +43,7 @@ def test_follow_up_is_seeded_with_a_briefing_not_the_whole_prompt() -> None:
     """The history is resent on every follow-up, so the prompt's free-agent
     block — over half its volume — must not ride along."""
     ai = FakeAI()
-    _scout(_rich_yahoo(), ai=ai).start_analysis()
+    _scout(_rich_yahoo(), ai=ai).start_analysis("")
     briefing, prompt = ai.history[0]["parts"][0], ai.prompts[0]
 
     assert len(briefing) < len(prompt) / 2
@@ -50,20 +53,20 @@ def test_follow_up_is_seeded_with_a_briefing_not_the_whole_prompt() -> None:
 
 def test_briefing_keeps_what_a_follow_up_needs() -> None:
     ai = FakeAI()
-    _scout(_rich_yahoo(), ai=ai).start_analysis()
+    _scout(_rich_yahoo(), ai=ai).start_analysis("")
     briefing = ai.history[0]["parts"][0]
 
     assert "CURRENT MATCHUP" in briefing  # why a category is close
     assert "TRANSACTION CONTEXT" in briefing  # why only three adds
-    assert "CURRENT ROSTER" in briefing  # why that drop
+    assert "CURRENT SQUAD" in briefing  # why that drop
     assert "Roster Player 0" in briefing
 
 
 def test_briefing_carries_only_the_recommended_free_agents() -> None:
     """_rich_yahoo offers nine free agents; the canned report names one."""
     ai = FakeAI()
-    recommended = MOCK_SCOUT_REPORT.targets[0].player_name
-    _scout(_rich_yahoo(recommended=recommended), ai=ai).start_analysis()
+    recommended = MOCK_SCOUT_REPORT.moves[0].player
+    _scout(_rich_yahoo(recommended=recommended), ai=ai).start_analysis("")
     briefing = ai.history[0]["parts"][0]
 
     assert recommended in briefing
@@ -74,14 +77,14 @@ def test_briefing_carries_only_the_recommended_free_agents() -> None:
 def test_briefing_tells_the_model_the_list_is_partial() -> None:
     """Otherwise it would invent numbers for a player it can no longer see."""
     ai = FakeAI()
-    _scout(_rich_yahoo(), ai=ai).start_analysis()
+    _scout(_rich_yahoo(), ai=ai).start_analysis("")
     assert "re-run the report" in ai.history[0]["parts"][0]
 
 
 def test_matchup_is_fetched_once_not_twice() -> None:
     """get_matchup_context and get_matchup_dates each used to sync their own Week."""
     yahoo = _rich_yahoo()
-    _scout(yahoo).start_analysis()
+    _scout(yahoo).start_analysis("")
     assert yahoo.matchup_fetches == 1
 
 
@@ -94,7 +97,7 @@ def test_missing_team_raises_before_any_ai_call() -> None:
 
     ai = FakeAI()
     with pytest.raises(TeamNotFoundError):
-        _scout(NoTeam(), ai=ai).start_analysis()
+        _scout(NoTeam(), ai=ai).start_analysis("")
     assert ai.prompts == []
 
 
@@ -112,7 +115,7 @@ def _rich_yahoo(recommended: str = "Mock Player One") -> FakeYahoo:
 
 def _prompt_for(yahoo: FakeYahoo, nba: FakeNBA | None = None) -> str:
     ai = FakeAI()
-    _scout(yahoo, ai=ai, nba=nba).start_analysis()
+    _scout(yahoo, ai=ai, nba=nba).start_analysis("")
     return ai.prompts[0]
 
 

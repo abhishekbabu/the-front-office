@@ -38,6 +38,13 @@ class AppSettings(BaseSettings):
     yahoo_token_file: str = ".yahoofantasy"
     yahoo_max_weekly_adds: int = Field(default=3, ge=0)
 
+    # ── Sleeper (fantasy football) ──────────────────────────────────────
+    # Sleeper needs no credentials; the username is only used to find leagues.
+    sleeper_username: str | None = None
+    sleeper_league_id: str | None = None
+    """Pin a specific league. Optional — otherwise leagues are discovered from the username."""
+    sleeper_cache_file: str = ".sleeper_cache.json"
+
     # ── Scouting ────────────────────────────────────────────────────────
     default_free_agent_count: int = Field(default=20, gt=0)
     report_free_agent_limit: int = Field(default=15, gt=0)

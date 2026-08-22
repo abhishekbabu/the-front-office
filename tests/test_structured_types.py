@@ -4,22 +4,22 @@ import pytest
 from google.genai import types as genai_types
 from pydantic import ValidationError
 
-from the_front_office.scout.types import MOCK_SCOUT_REPORT, Recommendation, ScoutReport
+from the_front_office.report.mocks import MOCK_SCOUT_REPORT
+from the_front_office.report.types import Move, ScoutReport
 from the_front_office.trade.types import MOCK_TRADE_VERDICT, TradeVerdict
 
 # Validated from dicts rather than constructors: the runtime rejection is the
 # point, and a deliberately-invalid literal in a constructor call is a static
 # type error the checker would (correctly) flag.
-VALID_RECOMMENDATION: dict[str, object] = {
+VALID_MOVE: dict[str, object] = {
     "action": "ADD",
-    "player_name": "Test Player",
+    "player": "Test Player",
     "position": "PF",
-    "nba_team": "LAL",
-    "games_remaining": 3,
-    "categories_helped": ["REB"],
-    "reasoning": "Rebounds at volume.",
-    "drop_player": "Bench Guy",
-    "drop_justification": "No categories won.",
+    "team": "LAL",
+    "metric": "3 games left",
+    "rationale": "Rebounds at volume.",
+    "replaces": "Bench Guy",
+    "replaces_rationale": "No categories won.",
 }
 
 VALID_VERDICT: dict[str, object] = {
@@ -42,9 +42,9 @@ def test_schemas_convert_for_the_gemini_response_schema(schema: type) -> None:
 
 def test_action_is_constrained_to_add_or_monitor() -> None:
     with pytest.raises(ValidationError):
-        Recommendation.model_validate({**VALID_RECOMMENDATION, "action": "TRADE"})
-    for ok in ("ADD", "MONITOR"):
-        assert Recommendation.model_validate({**VALID_RECOMMENDATION, "action": ok}).action == ok
+        Move.model_validate({**VALID_MOVE, "action": "NONSENSE"})
+    for ok in ("ADD", "START", "BENCH", "TRANSFER", "CAPTAIN", "MONITOR", "DROP"):
+        assert Move.model_validate({**VALID_MOVE, "action": ok}).action == ok
 
 
 def test_verdict_is_constrained_to_the_three_outcomes() -> None:
@@ -57,12 +57,12 @@ def test_verdict_is_constrained_to_the_three_outcomes() -> None:
 def test_missing_fields_are_rejected() -> None:
     """A model omitting a field must fail here, not render as a blank section."""
     with pytest.raises(ValidationError):
-        ScoutReport.model_validate({"matchup_insight": "x", "close_categories": []})
+        ScoutReport.model_validate({"situation": "x", "focus": []})
 
 
-def test_games_remaining_must_be_an_integer() -> None:
+def test_action_must_be_a_known_string() -> None:
     with pytest.raises(ValidationError):
-        Recommendation.model_validate({**VALID_RECOMMENDATION, "games_remaining": "four"})
+        Move.model_validate({**VALID_MOVE, "action": 42})
 
 
 def test_reports_round_trip_through_json() -> None:
@@ -74,7 +74,7 @@ def test_reports_round_trip_through_json() -> None:
 def test_every_field_carries_a_description_for_the_model() -> None:
     """Field descriptions are the schema's instructions to Gemini — a field
     without one gives the model nothing to go on."""
-    for schema in (ScoutReport, Recommendation, TradeVerdict):
+    for schema in (ScoutReport, Move, TradeVerdict):
         undocumented = [n for n, f in schema.model_fields.items() if not f.description]
         assert not undocumented, f"{schema.__name__} fields missing descriptions: {undocumented}"
 
@@ -82,5 +82,5 @@ def test_every_field_carries_a_description_for_the_model() -> None:
 def test_mock_values_satisfy_their_own_schemas() -> None:
     """--mock must produce something the real code path would accept."""
     assert ScoutReport.model_validate(MOCK_SCOUT_REPORT.model_dump()) == MOCK_SCOUT_REPORT
-    assert len(MOCK_SCOUT_REPORT.targets) == 3
+    assert len(MOCK_SCOUT_REPORT.moves) == 3
     assert TradeVerdict.model_validate(MOCK_TRADE_VERDICT.model_dump()) == MOCK_TRADE_VERDICT

@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from the_front_office.scout.types import MOCK_SCOUT_REPORT
+from the_front_office.report.mocks import MOCK_SCOUT_REPORT
 from the_front_office.trade.types import MOCK_TRADE_VERDICT
 
 

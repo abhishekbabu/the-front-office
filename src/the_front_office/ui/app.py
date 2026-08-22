@@ -15,8 +15,10 @@ import streamlit as st
 
 from the_front_office.config.logging import setup_logging
 from the_front_office.exceptions import FrontOfficeError
-from the_front_office.scout.engine import Scout
-from the_front_office.scout.types import Recommendation, ScoutReport
+from the_front_office.report.engine import ScoutEngine
+from the_front_office.report.types import Move, ScoutReport
+from the_front_office.sports.nba.provider import NBAProvider
+from the_front_office.sports.nfl.provider import NFLProvider
 from the_front_office.trade.engine import TradeEvaluator
 from the_front_office.trade.types import TradeVerdict
 from the_front_office.ui import data
@@ -41,35 +43,34 @@ def _roster_rows(_team: Any, team_name: str) -> list[dict[str, str]]:
 # ── rendering ───────────────────────────────────────────────────────────
 
 
-def render_recommendation(rec: Recommendation) -> None:
+def render_move(rec: Move) -> None:
     """One waiver move as an expandable card."""
-    games = f"{rec.games_remaining}G left" if rec.games_remaining else "schedule unknown"
-    header = f"{rec.action}  ·  {rec.player_name}  ({rec.position}, {rec.nba_team})  ·  {games}"
+    header = f"{rec.action}  ·  {rec.player}  ({rec.position}, {rec.team})  ·  {rec.metric or 'no metric'}"
 
     with st.expander(header, expanded=True):
-        if rec.categories_helped:
-            st.write(" ".join(f"`{c}`" for c in rec.categories_helped))
-        st.write(rec.reasoning)
-        if rec.drop_player:
+        if []:
+            st.write(" ".join(f"`{c}`" for c in []))
+        st.write(rec.rationale)
+        if rec.replaces:
             st.divider()
-            st.markdown(f"**Drop {rec.drop_player}** — {rec.drop_justification}")
+            st.markdown(f"**{rec.replaces}** — {rec.replaces_rationale}")
 
 
 def render_report(report: ScoutReport) -> None:
     """A full scout report."""
-    st.subheader("Matchup insight")
-    st.write(report.matchup_insight)
-    if report.close_categories:
-        st.write("**In play:** " + " ".join(f"`{c}`" for c in report.close_categories))
+    st.subheader("Situation")
+    st.write(report.situation)
+    if report.focus:
+        st.write("**In play:** " + " ".join(f"`{c}`" for c in report.focus))
 
-    st.subheader("Targets")
-    if not report.targets:
+    st.subheader("Moves")
+    if not report.moves:
         st.info("The model returned no recommendations.")
-    for rec in report.targets:
-        render_recommendation(rec)
+    for rec in report.moves:
+        render_move(rec)
 
     st.subheader("Strategy")
-    st.success(report.final_strategy)
+    st.success(report.strategy)
 
 
 def render_verdict(verdict: TradeVerdict) -> None:
@@ -129,6 +130,43 @@ def render_chat(key: str) -> None:
 # ── pages ───────────────────────────────────────────────────────────────
 
 
+def football_page(mock: bool) -> None:
+    """Weekly Sleeper report: start/sit and waiver targets."""
+    st.header("Football report")
+    st.caption("Start/sit and waiver targets for the current NFL week.")
+
+    provider = NFLProvider()
+    try:
+        refs = provider.list_leagues()
+    except FrontOfficeError as e:
+        st.error(str(e))
+        return
+
+    if not refs:
+        st.warning("No Sleeper NFL leagues found for this season.")
+        return
+
+    names = [f"{r.name} — {r.detail}" for r in refs]
+    chosen = st.selectbox("League", names) if len(names) > 1 else names[0]
+    ref = refs[names.index(chosen)]
+
+    if st.button("Run football report", type="primary"):
+        with st.spinner("Pulling rosters, projections and waiver pool…"):
+            try:
+                report, chat = ScoutEngine(provider, mock_ai=mock).start_analysis(ref.league_id)
+            except FrontOfficeError as e:
+                st.error(str(e))
+                return
+        st.session_state["football_report"] = report
+        st.session_state["football_chat"] = chat
+        st.session_state["football_history"] = []
+
+    report = st.session_state.get("football_report")
+    if report is not None:
+        render_report(report)
+        render_chat("football")
+
+
 def scout_page(league: Any, mock: bool) -> None:
     st.header("Scout report")
     st.caption("Waiver wire analysis for the current matchup.")
@@ -136,7 +174,7 @@ def scout_page(league: Any, mock: bool) -> None:
     if st.button("Run scout report", type="primary"):
         with st.spinner("Analysing roster, free agents and schedule…"):
             try:
-                report, chat = Scout(league, mock_ai=mock, nba=_nba_client()).start_analysis()
+                report, chat = ScoutEngine(NBAProvider(league, nba=_nba_client()), mock_ai=mock).start_analysis("")
             except FrontOfficeError as e:
                 st.error(str(e))
                 return
@@ -204,6 +242,14 @@ def main() -> None:
 
     st.sidebar.title("🏀 The Front Office")
     mock = st.sidebar.toggle("Mock AI", help="Skip Gemini calls. Yahoo data stays live.")
+
+    sport = st.sidebar.radio("Sport", ["NBA (Yahoo)", "NFL (Sleeper)"])
+
+    if sport == "NFL (Sleeper)":
+        # Sleeper needs no auth, so the football path skips the Yahoo handshake
+        # entirely rather than blocking on credentials it does not use.
+        football_page(mock)
+        return
 
     try:
         leagues = _load_leagues()

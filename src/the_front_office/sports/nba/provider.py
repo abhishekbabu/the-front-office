@@ -1,10 +1,12 @@
-"""
-Scout Engine — Orchestrates data retrieval and AI analysis for scouting reports.
+"""NBA on Yahoo.
+
+Category-league basketball: the forward-looking number is games remaining in the
+matchup period crossed with recent per-category form, and the budget constraint
+is Yahoo's weekly add limit.
 """
 
 import logging
 from datetime import date
-from typing import TYPE_CHECKING, Union
 
 from yahoofantasy import League, Player  # type: ignore[import-untyped]
 
@@ -12,44 +14,52 @@ from the_front_office.clients.nba.client import NBAClient
 from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
 from the_front_office.config.settings import settings
-from the_front_office.scout.types import MOCK_SCOUT_REPORT, ScoutContext, ScoutReport
+from the_front_office.report.types import SportContext
 from the_front_office.services import PlayerContextBuilder
-
-if TYPE_CHECKING:
-    from google.genai.chats import Chat
-
-    from the_front_office.clients.gemini.client import GeminiClient
-    from the_front_office.clients.gemini.types import MockChatSession
+from the_front_office.sports.base import LeagueRef
 
 logger = logging.getLogger(__name__)
 
 
-class Scout:
-    """
-    Orchestrates data retrieval and AI analysis to generate scouting reports.
-    """
+class NBAProvider:
+    """SportProvider for Yahoo category-league basketball."""
+
+    sport = "nba"
+    label = "NBA (Yahoo)"
 
     def __init__(
         self,
         league: League,
-        mock_ai: bool = False,
         *,
-        ai: "GeminiClient | None" = None,
         nba: NBAClient | None = None,
         yahoo: YahooFantasyClient | None = None,
     ):
-        """Collaborators default to real clients; pass them in to test or reuse.
-
-        Injection is keyword-only so the ordinary `Scout(league)` call is unchanged.
-        """
-        from the_front_office.clients.gemini.client import GeminiClient
-
-        self.ai = ai or GeminiClient(mock_mode=mock_ai)
+        """Collaborators default to real clients; pass them in to test or reuse."""
+        self.league = league
         self.nba = nba or NBAClient()
         self.yahoo = yahoo or YahooFantasyClient(league)
         self.context_builder = PlayerContextBuilder(self.nba)
 
-    def _build_context(self) -> ScoutContext:
+    def list_leagues(self) -> list[LeagueRef]:
+        """The single league this provider was constructed around.
+
+        Yahoo league discovery needs an authenticated Context, which main.py and
+        the UI already hold — they construct one provider per league.
+        """
+        return [
+            LeagueRef(
+                league_id=str(self.league.id),
+                name=str(self.league.name),
+                sport=self.sport,
+                detail=str(getattr(self.league, "league_type", "")),
+            )
+        ]
+
+    def build_context(self, league_id: str = "") -> SportContext:
+        """Gather league state and render the scouting prompt."""
+        return self._build_context()
+
+    def _build_context(self) -> SportContext:
         """Gather all data and build the initial AI prompt.
 
         Returns the prompt plus the pieces that make it up, so a follow-up
@@ -122,13 +132,13 @@ class Scout:
             recommendation_instructions=recommendation_instructions,
         )
 
-        return ScoutContext(
+        return SportContext(
             prompt=prompt,
-            matchup_context=matchup.context,
-            trans_context=trans_context,
-            schedule_context=schedule_context,
-            roster_lines=roster_lines,
-            free_agent_lines=fa_lines,
+            situation=matchup.context,
+            constraints=trans_context,
+            extra=schedule_context,
+            squad_lines=roster_lines,
+            candidate_lines=fa_lines,
         )
 
     def _rank_free_agents(self) -> tuple[list[Player], dict[str, str]]:
@@ -155,37 +165,3 @@ class Scout:
         players = [player_by_key[key] for key, _ in ranked]
         annotations = {key: f"[Top in: {', '.join(cats)}]" for key, cats in ranked}
         return players, annotations
-
-    def start_analysis(self) -> tuple[ScoutReport, Union["Chat", "MockChatSession"]]:
-        """Build the context, generate a validated report, and open a chat on it.
-
-        Returns:
-            The validated report and a chat session seeded with the exchange
-            that produced it.
-
-        Raises:
-            TeamNotFoundError: the login owns no team in this league.
-            YahooAPIError: a Yahoo request failed.
-            AIUnavailableError: no Gemini credentials.
-            AIResponseError: Gemini failed, or returned an invalid report.
-        """
-        context = self._build_context()
-        report = self.ai.generate_structured(context.prompt, ScoutReport, mock=MOCK_SCOUT_REPORT)
-
-        # Seed the chat with a briefing rather than the full prompt. The history
-        # is resent on every follow-up, and the prompt's free-agent block — over
-        # half its volume — is not what follow-ups ask about.
-        briefing = context.briefing(report)
-        logger.debug(f"Follow-up briefing is {len(briefing):,} chars vs {len(context.prompt):,} for the prompt")
-        chat = self.ai.start_chat(
-            initial_history=[
-                {"role": "user", "parts": [briefing]},
-                {"role": "model", "parts": [report.model_dump_json()]},
-            ]
-        )
-        return report, chat
-
-    def get_report(self) -> ScoutReport:
-        """Generate a scout report (non-interactive wrapper)."""
-        report, _ = self.start_analysis()
-        return report

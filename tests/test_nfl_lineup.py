@@ -1,0 +1,174 @@
+"""Tests for optimal lineup selection.
+
+This is the one part of the football report with an exact answer, so it is
+computed rather than asked of the model — and therefore worth pinning hard.
+"""
+
+from the_front_office.clients.sleeper.types import Projection
+from the_front_office.sports.nfl.lineup import (
+    LineupSlot,
+    eligible_positions,
+    lineup_changes,
+    lineup_points,
+    optimal_lineup,
+)
+
+
+def p(pid: str, pos: str, pts: float, name: str = "") -> Projection:
+    return Projection(player_id=pid, name=name or f"{pos} {pid}", position=pos, team="BUF", opponent="MIA", points=pts)
+
+
+def _names(lineup: list[LineupSlot]) -> list[str]:
+    return [s.player.player_id if s.player else "-" for s in lineup]
+
+
+# ── slot eligibility ────────────────────────────────────────────────────
+
+
+def test_a_named_slot_accepts_only_that_position() -> None:
+    assert eligible_positions("QB") == ("QB",)
+    assert eligible_positions("TE") == ("TE",)
+
+
+def test_flex_variants_have_the_right_eligibility() -> None:
+    assert set(eligible_positions("FLEX")) == {"RB", "WR", "TE"}
+    assert set(eligible_positions("WRRB_FLEX")) == {"RB", "WR"}
+    assert set(eligible_positions("SUPER_FLEX")) == {"QB", "RB", "WR", "TE"}
+
+
+# ── optimal_lineup ──────────────────────────────────────────────────────
+
+
+def test_each_slot_takes_the_best_eligible_player() -> None:
+    squad = [p("qb1", "QB", 20), p("qb2", "QB", 12), p("rb1", "RB", 15), p("rb2", "RB", 9)]
+    assert _names(optimal_lineup(["QB", "RB"], squad)) == ["qb1", "rb1"]
+
+
+def test_a_player_cannot_fill_two_slots() -> None:
+    squad = [p("rb1", "RB", 20), p("rb2", "RB", 8)]
+    assert _names(optimal_lineup(["RB", "RB"], squad)) == ["rb1", "rb2"]
+
+
+def test_flex_takes_the_best_leftover_across_positions() -> None:
+    squad = [p("rb1", "RB", 20), p("rb2", "RB", 6), p("wr1", "WR", 18), p("te1", "TE", 14)]
+    lineup = optimal_lineup(["RB", "WR", "FLEX"], squad)
+    assert _names(lineup) == ["rb1", "wr1", "te1"]  # TE 14 beats RB2 6
+
+
+def test_superflex_does_not_steal_the_only_quarterback() -> None:
+    """The classic greedy failure: fill SUPER_FLEX first with the top scorer and
+    the QB slot is left empty."""
+    squad = [p("qb1", "QB", 25), p("rb1", "RB", 20), p("rb2", "RB", 12)]
+    lineup = optimal_lineup(["QB", "SUPER_FLEX"], squad)
+    assert _names(lineup) == ["qb1", "rb1"]
+    assert lineup_points(lineup) == 45.0
+
+
+def test_a_slot_with_nobody_eligible_is_left_empty() -> None:
+    squad = [p("rb1", "RB", 20)]
+    lineup = optimal_lineup(["QB", "RB"], squad)
+    assert lineup[0].player is None
+    assert lineup[0].points == 0.0
+    assert lineup_points(lineup) == 20.0
+
+
+def test_empty_squad_yields_empty_slots() -> None:
+    lineup = optimal_lineup(["QB", "RB", "FLEX"], [])
+    assert all(s.player is None for s in lineup)
+    assert lineup_points(lineup) == 0.0
+
+
+def test_slot_order_is_preserved_in_the_result() -> None:
+    """The optimiser fills restrictive slots first, but must return them in the
+    league's own order so the rendered lineup reads correctly."""
+    squad = [p("qb1", "QB", 25), p("rb1", "RB", 20), p("wr1", "WR", 18)]
+    lineup = optimal_lineup(["FLEX", "QB", "RB"], squad)
+    assert [s.slot for s in lineup] == ["FLEX", "QB", "RB"]
+
+
+def test_defense_and_kicker_slots_are_filled() -> None:
+    squad = [p("k1", "K", 9), p("d1", "DEF", 7)]
+    assert _names(optimal_lineup(["K", "DEF"], squad)) == ["k1", "d1"]
+
+
+# ── lineup_changes ──────────────────────────────────────────────────────
+
+
+def test_no_changes_when_the_lineup_is_already_optimal() -> None:
+    squad = [p("rb1", "RB", 20), p("rb2", "RB", 8)]
+    assert lineup_changes(["RB"], ["rb1"], squad) == []
+
+
+def test_a_better_bench_player_is_surfaced_with_the_gain() -> None:
+    squad = [p("rb1", "RB", 20), p("rb2", "RB", 8)]
+    changes = lineup_changes(["RB"], ["rb2"], squad)
+    assert len(changes) == 1
+    assert changes[0].start.player_id == "rb1"
+    assert changes[0].bench is not None
+    assert changes[0].bench.player_id == "rb2"
+    assert changes[0].gain == 12.0
+
+
+def test_changes_are_ordered_by_gain() -> None:
+    squad = [
+        p("rb1", "RB", 20),
+        p("rb2", "RB", 5),
+        p("wr1", "WR", 14),
+        p("wr2", "WR", 12),
+    ]
+    changes = lineup_changes(["RB", "WR"], ["rb2", "wr2"], squad)
+    assert [c.start.player_id for c in changes] == ["rb1", "wr1"]
+    assert changes[0].gain > changes[1].gain
+
+
+def test_shuffling_the_same_players_between_slots_is_not_a_change() -> None:
+    """Moving a RB from the RB slot to FLEX is not a start/sit decision."""
+    squad = [p("rb1", "RB", 20), p("wr1", "WR", 18)]
+    assert lineup_changes(["RB", "FLEX"], ["rb1", "wr1"], squad) == []
+
+
+def test_filling_an_empty_slot_reports_no_benched_player() -> None:
+    squad = [p("rb1", "RB", 20), p("rb2", "RB", 10)]
+    changes = lineup_changes(["RB", "RB"], ["rb1"], squad)
+    assert len(changes) == 1
+    assert changes[0].start.player_id == "rb2"
+    assert changes[0].bench is None
+    assert changes[0].gain == 10.0
+
+
+# ── current_lineup ──────────────────────────────────────────────────────
+
+
+def test_current_lineup_is_positional() -> None:
+    """Sleeper's `starters` array maps 1:1 onto roster_positions."""
+    from the_front_office.sports.nfl.lineup import current_lineup
+
+    squad = [p("qb1", "QB", 22), p("rb1", "RB", 18)]
+    lineup = current_lineup(["QB", "RB"], ["qb1", "rb1"], squad)
+    assert _names(lineup) == ["qb1", "rb1"]
+
+
+def test_an_unfilled_starter_slot_is_empty() -> None:
+    from the_front_office.sports.nfl.lineup import current_lineup
+
+    squad = [p("qb1", "QB", 22)]
+    lineup = current_lineup(["QB", "RB"], ["qb1"], squad)
+    assert lineup[1].player is None
+
+
+def test_an_ineligible_player_does_not_count_toward_the_slot() -> None:
+    """A stale roster could put a QB in a WR slot; counting it would overstate
+    the lineup total and make every swap look like a downgrade."""
+    from the_front_office.sports.nfl.lineup import current_lineup
+
+    squad = [p("qb1", "QB", 22)]
+    lineup = current_lineup(["WR"], ["qb1"], squad)
+    assert lineup[0].player is None
+    assert lineup_points(lineup) == 0.0
+
+
+def test_a_swap_that_loses_points_is_not_recommended() -> None:
+    """Forced replacements are not upgrades, and '+-2.4' is worse than silence."""
+    squad = [p("qb1", "QB", 22), p("wr1", "WR", 10)]
+    changes = lineup_changes(["WR"], ["qb1"], squad)
+    assert all(c.gain > 0 for c in changes)

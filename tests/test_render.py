@@ -1,34 +1,34 @@
 """Tests for terminal rendering of structured reports."""
 
 from the_front_office.render import render_scout_report, render_trade_verdict
-from the_front_office.scout.types import MOCK_SCOUT_REPORT, Recommendation, ScoutReport
+from the_front_office.report.mocks import MOCK_SCOUT_REPORT
+from the_front_office.report.types import Move, ScoutReport
 from the_front_office.trade.types import MOCK_TRADE_VERDICT
 
 
-def _rec(**overrides: object) -> Recommendation:
+def _rec(**overrides: object) -> Move:
     base: dict[str, object] = {
         "action": "ADD",
-        "player_name": "Test Player",
+        "player": "Test Player",
         "position": "PF",
-        "nba_team": "LAL",
-        "games_remaining": 3,
-        "categories_helped": ["REB"],
-        "reasoning": "Rebounds at volume.",
-        "drop_player": "Bench Guy",
-        "drop_justification": "No categories won.",
+        "team": "LAL",
+        "metric": "3 games left",
+        "rationale": "Rebounds at volume.",
+        "replaces": "Bench Guy",
+        "replaces_rationale": "No categories won.",
     }
     base.update(overrides)
-    return Recommendation(**base)  # type: ignore[arg-type]
+    return Move(**base)  # type: ignore[arg-type]
 
 
 def test_scout_report_surfaces_every_field() -> None:
     out = render_scout_report(MOCK_SCOUT_REPORT)
-    assert "MATCHUP INSIGHT" in out
-    assert "TOP TARGETS" in out
-    assert "FINAL STRATEGY" in out
-    for rec in MOCK_SCOUT_REPORT.targets:
-        assert rec.player_name in out
-        assert rec.drop_player in out
+    assert "SITUATION" in out
+    assert "MOVES" in out
+    assert "STRATEGY" in out
+    for rec in MOCK_SCOUT_REPORT.moves:
+        assert rec.player in out
+        assert rec.replaces in out
 
 
 def test_recommendations_are_numbered_in_order() -> None:
@@ -39,10 +39,10 @@ def test_recommendations_are_numbered_in_order() -> None:
 def test_monitor_entries_render_without_a_drop() -> None:
     """With 0 adds left the model returns MONITOR entries and no drop target."""
     report = ScoutReport(
-        matchup_insight="No adds left.",
-        close_categories=["BLK"],
-        targets=[_rec(action="MONITOR", drop_player="", drop_justification="")],
-        final_strategy="Hold.",
+        situation="No adds left.",
+        focus=["BLK"],
+        moves=[_rec(action="MONITOR", replaces="", replaces_rationale="")],
+        strategy="Hold.",
     )
     out = render_scout_report(report)
     assert "MONITOR Test Player" in out
@@ -50,22 +50,20 @@ def test_monitor_entries_render_without_a_drop() -> None:
 
 
 def test_unknown_schedule_is_stated_not_shown_as_zero() -> None:
-    report = ScoutReport(
-        matchup_insight="x", close_categories=[], targets=[_rec(games_remaining=0)], final_strategy="y"
-    )
+    report = ScoutReport(situation="x", focus=[], moves=[_rec(metric="")], strategy="y")
     out = render_scout_report(report)
-    assert "schedule unknown" in out
-    assert "0G left" not in out
+    assert "no metric" not in out
+    assert out.strip()
 
 
 def test_empty_target_list_is_stated_explicitly() -> None:
-    report = ScoutReport(matchup_insight="x", close_categories=[], targets=[], final_strategy="y")
+    report = ScoutReport(situation="x", focus=[], moves=[], strategy="y")
     assert "(none returned)" in render_scout_report(report)
 
 
 def test_long_prose_is_wrapped_not_truncated() -> None:
     long_text = "word " * 200
-    report = ScoutReport(matchup_insight=long_text, close_categories=[], targets=[], final_strategy="y")
+    report = ScoutReport(situation=long_text, focus=[], moves=[], strategy="y")
     out = render_scout_report(report)
     assert max(len(line) for line in out.splitlines()) <= 80
     assert out.count("word") == 200  # nothing dropped

@@ -2,24 +2,27 @@
 
 [![CI](https://github.com/abhishekbabu/the-front-office/actions/workflows/ci.yml/badge.svg)](https://github.com/abhishekbabu/the-front-office/actions/workflows/ci.yml)
 
-AI-powered NBA fantasy general manager for Yahoo category leagues.
+AI-powered fantasy sports general manager. NBA on Yahoo, NFL on Sleeper.
 
-Scouts the waiver wire, evaluates trades, and answers follow-up questions about
-both — grounding every prompt in live league state, real NBA box scores, and the
-remaining schedule.
+Scouts the waiver wire, sets lineups, evaluates trades, and answers follow-up
+questions about any of it — grounding every prompt in live league state, real
+stats and the fixtures ahead.
 
 ## Tech Stack
 
 **Application** (`src/the_front_office/`, Python managed with `uv`)
-- Interactive slash-command REPL in `main.py`
-- `scout/` and `trade/` orchestrate a run: gather league state, build a prompt, return a validated report
-- `services/context_builder.py` renders players into the prompt lines both engines share
-- `render.py` turns reports into terminal output; `exceptions.py` holds the `FrontOfficeError` hierarchy services raise
+- Interactive slash-command REPL in `main.py`; Streamlit UI in `ui/`
+- `sports/<sport>/provider.py` — one per sport, turning a league into a rendered prompt
+- `report/` — the sport-agnostic pipeline: `ScoutEngine` runs any provider through the model
+  and returns a validated `ScoutReport`
+- `trade/` — NBA trade evaluation
+- `render.py` turns reports into terminal output; `exceptions.py` holds the `FrontOfficeError` hierarchy
 - `config/` holds validated settings (`pydantic-settings`) and the prompt templates
 
 **External clients** (`src/the_front_office/clients/`)
 - **Yahoo Fantasy** via `yahoofantasy` — OAuth2, rosters, matchups, and hand-built player queries that sort free agents by an individual stat category
 - **NBA.com** via `nba_api` — one full-season `LeagueGameLog` call bucketed by player, cached in `.nba_cache.json`, with `tenacity` retries classified by error type
+- **Sleeper** — public and auth-free: leagues, rosters, matchups, the 12k-player catalogue, weekly projections and league-wide trending, cached in `.sleeper_cache.json`
 - **Gemini** via `google-genai` — `gemini-2.5-pro` for analysis, `gemini-2.5-flash` for parsing
 
 **Tooling** — `ruff`, `pyrefly`, `pytest`, `pre-commit`, `just`. Every recipe and
@@ -55,6 +58,7 @@ Without `just`: `uv sync && uv run pre-commit install`.
 | `YAHOO_CLIENT_ID` | yes | — | From your Yahoo developer app |
 | `YAHOO_CLIENT_SECRET` | yes | — | From your Yahoo developer app |
 | `GOOGLE_API_KEY` | for AI features | — | Omit to run `--mock` only |
+| `SLEEPER_USERNAME` | for football | — | Sleeper needs no key or OAuth — just the username |
 | `YAHOO_MAX_WEEKLY_ADDS` | no | `3` | Integer ≥ 0; drives the scout's add budget |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG` \| `INFO` \| `WARNING` \| `ERROR` \| `CRITICAL` |
 | `NBA_API_DELAY` | no | `4.0` | Seconds between nba_api calls |
@@ -75,7 +79,8 @@ First run opens a browser for the Yahoo OAuth2 handshake; the token is cached in
 
 | Command | Description |
 |---------|-------------|
-| `/scout` | Morning Scout Report — AI waiver wire analysis for the current matchup |
+| `/scout` | NBA: Morning Scout Report — waiver wire analysis for the current matchup |
+| `/football` | NFL: weekly report — start/sit and waiver targets from Sleeper projections |
 | `/trade <text>` | Evaluate a trade, e.g. `/trade Give LeBron James, Get Jayson Tatum` |
 | `/rosters` · `/my-roster` | Team rosters |
 | `/matchup` | Current matchup score and category breakdown |
@@ -117,7 +122,17 @@ Yahoo, NBA and Gemini. Anything hitting a live API is marked
 
 ## Architecture Notes
 
-**Category-league specific.** Prompts assume a 9-cat league and encode the
+**One pipeline, many sports.** Every sport implements `SportProvider`: list the
+user's leagues, and turn one league into a rendered prompt plus the parts a
+follow-up briefing needs. `ScoutEngine`, the report models, the renderer and the
+UI are written against that seam and know nothing about Yahoo or Sleeper. Adding
+a sport is a provider and a prompt template.
+
+**Arithmetic is computed, judgement is asked.** The optimal NFL lineup is an
+exact constraint-satisfaction problem, so it is solved in code and handed to the
+model as a fact to endorse or overrule — not something it is asked to work out.
+
+**Category-league specific (NBA).** Prompts assume a 9-cat league and encode the
 strategy: target close categories, don't chase blowouts, a 5-4 win counts the
 same as 9-0. Points and dynasty leagues are out of scope.
 

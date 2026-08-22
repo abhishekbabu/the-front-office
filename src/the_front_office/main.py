@@ -16,7 +16,9 @@ from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.config.logging import setup_logging
 from the_front_office.exceptions import FrontOfficeError
 from the_front_office.render import render_scout_report, render_trade_verdict
-from the_front_office.scout import Scout
+from the_front_office.report.engine import ScoutEngine
+from the_front_office.sports.nba.provider import NBAProvider
+from the_front_office.sports.nfl.provider import NFLProvider
 from the_front_office.trade.engine import TradeEvaluator
 
 if TYPE_CHECKING:
@@ -110,7 +112,8 @@ def _print_help() -> None:
     print()
     print("  Available commands:")
     print("  ─────────────────────────────────────")
-    print("  /scout               Run the Morning Scout Report (AI waiver analysis)")
+    print("  /scout               NBA: Morning Scout Report (Yahoo waiver analysis)")
+    print("  /football            NFL: weekly report — start/sit and waivers (Sleeper)")
     print("  /scout --mock        Use mock AI responses (for testing)")
     print("  /trade <txt>         Evaluate a trade (e.g. '/trade Give LeBron, Get Tatum')")
     print("  /trade --mock <txt>  Evaluate a trade with mock AI responses")
@@ -127,15 +130,42 @@ def _print_help() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _cmd_football(mock: bool = False) -> None:
+    """Run the weekly football report for every Sleeper league."""
+    provider = NFLProvider()
+    engine = ScoutEngine(provider, mock_ai=mock)
+    try:
+        refs = provider.list_leagues()
+    except FrontOfficeError as e:
+        print(f"  ❌ {e}")
+        return
+
+    if not refs:
+        print("  ⚠️  No Sleeper NFL leagues found for this season.")
+        return
+
+    for ref in refs:
+        _print_header(f"Football Report: {ref.name}")
+        print(f"  {ref.detail}")
+        print("  ⏳ Pulling rosters, projections and waiver pool...")
+        try:
+            report, chat = engine.start_analysis(ref.league_id)
+        except FrontOfficeError as e:
+            print(f"  ❌ {e}")
+            continue
+        print("\n" + render_scout_report(report))
+        _interactive_followup(chat, "report")
+
+
 def _cmd_scout(leagues: list[League], mock: bool = False) -> None:
     """Run the scout report for all leagues."""
     for league in leagues:
         _print_header(f"Scouting Report: {league.name}")
-        scout = Scout(league, mock_ai=mock)
+        scout = ScoutEngine(NBAProvider(league), mock_ai=mock)
 
         print("  ⏳ Analyzing roster, free agents, and schedule... (this may take a moment)")
         try:
-            report, chat = scout.start_analysis()
+            report, chat = scout.start_analysis("")
         except FrontOfficeError as e:
             print(f"  ❌ {e}")
             continue
@@ -297,6 +327,8 @@ def _dispatch(leagues: list[League], cmd: str, args: list[str], mock: bool) -> N
     """
     if cmd == "/scout":
         _cmd_scout(leagues, mock=mock)
+    elif cmd in ("/football", "/nfl"):
+        _cmd_football(mock=mock)
     elif cmd == "/trade":
         _cmd_trade(leagues, args, mock=mock)
     elif cmd == "/rosters":
