@@ -108,7 +108,7 @@ class GeminiClient:
         Extract the players being given and received in this trade offer.
         Return ONLY a JSON object with keys "giving" and "receiving".
         Using full player names.
-        
+
         Trade: "{text}"
         """
 

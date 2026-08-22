@@ -5,6 +5,7 @@ Authenticates once with Yahoo Fantasy, then waits for slash commands
 to run scouting reports, view rosters, etc.
 """
 
+import contextlib
 import sys
 from datetime import datetime
 from typing import TYPE_CHECKING, Union
@@ -21,10 +22,9 @@ if TYPE_CHECKING:
 
     from the_front_office.clients.gemini.types import MockChatSession
 
-try:
+# Graceful fallback on systems without readline
+with contextlib.suppress(ImportError):
     import readline  # noqa: F401 — enables up/down arrow history in input()
-except ImportError:
-    pass  # Graceful fallback on systems without readline
 
 
 # ---------------------------------------------------------------------------
@@ -204,7 +204,7 @@ def main() -> None:
         print("  ⚠️  No NBA leagues found for this season.")
         sys.exit(0)
 
-    print(f"  ✅ Found {len(leagues)} league(s): {', '.join(l.name for l in leagues)}")
+    print(f"  ✅ Found {len(leagues)} league(s): {', '.join(lg.name for lg in leagues)}")
     _print_help()
 
     # --- REPL ---

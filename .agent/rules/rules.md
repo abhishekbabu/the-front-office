@@ -9,7 +9,7 @@ The Front Office is an AI-powered NBA fantasy sports assistant that provides wai
 - **ALWAYS** run `mypy src/the_front_office` before committing
 - **AVOID** using `Any`. Use specific types from libraries or `object` if truly generic.
 - Add type hints to all function signatures
-- Use `List`, `Dict`, `Optional` from `typing` module
+- Use builtin generics (`list[str]`, `dict[str, int]`) and PEP 604 unions (`str | None`), not `typing.List`/`Dict`/`Optional` — enforced by ruff's `UP` rules
 - Handle `None` values explicitly with assertions or conditional checks
 - Add `# type: ignore[import-untyped]` for untyped third-party libraries
 
@@ -19,9 +19,9 @@ The Front Office is an AI-powered NBA fantasy sports assistant that provides wai
 - Keep the `Technical Stack` and `Project Structure` accurate.
 
 ### Import Hygiene
-- **ALWAYS** remove unused imports. Use `flake8 --select=F401` to check.
-- Keep imports organized: standard library first, third-party libraries second, local modules third.
-- Avoid wildcard imports (`from module import *`).
+- Run `ruff check src/ --fix` — it removes unused imports (F401) and sorts import groups (I001) for you.
+- Imports are grouped standard library / third-party / local, enforced by ruff's isort rules.
+- Avoid wildcard imports (`from module import *`) and relative imports (`from .x import y`, banned by TID252).
 
 ### Project Structure
 ```
@@ -48,7 +48,7 @@ the-front-office/
 ### Dependencies
 - **Production**: Add to `dependencies` in `pyproject.toml`
 - **Development**: Add to `[project.optional-dependencies.dev]` in `pyproject.toml`
-- Pin minimum versions: `package>=X.Y.Z`
+- Bound both ends: `package>=X.Y.Z,<NEXT_MAJOR`, then refresh `uv.lock` with `uv lock`
 
 ### Environment Variables
 - Store secrets in `.env` (never commit)
@@ -92,7 +92,9 @@ the-front-office/
 
 ## Code Quality Checklist
 Before committing:
+- [ ] `ruff check src/` and `ruff format --check src/` pass
 - [ ] `mypy src/the_front_office` passes
+- [ ] (all three run automatically if `pre-commit install` has been run)
 - [ ] No debug print statements (use `logger` instead)
 - [ ] No hardcoded credentials
 - [ ] Updated `pyproject.toml` if dependencies changed
@@ -114,10 +116,8 @@ logger.error("Error message")
 
 ### Type Annotations
 ```python
-from typing import List, Optional
-
-def fetch_players(league, count: int = 20) -> List[object]:
-    players: List[object] = league.players(status='A')
+def fetch_players(league, count: int = 20) -> list[object]:
+    players: list[object] = league.players(status="A")
     return players[:count]
 ```
 
@@ -139,4 +139,4 @@ When working on this project:
 4. Create PRs with descriptive titles and bodies
 5. Keep commits atomic and well-described
 6. Never commit secrets or tokens
-7. **ALWAYS** run all Python-related commands (scripts, tests, type checking) using the project's virtual environment: `./.venv/Scripts/python` (Windows) or `./.venv/bin/python` (UNIX).
+7. **ALWAYS** run Python commands through the project venv — prefer `uv run <cmd>`, which resolves the right interpreter on every platform.

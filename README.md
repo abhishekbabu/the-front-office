@@ -20,7 +20,7 @@ The Front Office now operates as an interactive shell for real-time fantasy mana
     - **Google Gemini API** (via `google-genai` SDK)
     - **NBA Data** (via `nba_api`)
 - **AI Engine:** Gemini 2.5 (Pro for strategy, Flash for parsing)
-- **Dev Tools:** Mypy (Typesafety), Flake8 (Hygiene)
+- **Dev Tools:** uv (Env & Locking), Ruff (Lint & Format), Mypy (Typesafety), pre-commit (Enforcement)
 
 ---
 
@@ -54,15 +54,12 @@ the-front-office/
 git clone <repo-url>
 cd the-front-office
 
-# Create and activate virtual environment
-python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-# Mac/Linux:
-source .venv/bin/activate
+# Create the virtual environment and install locked dependencies
+uv venv --python 3.10
+uv pip install -e ".[dev]"
 
-# Install dependencies (editable mode)
-pip install -e ".[dev]"
+# Install the git hooks (ruff, ruff-format, mypy run on every commit)
+uv run pre-commit install
 ```
 
 ### 3. Configuration
@@ -109,5 +106,5 @@ Once inside the shell, use the following commands:
 
 ## 🔒 Security & Quality
 - Never commit `.env` or `.yahoofantasy` (token) files.
-- **Type Safety:** Always run `mypy src/the_front_office` before committing changes.
-- **Import Hygiene:** Keep code clean of unused imports (`flake8`).
+- **Type Safety:** Always run `mypy src/the_front_office` before committing changes (also enforced by pre-commit).
+- **Lint & Format:** `ruff check src/ --fix` and `ruff format src/`. Both run automatically via pre-commit.

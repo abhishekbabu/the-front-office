@@ -271,9 +271,8 @@ class NBAClient:
         today = date.today()
         for g in games:
             game_date = date.fromisoformat(g["date"])
-            if start_date <= game_date <= end_date and game_date >= today:
-                if g["status"] in (1, 2):
-                    count += 1
+            if start_date <= game_date <= end_date and game_date >= today and g["status"] in (1, 2):
+                count += 1
         return count
 
     def get_remaining_games_bulk(self, team_abbrs: list[str], start_date: date, end_date: date) -> dict[str, int]:

@@ -9,6 +9,7 @@ from yahoofantasy import League, Player  # type: ignore[import-untyped]
 
 from the_front_office.clients.nba.client import NBAClient
 from the_front_office.clients.yahoo.client import YahooFantasyClient
+from the_front_office.config.constants import TRADE_PROMPT_TEMPLATE
 from the_front_office.services.context_builder import PlayerContextBuilder
 
 if TYPE_CHECKING:
@@ -17,8 +18,6 @@ if TYPE_CHECKING:
     from the_front_office.clients.gemini.types import MockChatSession
 
 logger = logging.getLogger(__name__)
-
-from the_front_office.config.constants import TRADE_PROMPT_TEMPLATE
 
 
 class TradeEvaluator:
