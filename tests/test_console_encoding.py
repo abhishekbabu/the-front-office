@@ -11,7 +11,7 @@ import sys
 
 import pytest
 
-from the_front_office.main import _configure_console
+from the_front_office.adapters.inbound.cli.repl import _configure_console
 
 # A sample of the glyphs the UI actually prints.
 UI_GLYPHS = "🏀 ⚡ ⏳ ✅ ❌ ⚠️ 📋 🔐 💬 🤖 👋 ═ ─ —"

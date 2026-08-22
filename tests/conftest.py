@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from the_front_office.report.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
+from the_front_office.domain.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
 
 
 def make_player(
@@ -63,7 +63,7 @@ class FakeYahoo:
         return team
 
     def get_matchup(self, my_team: Any) -> Any:
-        from the_front_office.clients.yahoo.types import MatchupInfo
+        from the_front_office.adapters.outbound.platforms.yahoo.types import MatchupInfo
 
         self.matchup_fetches += 1
         return MatchupInfo(
@@ -149,7 +149,7 @@ class FakeAI:
         return self.chat
 
     def parse_trade_string(self, text: str) -> Any:
-        from the_front_office.trade.types import TradeProposal
+        from the_front_office.domain.models import TradeProposal
 
         return (
             self.proposal

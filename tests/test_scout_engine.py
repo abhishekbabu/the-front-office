@@ -9,11 +9,11 @@ from typing import Any
 import pytest
 from conftest import FakeAI, FakeNBA, FakeYahoo, make_player
 
-from the_front_office.exceptions import TeamNotFoundError
-from the_front_office.report.engine import ScoutEngine
-from the_front_office.report.mocks import MOCK_SCOUT_REPORT
-from the_front_office.report.types import ScoutReport
-from the_front_office.sports.nba.yahoo import YahooNBAProvider
+from the_front_office.adapters.outbound.sports.nba.yahoo import YahooNBAProvider
+from the_front_office.application.scouting import ScoutEngine
+from the_front_office.domain.errors import TeamNotFoundError
+from the_front_office.domain.mocks import MOCK_SCOUT_REPORT
+from the_front_office.domain.models import ScoutReport
 
 
 def _scout(yahoo: FakeYahoo, ai: FakeAI | None = None, nba: FakeNBA | None = None) -> ScoutEngine:
@@ -212,7 +212,7 @@ def test_a_specific_league_can_be_selected() -> None:
 def test_selecting_an_unknown_league_raises() -> None:
     from types import SimpleNamespace
 
-    from the_front_office.exceptions import LeagueNotFoundError
+    from the_front_office.domain.errors import LeagueNotFoundError
 
     one = SimpleNamespace(id="1", name="One")
     provider = YahooNBAProvider(one, all_leagues=[one], nba=FakeNBA(), yahoo=FakeYahoo())  # type: ignore[arg-type]
@@ -242,7 +242,7 @@ class FakeSleeperProjections:
         self.weeks_requested: list[int] = []
 
     def get_state(self, sport: str = "nfl") -> Any:
-        from the_front_office.clients.sleeper.types import NFLState
+        from the_front_office.adapters.outbound.platforms.sleeper.types import NFLState
 
         return NFLState(week=self.week, season=self.season, season_type="regular", display_week=self.week)
 
@@ -254,7 +254,7 @@ class FakeSleeperProjections:
 
 
 def _game(name: str, day: str, **stats: float) -> Any:
-    from the_front_office.clients.sleeper.types import GameProjection
+    from the_front_office.adapters.outbound.platforms.sleeper.types import GameProjection
 
     base = {
         "pts": 25.0,
@@ -319,7 +319,7 @@ def test_out_of_season_falls_back_to_recent_form() -> None:
 
 
 def test_a_projection_failure_does_not_lose_the_report() -> None:
-    from the_front_office.exceptions import SleeperAPIError
+    from the_front_office.domain.errors import SleeperAPIError
 
     sleeper = FakeSleeperProjections(error=SleeperAPIError("429"))
     ctx = _provider_with(sleeper).build_context()
@@ -333,7 +333,7 @@ def test_the_next_week_is_tried_when_the_current_one_is_empty() -> None:
 
     class Straddling(FakeSleeperProjections):
         def get_state(self, sport: str = "nfl") -> Any:
-            from the_front_office.clients.sleeper.types import NFLState
+            from the_front_office.adapters.outbound.platforms.sleeper.types import NFLState
 
             return NFLState(week=sleeper_state_week, season="2026", season_type="regular", display_week=12)
 

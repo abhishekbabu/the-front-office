@@ -5,9 +5,9 @@ from typing import Any
 
 import pytest
 
-from the_front_office.exceptions import LeagueNotFoundError
-from the_front_office.sports.nba.yahoo import YahooNBAProvider
-from the_front_office.ui import data
+from the_front_office.adapters.inbound.web import data
+from the_front_office.adapters.outbound.sports.nba.yahoo import YahooNBAProvider
+from the_front_office.domain.errors import LeagueNotFoundError
 
 # ── season rollover ─────────────────────────────────────────────────────
 
@@ -98,7 +98,7 @@ def test_a_situation_without_a_breakdown_yields_no_rows() -> None:
 
 
 def test_nba_client_is_constructed(monkeypatch: pytest.MonkeyPatch) -> None:
-    import the_front_office.ui.data as mod
+    import the_front_office.adapters.inbound.web.data as mod
 
     built: list[bool] = []
     monkeypatch.setattr(mod, "NBAClient", lambda: built.append(True))
@@ -111,7 +111,7 @@ def test_squad_rows_shape_is_shared_across_sports() -> None:
     agree between sports."""
     import inspect
 
-    from the_front_office.sports.nfl.sleeper import SleeperNFLProvider
+    from the_front_office.adapters.outbound.sports.nfl.sleeper import SleeperNFLProvider
 
     for provider in (YahooNBAProvider, SleeperNFLProvider):
         assert "squad_rows" in dir(provider)

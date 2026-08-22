@@ -5,8 +5,14 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from the_front_office.clients.nba.client import PACIFIC, NBAClient, _parse_timestamp, _utc_now
-from the_front_office.clients.nba.types import GameLogRecord
+from the_front_office.adapters.outbound.platforms.nba_stats.client import (
+    PACIFIC,
+    NBAClient,
+    _parse_timestamp,
+    _utc_now,
+)
+from the_front_office.adapters.outbound.platforms.nba_stats.stats import extract_nine_cat
+from the_front_office.adapters.outbound.platforms.nba_stats.types import GameLogRecord
 
 
 def _client() -> NBAClient:
@@ -39,7 +45,7 @@ def _game(**overrides: float | str) -> GameLogRecord:
     return base  # type: ignore[return-value]
 
 
-# ── _extract_9cat_from_records ──────────────────────────────────────────
+# ── extract_nine_cat ────────────────────────────────────────────────────
 
 
 def test_percentages_use_totals_not_average_of_ratios() -> None:
@@ -52,7 +58,7 @@ def test_percentages_use_totals_not_average_of_ratios() -> None:
         _game(FGM=1.0, FGA=1.0),  # 100% on 1 attempt
         _game(FGM=0.0, FGA=19.0),  # 0% on 19 attempts
     ]
-    stats = _client()._extract_9cat_from_records(records)
+    stats = extract_nine_cat(records)
 
     assert stats["FG_PCT"] == 0.05  # 1/20 — the correct volume-weighted value
     assert stats["FG_PCT"] != pytest.approx(0.5)  # what averaging the ratios would give
@@ -60,13 +66,13 @@ def test_percentages_use_totals_not_average_of_ratios() -> None:
 
 def test_counting_stats_are_per_game_averages() -> None:
     records = [_game(PTS=10.0), _game(PTS=20.0), _game(PTS=30.0)]
-    stats = _client()._extract_9cat_from_records(records)
+    stats = extract_nine_cat(records)
     assert stats["PTS"] == 20.0
 
 
 def test_zero_attempts_does_not_divide_by_zero() -> None:
     records = [_game(FGM=0.0, FGA=0.0, FTM=0.0, FTA=0.0)]
-    stats = _client()._extract_9cat_from_records(records)
+    stats = extract_nine_cat(records)
     assert stats["FG_PCT"] == 0.0
     assert stats["FT_PCT"] == 0.0
 

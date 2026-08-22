@@ -1,0 +1,53 @@
+"""Terminal output helpers."""
+
+from the_front_office.domain.ports import ChatSession
+
+
+def _print_header(text: str) -> None:
+    """Print a styled section header."""
+    width = 60
+    print("\n" + "═" * width)
+    print(f"  {text}")
+    print("═" * width)
+
+
+def _print_rows(rows: list[dict[str, str]]) -> None:
+    """Print table rows with columns sized to their content."""
+    if not rows:
+        print("  (no players found)")
+        return
+    columns = list(rows[0])
+    widths = {c: max(len(c), max(len(str(r.get(c, ""))) for r in rows)) for c in columns}
+    print("  " + "  ".join(c.ljust(widths[c]) for c in columns))
+    print("  " + "  ".join("─" * widths[c] for c in columns))
+    for row in rows:
+        print("  " + "  ".join(str(row.get(c, "")).ljust(widths[c]) for c in columns))
+
+
+def _interactive_followup(
+    chat: ChatSession | None,
+    noun: str,
+) -> None:
+    """Run a follow-up Q&A loop against an open AI chat session."""
+    if not chat:
+        return
+
+    print("\n  " + "─" * 60)
+    print(f"  💬 Interactive Mode: Ask follow-up questions about this {noun}.")
+    print("     Type your question or press Enter to continue.")
+    print("  " + "─" * 60)
+
+    while True:
+        try:
+            user_input = input("\n  Query > ").strip()
+            if not user_input or user_input.lower() in ("/quit", "/exit", "q"):
+                break
+
+            print("  ⏳ Thinking...")
+            response = chat.send_message(user_input)
+            print(f"\n  🤖 {response.text}")
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            print(f"  ❌ Error: {e}")
+            break

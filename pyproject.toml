@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [project.scripts]
-front-office = "the_front_office.main:main"
+front-office = "the_front_office.adapters.inbound.cli.repl:main"
 
 [dependency-groups]
 dev = [
@@ -96,10 +96,12 @@ source = ["the_front_office"]
 omit = [
     # Presentation shells: exercised by hand, not worth mocking a terminal or
     # a Streamlit runtime for. The logic they call is covered directly.
-    "*/main.py",
+    "*/adapters/inbound/cli/repl.py",
+    "*/adapters/inbound/cli/output.py",
+    "*/__main__.py",
     # app.py's page functions wire Streamlit widgets together; its render and
     # data helpers are tested directly in tests/test_ui_render.py.
-    "*/ui/app.py",
+    "*/adapters/inbound/web/app.py",
 ]
 
 [tool.coverage.report]

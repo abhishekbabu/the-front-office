@@ -1,6 +1,6 @@
 """Tests for TradeProposal validity."""
 
-from the_front_office.trade.types import TradeProposal
+from the_front_office.domain.models import TradeProposal
 
 
 def test_both_sides_populated_is_valid() -> None:

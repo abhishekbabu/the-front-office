@@ -5,11 +5,11 @@ from typing import Any
 
 import pytest
 
-from the_front_office.clients.gemini.client import GeminiClient
-from the_front_office.clients.gemini.constants import MODEL_FLASH, MODEL_PRO
-from the_front_office.exceptions import AIResponseError, AIUnavailableError
-from the_front_office.report.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
-from the_front_office.report.types import ScoutReport, TradeVerdict
+from the_front_office.adapters.outbound.llm.gemini.client import GeminiClient
+from the_front_office.adapters.outbound.llm.gemini.constants import MODEL_FLASH, MODEL_PRO
+from the_front_office.domain.errors import AIResponseError, AIUnavailableError
+from the_front_office.domain.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
+from the_front_office.domain.models import ScoutReport, TradeVerdict
 
 
 class FakeModels:

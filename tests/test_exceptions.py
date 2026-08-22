@@ -2,7 +2,7 @@
 
 import pytest
 
-from the_front_office.exceptions import (
+from the_front_office.domain.errors import (
     AIResponseError,
     AIUnavailableError,
     FrontOfficeError,

@@ -12,7 +12,7 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from the_front_office.clients.nba.client import NBAClient, _utc_now
+from the_front_office.adapters.outbound.platforms.nba_stats.client import NBAClient, _utc_now
 
 
 def _client(tmp_path: Path) -> NBAClient:
@@ -229,7 +229,7 @@ def test_schedule_fetch_failure_does_not_raise(tmp_path: Path) -> None:
 
 def test_calls_are_spaced_by_the_configured_delay(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The project spec requires a delay between nba_api calls to avoid IP blocks."""
-    import the_front_office.clients.nba.client as mod
+    import the_front_office.adapters.outbound.platforms.nba_stats.client as mod
 
     slept: list[float] = []
     monkeypatch.setattr(mod.time, "sleep", lambda s: slept.append(s))
@@ -243,7 +243,7 @@ def test_calls_are_spaced_by_the_configured_delay(tmp_path: Path, monkeypatch: p
 
 
 def test_no_sleep_when_the_delay_has_already_elapsed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    import the_front_office.clients.nba.client as mod
+    import the_front_office.adapters.outbound.platforms.nba_stats.client as mod
 
     slept: list[float] = []
     monkeypatch.setattr(mod.time, "sleep", lambda s: slept.append(s))

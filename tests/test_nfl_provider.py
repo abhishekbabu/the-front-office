@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from the_front_office.clients.sleeper.types import (
+from the_front_office.adapters.outbound.platforms.sleeper.types import (
     NFLState,
     PlayerMeta,
     Projection,
@@ -13,8 +13,8 @@ from the_front_office.clients.sleeper.types import (
     SleeperUser,
     TrendingPlayer,
 )
-from the_front_office.exceptions import LeagueNotFoundError, SleeperAPIError
-from the_front_office.sports.nfl.sleeper import SleeperNFLProvider
+from the_front_office.adapters.outbound.sports.nfl.sleeper import SleeperNFLProvider
+from the_front_office.domain.errors import LeagueNotFoundError, SleeperAPIError
 
 MY_ID = "user-1"
 

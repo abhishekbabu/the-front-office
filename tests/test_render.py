@@ -1,8 +1,8 @@
 """Tests for terminal rendering of structured reports."""
 
-from the_front_office.render import render_scout_report, render_trade_verdict
-from the_front_office.report.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
-from the_front_office.report.types import Move, ScoutReport
+from the_front_office.adapters.inbound.cli.render import render_scout_report, render_trade_verdict
+from the_front_office.domain.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
+from the_front_office.domain.models import Move, ScoutReport
 
 
 def _rec(**overrides: object) -> Move:
@@ -78,7 +78,7 @@ def test_trade_verdict_surfaces_every_field() -> None:
 
 
 def test_empty_category_lists_render_as_a_dash() -> None:
-    from the_front_office.report.types import TradeVerdict
+    from the_front_office.domain.models import TradeVerdict
 
     v = TradeVerdict(
         verdict="REJECT",

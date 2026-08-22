@@ -10,15 +10,24 @@ stats and the fixtures ahead.
 
 ## Tech Stack
 
-**Application** (`src/the_front_office/`, Python managed with `uv`)
-- `sports/registry.py` — which sports exist and whether each is configured; every entry point reads it
-- `sports/<sport>/<platform>.py` — one provider per sport+platform, turning a league into a rendered prompt
-- `report/` — the sport-agnostic pipeline: `ScoutEngine` runs any provider through the model and returns a validated `ScoutReport`
-- `trade/` — trade evaluation (Yahoo only so far)
-- `main.py` (REPL) and `ui/` (Streamlit) — both driven by the registry, neither knows a platform name
-- `render.py`, `exceptions.py`, `config/` — shared output, errors and validated settings
+**Layout** (`src/the_front_office/`, Python managed with `uv`) — ports and adapters,
+with dependencies pointing strictly inward:
 
-**External clients** (`src/the_front_office/clients/`)
+```text
+domain/       models and ports. Imports nothing else in the package.
+application/  use cases over ports: ScoutEngine, TradeEngine.
+adapters/
+  inbound/    drivers — the CLI and the Streamlit UI.
+  outbound/   driven — platform clients, the language model, and the
+              per-sport providers implementing SportProvider.
+bootstrap.py  the composition root: the only module naming a concrete
+              implementation. Registers sports and wires engines.
+```
+
+No adapter is named anywhere in `domain/` or `application/`; the engines take an
+`AnalysisModel` port rather than a vendor client.
+
+**Outbound adapters** (`src/the_front_office/adapters/outbound/`)
 - **Yahoo Fantasy** via `yahoofantasy` — OAuth2, rosters, matchups, and hand-built player queries that sort free agents by an individual stat category
 - **NBA.com** via `nba_api` — one full-season `LeagueGameLog` call bucketed by player for recent form (L5/L10/L15), cached in `.nba_cache.json`, with `tenacity` retries classified by error type
 - **Sleeper** — public and auth-free, and used by both sports: football leagues, rosters, matchups and weekly projections; NBA per-game projections summed into category totals for the matchup period. Cached in `.sleeper_cache.json`
@@ -119,6 +128,26 @@ Tests are hermetic — no network, no credentials, no cache file on disk. Engine
 take their collaborators by keyword, so `tests/conftest.py` fakes stand in for
 Yahoo, NBA and Gemini. Anything hitting a live API is marked
 `@pytest.mark.integration` and deselected by default.
+
+## Project Layout
+
+```text
+the-front-office/
+├── src/the_front_office/
+│   ├── domain/            # models + ports (pure — imports nothing else here)
+│   ├── application/       # scouting and trading use cases, over ports
+│   ├── adapters/
+│   │   ├── inbound/       # drivers: cli/, web/
+│   │   └── outbound/      # driven: llm/, platforms/, sports/
+│   ├── bootstrap.py       # composition root: sport registry + engine wiring
+│   └── config/            # validated settings + prompt templates
+├── tests/                 # hermetic pytest suite
+├── .agent/rules/rules.md  # agent-facing project rules
+├── Brewfile               # system tooling (just, uv)
+├── justfile               # task runner
+├── pyproject.toml         # package metadata, dependencies, tool config
+└── uv.lock                # pinned dependency graph
+```
 
 ## Security
 

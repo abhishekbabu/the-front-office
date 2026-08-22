@@ -3,7 +3,7 @@
 import pytest
 import requests
 
-from the_front_office.clients.nba.client import (
+from the_front_office.adapters.outbound.platforms.nba_stats.client import (
     NBA_RETRY_MAX_ATTEMPTS,
     _is_nba_retryable_error,
     _nba_retry,

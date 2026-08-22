@@ -74,11 +74,11 @@ hooks:
 
 # Start the interactive CLI
 run:
-    uv run python -m the_front_office.main
+    uv run python -m the_front_office
 
 # Start the web UI (http://localhost:8501)
 ui:
-    uv run streamlit run src/the_front_office/ui/app.py
+    uv run streamlit run src/the_front_office/adapters/inbound/web/app.py
 
 # ============================================================================
 # Housekeeping

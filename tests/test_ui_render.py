@@ -10,8 +10,8 @@ from typing import Any
 
 import pytest
 
-from the_front_office.report.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
-from the_front_office.report.types import ScoutReport, TradeVerdict
+from the_front_office.domain.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
+from the_front_office.domain.models import ScoutReport, TradeVerdict
 
 
 class Recorder:
@@ -55,7 +55,7 @@ class _NullContext:
 
 @pytest.fixture
 def page(monkeypatch: pytest.MonkeyPatch) -> Recorder:
-    import the_front_office.ui.app as app
+    import the_front_office.adapters.inbound.web.app as app
 
     rec = Recorder()
     monkeypatch.setattr(app, "st", rec)
@@ -63,7 +63,7 @@ def page(monkeypatch: pytest.MonkeyPatch) -> Recorder:
 
 
 def _app() -> Any:
-    import the_front_office.ui.app as app
+    import the_front_office.adapters.inbound.web.app as app
 
     return app
 
@@ -144,7 +144,7 @@ def test_verdict_colour_map_covers_every_allowed_verdict() -> None:
     """A new verdict literal without a colour would render gray silently."""
     import typing
 
-    from the_front_office.report.types import TradeVerdict as TV
+    from the_front_office.domain.models import TradeVerdict as TV
 
     allowed = set(typing.get_args(TV.model_fields["verdict"].annotation))
     assert allowed == set(_app().VERDICT_COLOURS)
@@ -217,7 +217,7 @@ class FakeRef:
 
 
 def _page_recorder(monkeypatch: pytest.MonkeyPatch, **extra: Any) -> Recorder:
-    import the_front_office.ui.app as app
+    import the_front_office.adapters.inbound.web.app as app
 
     rec = Recorder()
     rec.error = rec.warning = rec._record  # type: ignore[attr-defined]
@@ -265,7 +265,7 @@ def test_choosing_a_sport_builds_only_that_provider(monkeypatch: pytest.MonkeyPa
 
 
 def test_an_unconfigured_provider_surfaces_its_message(monkeypatch: pytest.MonkeyPatch) -> None:
-    from the_front_office.exceptions import LeagueNotFoundError
+    from the_front_office.domain.errors import LeagueNotFoundError
 
     app = _app()
     rec = _page_recorder(monkeypatch)
@@ -295,7 +295,7 @@ def test_trade_is_offered_only_where_it_is_supported(monkeypatch: pytest.MonkeyP
 
 
 def test_scout_page_renders_a_domain_error_instead_of_raising(monkeypatch: pytest.MonkeyPatch) -> None:
-    from the_front_office.exceptions import TeamNotFoundError
+    from the_front_office.domain.errors import TeamNotFoundError
 
     app = _app()
     rec = _page_recorder(monkeypatch)

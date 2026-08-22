@@ -11,13 +11,13 @@ from typing import Any
 import pytest
 import requests
 
-from the_front_office.cache import JsonDiskCache
-from the_front_office.clients.sleeper.client import (
+from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
+from the_front_office.adapters.outbound.platforms.sleeper.client import (
     RETRY_MAX_ATTEMPTS,
     SleeperClient,
     _is_retryable,
 )
-from the_front_office.exceptions import SleeperAPIError
+from the_front_office.domain.errors import SleeperAPIError
 
 
 class FakeResponse:
@@ -54,7 +54,7 @@ class FakeSession:
 @pytest.fixture
 def no_retry_wait(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep the hermetic suite fast — the backoff is real seconds otherwise."""
-    import the_front_office.clients.sleeper.client as mod
+    import the_front_office.adapters.outbound.platforms.sleeper.client as mod
 
     original = mod._retry
     monkeypatch.setattr(mod, "_retry", lambda: original().copy(wait=lambda _: 0))
@@ -202,7 +202,7 @@ def test_rosters_carry_record_and_bench(tmp_path: Path) -> None:
 
 
 def test_a_tie_shows_in_the_record() -> None:
-    from the_front_office.clients.sleeper.types import SleeperRoster
+    from the_front_office.adapters.outbound.platforms.sleeper.types import SleeperRoster
 
     assert SleeperRoster(1, "42", [], [], wins=2, losses=1, ties=1).record == "2-1-1"
 
@@ -332,7 +332,7 @@ def test_an_empty_matchup_week_is_an_empty_list(tmp_path: Path) -> None:
 
 def test_live_matchups_expire_far_sooner_than_the_catalogue() -> None:
     """Scores move during games; the player catalogue does not."""
-    from the_front_office.clients.sleeper.client import MATCHUPS_TTL, PLAYERS_TTL
+    from the_front_office.adapters.outbound.platforms.sleeper.client import MATCHUPS_TTL, PLAYERS_TTL
 
     assert timedelta(minutes=5) > MATCHUPS_TTL
     assert timedelta(days=1) <= PLAYERS_TTL

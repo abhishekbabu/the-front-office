@@ -2,12 +2,12 @@
 
 import pytest
 
-from the_front_office.clients.gemini.client import GeminiClient
-from the_front_office.clients.gemini.constants import MODEL_FLASH, MODEL_PRO
-from the_front_office.clients.gemini.types import MockChatSession
-from the_front_office.exceptions import AIResponseError, AIUnavailableError
-from the_front_office.report.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
-from the_front_office.report.types import ScoutReport, TradeVerdict
+from the_front_office.adapters.outbound.llm.gemini.client import GeminiClient
+from the_front_office.adapters.outbound.llm.gemini.constants import MODEL_FLASH, MODEL_PRO
+from the_front_office.adapters.outbound.llm.gemini.types import MockChatSession
+from the_front_office.domain.errors import AIResponseError, AIUnavailableError
+from the_front_office.domain.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
+from the_front_office.domain.models import ScoutReport, TradeVerdict
 
 
 def test_mock_mode_never_constructs_a_real_client() -> None:
@@ -61,7 +61,7 @@ def test_parsing_uses_flash_and_strategy_uses_pro() -> None:
     """Flash for parsing and structuring, Pro for analysis — per .agent/rules/rules.md."""
     import inspect
 
-    from the_front_office.clients.gemini import client as mod
+    from the_front_office.adapters.outbound.llm.gemini import client as mod
 
     assert MODEL_FLASH == "gemini-2.5-flash"
     assert MODEL_PRO == "gemini-2.5-pro"

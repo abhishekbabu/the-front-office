@@ -1,0 +1,59 @@
+"""The generic trade pipeline.
+
+Identical for every sport: parse the proposal, ask the provider to price both
+sides, and return a validated verdict. Which sports can do this is declared by
+the registry, not tested here.
+"""
+
+import logging
+
+from the_front_office.domain.errors import AIResponseError, TradeParseError
+from the_front_office.domain.mocks import MOCK_TRADE_VERDICT
+from the_front_office.domain.models import TradeVerdict
+from the_front_office.domain.ports import AnalysisModel, ChatSession, TradeProvider
+
+logger = logging.getLogger(__name__)
+
+STRUCTURE_INSTRUCTION = "Extract this fantasy trade evaluation into the given structure."
+
+
+class TradeEngine:
+    """Turns any TradeProvider into a trade verdict."""
+
+    def __init__(self, provider: TradeProvider, *, ai: AnalysisModel):
+        """Both collaborators are ports. `bootstrap.trade_engine` wires them."""
+        self.provider = provider
+        self.ai = ai
+
+    def evaluate(self, league_id: str, trade_text: str) -> tuple[TradeVerdict, ChatSession]:
+        """Evaluate a trade described in plain language.
+
+        Raises:
+            TradeParseError: the description could not be split into two sides.
+            PlayerNotFoundError: a named player could not be resolved.
+            AIResponseError: the model failed or returned nothing usable.
+        """
+        proposal = self.ai.parse_trade_string(trade_text)
+        if not proposal.is_valid:
+            raise TradeParseError(trade_text)
+        logger.info(f"Parsed trade — giving {proposal.giving}, receiving {proposal.receiving}")
+
+        context = self.provider.build_trade_context(league_id, proposal)
+
+        # Google Search stays enabled: live injury and standings news is most of
+        # the value in a trade call. The Gemini API will not accept a response
+        # schema alongside a tool, so the search-grounded prose is structured in
+        # a cheap second pass.
+        chat = self.ai.start_chat(enable_search=True)
+        try:
+            response = chat.send_message(context.prompt)
+        except Exception as e:
+            logger.error(f"Error evaluating trade: {e}")
+            raise AIResponseError(f"Trade evaluation failed: {e}") from e
+
+        text = getattr(response, "text", None)
+        if not text:
+            raise AIResponseError("The model returned an empty trade evaluation.")
+
+        verdict = self.ai.structure_text(text, TradeVerdict, instruction=STRUCTURE_INSTRUCTION, mock=MOCK_TRADE_VERDICT)
+        return verdict, chat  # type: ignore[return-value]

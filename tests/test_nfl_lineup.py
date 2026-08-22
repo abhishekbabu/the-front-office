@@ -4,8 +4,8 @@ This is the one part of the football report with an exact answer, so it is
 computed rather than asked of the model — and therefore worth pinning hard.
 """
 
-from the_front_office.clients.sleeper.types import Projection
-from the_front_office.sports.nfl.lineup import (
+from the_front_office.adapters.outbound.platforms.sleeper.types import Projection
+from the_front_office.adapters.outbound.sports.nfl.lineup import (
     LineupSlot,
     eligible_positions,
     lineup_changes,
@@ -141,7 +141,7 @@ def test_filling_an_empty_slot_reports_no_benched_player() -> None:
 
 def test_current_lineup_is_positional() -> None:
     """Sleeper's `starters` array maps 1:1 onto roster_positions."""
-    from the_front_office.sports.nfl.lineup import current_lineup
+    from the_front_office.adapters.outbound.sports.nfl.lineup import current_lineup
 
     squad = [p("qb1", "QB", 22), p("rb1", "RB", 18)]
     lineup = current_lineup(["QB", "RB"], ["qb1", "rb1"], squad)
@@ -149,7 +149,7 @@ def test_current_lineup_is_positional() -> None:
 
 
 def test_an_unfilled_starter_slot_is_empty() -> None:
-    from the_front_office.sports.nfl.lineup import current_lineup
+    from the_front_office.adapters.outbound.sports.nfl.lineup import current_lineup
 
     squad = [p("qb1", "QB", 22)]
     lineup = current_lineup(["QB", "RB"], ["qb1"], squad)
@@ -159,7 +159,7 @@ def test_an_unfilled_starter_slot_is_empty() -> None:
 def test_an_ineligible_player_does_not_count_toward_the_slot() -> None:
     """A stale roster could put a QB in a WR slot; counting it would overstate
     the lineup total and make every swap look like a downgrade."""
-    from the_front_office.sports.nfl.lineup import current_lineup
+    from the_front_office.adapters.outbound.sports.nfl.lineup import current_lineup
 
     squad = [p("qb1", "QB", 22)]
     lineup = current_lineup(["WR"], ["qb1"], squad)

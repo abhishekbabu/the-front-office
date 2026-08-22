@@ -10,10 +10,10 @@ from typing import Any
 
 import pytest
 
-from the_front_office.clients.yahoo.client import YahooFantasyClient
-from the_front_office.clients.yahoo.constants import SCOUT_CATEGORIES
-from the_front_office.clients.yahoo.types import PlayerPosition, PlayerStat, PlayerStatus, Timeframe
-from the_front_office.exceptions import TeamNotFoundError, YahooAPIError
+from the_front_office.adapters.outbound.platforms.yahoo.client import YahooFantasyClient
+from the_front_office.adapters.outbound.platforms.yahoo.constants import SCOUT_CATEGORIES
+from the_front_office.adapters.outbound.platforms.yahoo.types import PlayerPosition, PlayerStat, PlayerStatus, Timeframe
+from the_front_office.domain.errors import TeamNotFoundError, YahooAPIError
 
 
 @pytest.fixture(autouse=True)
@@ -23,7 +23,7 @@ def _identity_parse(monkeypatch: pytest.MonkeyPatch) -> None:
     FakeContext hands back already-parsed dicts, which is the shape the rest of
     the client works in. Parsing XML is yahoofantasy's job, not ours to retest.
     """
-    import the_front_office.clients.yahoo.client as mod
+    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
     monkeypatch.setattr(mod, "parse_response", lambda raw: raw)
 
@@ -196,7 +196,7 @@ def test_unparseable_category_response_raises() -> None:
     """A response we cannot read must not silently become an empty category."""
     client, _ = _client(_response({"player": [_player_payload("A B")]}))
 
-    import the_front_office.clients.yahoo.client as mod
+    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
     def _explode(raw: object) -> object:
         raise ValueError("malformed xml")
@@ -224,7 +224,7 @@ def test_a_token_is_refreshed_once_before_the_pool() -> None:
 
 def test_scoreboard_is_refreshed_on_a_short_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
     """An hour-old scoreboard would misstate every category margin."""
-    import the_front_office.clients.yahoo.client as mod
+    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
     FakeWeek.matchups_to_return = [_matchup()]
     monkeypatch.setattr(mod, "Week", FakeWeek)
@@ -248,7 +248,7 @@ def test_scoreboard_is_refreshed_on_a_short_ttl(monkeypatch: pytest.MonkeyPatch)
 def test_a_failed_scoreboard_refresh_falls_back_to_the_persisted_copy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import the_front_office.clients.yahoo.client as mod
+    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
     FakeWeek.matchups_to_return = [_matchup()]
     monkeypatch.setattr(mod, "Week", FakeWeek)
@@ -336,7 +336,7 @@ def test_search_on_an_unexpected_shape_raises() -> None:
 
 
 def test_existing_token_skips_the_login_flow(monkeypatch: pytest.MonkeyPatch) -> None:
-    import the_front_office.clients.yahoo.client as mod
+    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
     monkeypatch.setattr(YahooFantasyClient, "_token_exists", classmethod(lambda cls: True))
     ran: list[Any] = []
@@ -346,7 +346,7 @@ def test_existing_token_skips_the_login_flow(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_force_relogins_even_with_a_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    import the_front_office.clients.yahoo.client as mod
+    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
     monkeypatch.setattr(YahooFantasyClient, "_token_exists", classmethod(lambda cls: True))
     monkeypatch.setattr(mod.settings, "yahoo_client_id", "id")
@@ -358,7 +358,7 @@ def test_force_relogins_even_with_a_token(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_login_passes_credentials_and_redirect_uri(monkeypatch: pytest.MonkeyPatch) -> None:
-    import the_front_office.clients.yahoo.client as mod
+    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
     monkeypatch.setattr(YahooFantasyClient, "_token_exists", classmethod(lambda cls: False))
     monkeypatch.setattr(mod.settings, "yahoo_client_id", "the-id")
@@ -375,7 +375,7 @@ def test_login_passes_credentials_and_redirect_uri(monkeypatch: pytest.MonkeyPat
 
 
 def test_missing_credentials_exit_with_a_message(monkeypatch: pytest.MonkeyPatch) -> None:
-    import the_front_office.clients.yahoo.client as mod
+    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
     monkeypatch.setattr(YahooFantasyClient, "_token_exists", classmethod(lambda cls: False))
     monkeypatch.setattr(mod.settings, "yahoo_client_id", None)
@@ -387,7 +387,7 @@ def test_missing_credentials_exit_with_a_message(monkeypatch: pytest.MonkeyPatch
 def test_failed_login_subprocess_exits(monkeypatch: pytest.MonkeyPatch) -> None:
     import subprocess as real_subprocess
 
-    import the_front_office.clients.yahoo.client as mod
+    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
     monkeypatch.setattr(YahooFantasyClient, "_token_exists", classmethod(lambda cls: False))
     monkeypatch.setattr(mod.settings, "yahoo_client_id", "id")
@@ -452,7 +452,7 @@ def _matchup(my_key: str = "t1") -> Any:
 
 
 def _matchup_client(monkeypatch: pytest.MonkeyPatch, matchups: list[Any], current_week: Any = 5) -> Any:
-    import the_front_office.clients.yahoo.client as mod
+    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
     FakeWeek.matchups_to_return = matchups
     FakeWeek.instances = []
@@ -493,7 +493,7 @@ def test_matchup_context_is_empty_when_there_is_no_matchup(monkeypatch: pytest.M
 
 def test_matchup_failures_degrade_to_empty_context(monkeypatch: pytest.MonkeyPatch) -> None:
     """Matchup context is enrichment — losing it must not lose the report."""
-    import the_front_office.clients.yahoo.client as mod
+    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
     class Exploding(FakeWeek):
         def sync(self) -> None:

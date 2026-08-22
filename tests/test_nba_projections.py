@@ -7,8 +7,8 @@ player's numbers.
 
 from datetime import date
 
-from the_front_office.clients.sleeper.types import GameProjection
-from the_front_office.sports.nba.projections import (
+from the_front_office.adapters.outbound.platforms.sleeper.types import GameProjection
+from the_front_office.adapters.outbound.sports.nba.projections import (
     ProjectionIndex,
     aggregate,
     normalise_name,

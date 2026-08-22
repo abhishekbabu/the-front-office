@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from the_front_office.cache import JsonDiskCache
+from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
 
 HOUR = timedelta(hours=1)
 T0 = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
