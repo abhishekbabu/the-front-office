@@ -11,13 +11,12 @@ stats and the fixtures ahead.
 ## Tech Stack
 
 **Application** (`src/the_front_office/`, Python managed with `uv`)
-- Interactive slash-command REPL in `main.py`; Streamlit UI in `ui/`
-- `sports/<sport>/provider.py` — one per sport, turning a league into a rendered prompt
-- `report/` — the sport-agnostic pipeline: `ScoutEngine` runs any provider through the model
-  and returns a validated `ScoutReport`
-- `trade/` — NBA trade evaluation
-- `render.py` turns reports into terminal output; `exceptions.py` holds the `FrontOfficeError` hierarchy
-- `config/` holds validated settings (`pydantic-settings`) and the prompt templates
+- `sports/registry.py` — which sports exist and whether each is configured; every entry point reads it
+- `sports/<sport>/<platform>.py` — one provider per sport+platform, turning a league into a rendered prompt
+- `report/` — the sport-agnostic pipeline: `ScoutEngine` runs any provider through the model and returns a validated `ScoutReport`
+- `trade/` — trade evaluation (Yahoo only so far)
+- `main.py` (REPL) and `ui/` (Streamlit) — both driven by the registry, neither knows a platform name
+- `render.py`, `exceptions.py`, `config/` — shared output, errors and validated settings
 
 **External clients** (`src/the_front_office/clients/`)
 - **Yahoo Fantasy** via `yahoofantasy` — OAuth2, rosters, matchups, and hand-built player queries that sort free agents by an individual stat category
@@ -79,17 +78,18 @@ First run opens a browser for the Yahoo OAuth2 handshake; the token is cached in
 
 | Command | Description |
 |---------|-------------|
-| `/scout` | NBA: Morning Scout Report — waiver wire analysis for the current matchup |
-| `/football` | NFL: weekly report — start/sit and waiver targets from Sleeper projections |
-| `/trade <text>` | Evaluate a trade, e.g. `/trade Give LeBron James, Get Jayson Tatum` |
-| `/rosters` · `/my-roster` | Team rosters |
-| `/matchup` | Current matchup score and category breakdown |
+| `/scout [sport]` | Scouting report. No sport runs every configured one |
+| `/roster [sport]` | Your roster |
+| `/leagues` | Every league, per sport |
+| `/trade <text>` | Evaluate a trade, e.g. `/trade Give LeBron James, Get Jayson Tatum` (NBA only) |
 | `/help` · `/quit` | — |
 
-The web UI covers the same ground: a Scout page, a Trade page, and a team view
-with the matchup category table and roster. Both render the same validated
-`ScoutReport` and `TradeVerdict` models — the CLI through `render.py`, the UI
-through `ui/app.py`.
+Add `--mock` to `/scout` or `/trade` to swap Gemini for canned responses and
+exercise the report path without spending tokens. League data stays live.
+
+The web UI covers the same ground with a sport picker in the sidebar. Both
+front ends render the same validated models — the CLI through `render.py`, the
+UI through `ui/app.py`.
 
 `/scout` and `/trade` accept `--mock`, which swaps Gemini for canned responses so
 you can exercise the report path without spending tokens. Yahoo stays live —
@@ -119,69 +119,6 @@ Tests are hermetic — no network, no credentials, no cache file on disk. Engine
 take their collaborators by keyword, so `tests/conftest.py` fakes stand in for
 Yahoo, NBA and Gemini. Anything hitting a live API is marked
 `@pytest.mark.integration` and deselected by default.
-
-## Architecture Notes
-
-**One pipeline, many sports.** Every sport implements `SportProvider`: list the
-user's leagues, and turn one league into a rendered prompt plus the parts a
-follow-up briefing needs. `ScoutEngine`, the report models, the renderer and the
-UI are written against that seam and know nothing about Yahoo or Sleeper. Adding
-a sport is a provider and a prompt template.
-
-**Arithmetic is computed, judgement is asked.** The optimal NFL lineup is an
-exact constraint-satisfaction problem, so it is solved in code and handed to the
-model as a fact to endorse or overrule — not something it is asked to work out.
-
-**Category-league specific (NBA).** Prompts assume a 9-cat league and encode the
-strategy: target close categories, don't chase blowouts, a 5-4 win counts the
-same as 9-0. Points and dynasty leagues are out of scope.
-
-**One set of models, two front ends.** The engines return validated
-`ScoutReport` / `TradeVerdict` and know nothing about presentation, so the CLI
-and the Streamlit UI are interchangeable renderers over the same data.
-
-**Reports are typed, not prose.** Gemini returns `ScoutReport` and `TradeVerdict`
-as response schemas, so a model that ignores the requested shape fails loudly
-instead of producing something unrenderable. A schema cannot be combined with
-the Google Search tool, so the trade path — which needs live injury news — keeps
-search and structures its prose in a second Flash pass.
-
-**Services raise, callers render.** No service returns `None`, `[]`, or an error
-string to signal failure; those are indistinguishable from real results. An
-empty list is a valid answer (no search matches); a failed request is not.
-
-**Two caches, two invalidation strategies.** The NBA schedule is TTL-based (24h).
-The league game log invalidates at 1:00 AM and 3:00 PM **Pacific** — after games
-end, before they start — so a report never mixes stale box scores into a live
-matchup. Both are anchored to `America/Los_Angeles` with timestamps stored as
-UTC, so behaviour is identical wherever the machine is.
-
-**Remaining-game counts are zone-independent.** The matchup *window* test uses
-the NBA game-date label (what Yahoo's matchup dates also mean); the
-*already-played* test uses the true tip-off instant in UTC. "Remaining" means not
-yet started. The status filter still runs, since a cached schedule can be 24h old.
-
-**Fetching is batched, parallel, and freshness-aware.** The eight category
-queries run concurrently (~7.7x faster than serial on a 150ms round trip), with
-persistence writes kept on one thread because yahoofantasy's cache is a
-read-modify-write of a single pickle. The scoreboard is refreshed on a 120s TTL
-rather than yahoofantasy's default hour, since it is what "which categories are
-close" is computed from.
-
-**Follow-ups are seeded with a briefing, not the prompt.** Chat history is
-resent on every turn, and the free-agent block is over half the prompt by
-volume. The briefing carries the matchup, budget, schedule, full roster and the
-recommended players only — 63% smaller — and tells the model to decline rather
-than invent numbers for a player it can no longer see.
-
-**Rate limiting is deliberate.** `nba_api` calls are spaced by
-`settings.nba_api_delay` and retried only on transient failures — timeouts, 5xx,
-and the non-JSON body stats.nba.com serves when throttling. A 4xx or a changed
-payload shape fails immediately rather than burning the budget.
-
-**Platform.** Runs on macOS, Linux and Windows. `pyreadline3` and `tzdata` are
-installed only on Windows; `main()` reconfigures stdout to UTF-8 so redirected
-output survives a cp1252 locale; `.gitattributes` pins `eol=lf`.
 
 ## Security
 

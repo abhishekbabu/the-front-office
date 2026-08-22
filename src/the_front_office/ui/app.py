@@ -17,8 +17,7 @@ from the_front_office.config.logging import setup_logging
 from the_front_office.exceptions import FrontOfficeError
 from the_front_office.report.engine import ScoutEngine
 from the_front_office.report.types import Move, ScoutReport, TradeVerdict
-from the_front_office.sports.nba.provider import NBAProvider
-from the_front_office.sports.nfl.provider import NFLProvider
+from the_front_office.sports.registry import requirements_summary
 from the_front_office.trade.engine import TradeEvaluator
 from the_front_office.ui import data
 
@@ -29,14 +28,7 @@ VERDICT_COLOURS = {"ACCEPT": "green", "REJECT": "red", "COUNTER": "orange"}
 # Streamlit reruns this script on every interaction; without caching, each
 # click would re-authenticate and re-read the NBA cache from disk.
 
-_load_leagues = st.cache_resource(show_spinner=False)(data.load_leagues)
 _nba_client = st.cache_resource(show_spinner=False)(data.nba_client)
-
-
-@st.cache_data(show_spinner=False)
-def _roster_rows(_team: Any, team_name: str) -> list[dict[str, str]]:
-    """Cached per team name — the Yahoo object itself is not hashable."""
-    return data.roster_rows(_team)
 
 
 # ── rendering ───────────────────────────────────────────────────────────
@@ -129,65 +121,66 @@ def render_chat(key: str) -> None:
 # ── pages ───────────────────────────────────────────────────────────────
 
 
-def football_page(mock: bool) -> None:
-    """Weekly Sleeper report: start/sit and waiver targets."""
-    st.header("Football report")
-    st.caption("Start/sit and waiver targets for the current NFL week.")
+def scout_page(entry: Any, provider: Any, mock: bool) -> None:
+    """Scouting report for whichever sport is selected."""
+    st.header(f"{entry.label} report")
 
-    provider = NFLProvider()
     try:
         refs = provider.list_leagues()
     except FrontOfficeError as e:
         st.error(str(e))
         return
-
     if not refs:
-        st.warning("No Sleeper NFL leagues found for this season.")
+        st.warning(f"No {entry.label} leagues found for this season.")
         return
 
-    names = [f"{r.name} — {r.detail}" for r in refs]
-    chosen = st.selectbox("League", names) if len(names) > 1 else names[0]
-    ref = refs[names.index(chosen)]
+    ref = _pick_league(refs)
+    key = f"scout_{entry.sport}"
 
-    if st.button("Run football report", type="primary"):
-        with st.spinner("Pulling rosters, projections and waiver pool…"):
+    if st.button("Run report", type="primary"):
+        with st.spinner("Gathering league state and building the report…"):
             try:
                 report, chat = ScoutEngine(provider, mock_ai=mock).start_analysis(ref.league_id)
             except FrontOfficeError as e:
                 st.error(str(e))
                 return
-        st.session_state["football_report"] = report
-        st.session_state["football_chat"] = chat
-        st.session_state["football_history"] = []
+        st.session_state[f"{key}_report"] = report
+        st.session_state[f"{key}_chat"] = chat
+        st.session_state[f"{key}_history"] = []
 
-    report = st.session_state.get("football_report")
+    report = st.session_state.get(f"{key}_report")
     if report is not None:
         render_report(report)
-        render_chat("football")
+        render_chat(key)
 
 
-def scout_page(league: Any, mock: bool) -> None:
-    st.header("Scout report")
-    st.caption("Waiver wire analysis for the current matchup.")
+def team_page(entry: Any, provider: Any) -> None:
+    """Roster view for whichever sport is selected."""
+    try:
+        refs = provider.list_leagues()
+    except FrontOfficeError as e:
+        st.error(str(e))
+        return
+    if not refs:
+        st.warning(f"No {entry.label} leagues found for this season.")
+        return
 
-    if st.button("Run scout report", type="primary"):
-        with st.spinner("Analysing roster, free agents and schedule…"):
-            try:
-                report, chat = ScoutEngine(NBAProvider(league, nba=_nba_client()), mock_ai=mock).start_analysis("")
-            except FrontOfficeError as e:
-                st.error(str(e))
-                return
-        st.session_state["scout_report"] = report
-        st.session_state["scout_chat"] = chat
-        st.session_state["scout_history"] = []
+    ref = _pick_league(refs)
+    st.header(ref.name)
+    if ref.detail:
+        st.caption(ref.detail)
 
-    report = st.session_state.get("scout_report")
-    if report is not None:
-        render_report(report)
-        render_chat("scout")
+    try:
+        rows = provider.squad_rows(ref.league_id)
+    except FrontOfficeError as e:
+        st.error(str(e))
+        return
+    st.subheader("Roster")
+    st.dataframe(rows, hide_index=True, use_container_width=True)
 
 
 def trade_page(league: Any, mock: bool) -> None:
+    """Trade evaluation. NBA only for now."""
     st.header("Trade evaluation")
     st.caption("Describe a trade in plain language.")
 
@@ -209,68 +202,48 @@ def trade_page(league: Any, mock: bool) -> None:
         render_chat("trade")
 
 
-def team_page(league: Any) -> None:
-    from the_front_office.clients.yahoo.client import YahooFantasyClient
-
-    yahoo = YahooFantasyClient(league)
-    try:
-        team = yahoo.get_user_team()
-    except FrontOfficeError as e:
-        st.error(str(e))
-        return
-
-    st.header(team.name)
-
-    st.subheader("Matchup")
-    rows = data.matchup_rows(yahoo.get_matchup_context(team))
-    if rows:
-        st.dataframe(rows, hide_index=True, use_container_width=True)
-    else:
-        st.info("No matchup in progress.")
-
-    st.subheader("Roster")
-    st.dataframe(_roster_rows(team, team.name), hide_index=True, use_container_width=True)
+def _pick_league(refs: list[Any]) -> Any:
+    """League selector, collapsed to a caption when there is only one."""
+    if len(refs) == 1:
+        return refs[0]
+    labels = [f"{r.name} — {r.detail}" if r.detail else r.name for r in refs]
+    return refs[labels.index(st.selectbox("League", labels))]
 
 
 # ── entry point ─────────────────────────────────────────────────────────
 
 
 def main() -> None:
-    st.set_page_config(page_title="The Front Office", page_icon="🏀", layout="wide")
+    st.set_page_config(page_title="The Front Office", page_icon="🏆", layout="wide")
     setup_logging()
 
-    st.sidebar.title("🏀 The Front Office")
-    mock = st.sidebar.toggle("Mock AI", help="Skip Gemini calls. Yahoo data stays live.")
+    st.sidebar.title("🏆 The Front Office")
+    mock = st.sidebar.toggle("Mock AI", help="Skip Gemini calls. League data stays live.")
 
-    sport = st.sidebar.radio("Sport", ["NBA (Yahoo)", "NFL (Sleeper)"])
+    entries = data.available_sports()
+    if not entries:
+        st.error("No sports configured. In .env set — " + requirements_summary())
+        st.stop()
 
-    if sport == "NFL (Sleeper)":
-        # Sleeper needs no auth, so the football path skips the Yahoo handshake
-        # entirely rather than blocking on credentials it does not use.
-        football_page(mock)
-        return
+    labels = [e.label for e in entries]
+    chosen = st.sidebar.radio("Sport", labels) if len(labels) > 1 else labels[0]
+    entry = entries[labels.index(chosen)]
+
+    views = ["Scout", "My team"] + (["Trade"] if entry.supports_trades else [])
+    page = st.sidebar.radio("View", views)
 
     try:
-        leagues = _load_leagues()
-    except Exception as e:
-        st.error(f"Could not reach Yahoo: {e}")
+        provider = data.build_provider(entry.sport)
+    except FrontOfficeError as e:
+        st.error(str(e))
         st.stop()
 
-    if not leagues:
-        st.warning("No NBA leagues found for this season.")
-        st.stop()
-
-    names = [lg.name for lg in leagues]
-    chosen = st.sidebar.selectbox("League", names) if len(names) > 1 else names[0]
-    league = leagues[names.index(chosen)]
-
-    page = st.sidebar.radio("View", ["Scout", "Trade", "My team"])
     if page == "Scout":
-        scout_page(league, mock)
-    elif page == "Trade":
-        trade_page(league, mock)
+        scout_page(entry, provider, mock)
+    elif page == "My team":
+        team_page(entry, provider)
     else:
-        team_page(league)
+        trade_page(provider.league, mock)
 
 
 # Streamlit executes this script with __name__ == "__main__", so the guard runs

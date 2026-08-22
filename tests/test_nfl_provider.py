@@ -14,7 +14,7 @@ from the_front_office.clients.sleeper.types import (
     TrendingPlayer,
 )
 from the_front_office.exceptions import LeagueNotFoundError, SleeperAPIError
-from the_front_office.sports.nfl.provider import NFLProvider
+from the_front_office.sports.nfl.sleeper import SleeperNFLProvider
 
 MY_ID = "user-1"
 
@@ -99,8 +99,8 @@ class FakeSleeper:
         return self.trending
 
 
-def _provider(client: FakeSleeper) -> NFLProvider:
-    return NFLProvider(username="me", client=client)  # type: ignore[arg-type]
+def _provider(client: FakeSleeper) -> SleeperNFLProvider:
+    return SleeperNFLProvider(username="me", client=client)  # type: ignore[arg-type]
 
 
 DEFAULT_PROJECTIONS = {
@@ -124,7 +124,7 @@ def test_leagues_are_listed_with_format_and_size() -> None:
 
 
 def test_missing_username_is_a_clear_error() -> None:
-    provider = NFLProvider(username=None, client=FakeSleeper())  # type: ignore[arg-type]
+    provider = SleeperNFLProvider(username=None, client=FakeSleeper())  # type: ignore[arg-type]
     with pytest.raises(LeagueNotFoundError, match="SLEEPER_USERNAME"):
         provider.list_leagues()
 
@@ -319,3 +319,17 @@ def test_the_bench_gap_matches_the_printed_figures() -> None:
     gap_match = re.search(r"so (\d+\.\d) points are sitting", constraints)
     assert gap_match is not None
     assert float(gap_match.group(1)) == round(best - current, 1)
+
+
+def test_squad_rows_mark_starters_and_bench() -> None:
+    client = FakeSleeper(
+        projections=dict(DEFAULT_PROJECTIONS),
+        rosters=[SleeperRoster(roster_id=1, owner_id=MY_ID, player_ids=["qb1", "rb1"], starter_ids=["qb1"])],
+    )
+    rows = _provider(client).squad_rows("L1")
+    assert {r["Player"]: r["Slot"] for r in rows} == {"Star QB": "START", "Good RB": "BN"}
+
+
+def test_squad_rows_skip_players_missing_from_the_catalogue() -> None:
+    client = FakeSleeper(rosters=[SleeperRoster(roster_id=1, owner_id=MY_ID, player_ids=["ghost"], starter_ids=[])])
+    assert _provider(client).squad_rows("L1") == []

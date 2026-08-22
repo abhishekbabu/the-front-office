@@ -70,8 +70,13 @@ expensive or side-effecting must be cached (`st.cache_resource` for clients,
 testable; `ui/app.py` only lays out widgets. Keep `main()` behind the
 `__name__ == "__main__"` guard so the module stays importable.
 
-**Adding a sport.** Implement `SportProvider` in `sports/<sport>/provider.py`
-(`list_leagues` + `build_context`) and add a prompt template. Do not add sport
+**Adding a sport.** Implement `SportProvider` in `sports/<sport>/<platform>.py`
+(`list_leagues`, `build_context`, `squad_rows`), add a prompt template and a
+canned mock report, then add one `SportEntry` to `sports/registry.py`. The CLI,
+the UI and the help text pick it up from there — do not name a provider in an
+entry point. `is_configured` must be true only when the credentials actually
+exist: building a provider may open an OAuth flow, and a user who does not play
+that sport must never be made to sit through it. Do not add sport
 specifics to `report/`, `render.py` or `ui/` — those are the shared seam. If a
 sport needs a field the shared `Move` / `ScoutReport` / `TradeVerdict` lacks,
 widen those models rather than forking them. Keep their field names in the

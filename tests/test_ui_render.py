@@ -200,6 +200,22 @@ class Stopped(Exception):
     """Stands in for st.stop(), which halts the script."""
 
 
+class FakeEntry:
+    sport = "nfl"
+    label = "NFL (Sleeper)"
+    requires = "SLEEPER_USERNAME"
+    supports_trades = False
+
+    @staticmethod
+    def is_configured() -> bool:
+        return True
+
+
+class FakeRef:
+    def __init__(self, league_id: str = "L1", name: str = "My League", detail: str = "12-team") -> None:
+        self.league_id, self.name, self.detail = league_id, name, detail
+
+
 def _page_recorder(monkeypatch: pytest.MonkeyPatch, **extra: Any) -> Recorder:
     import the_front_office.ui.app as app
 
@@ -209,8 +225,12 @@ def _page_recorder(monkeypatch: pytest.MonkeyPatch, **extra: Any) -> Recorder:
     rec.sidebar = rec  # type: ignore[attr-defined]
     rec.title = rec._record  # type: ignore[attr-defined]
     rec.toggle = lambda label, help=None: False  # type: ignore[attr-defined]
-    # The sidebar now picks a sport before anything platform-specific happens.
     rec.radio = lambda label, options: options[0]  # type: ignore[attr-defined]
+    rec.selectbox = lambda label, options: options[0]  # type: ignore[attr-defined]
+    rec.button = lambda label, type=None, disabled=False: False  # type: ignore[attr-defined]
+    rec.spinner = lambda label: _NullContext()  # type: ignore[attr-defined]
+    rec.dataframe = lambda rows, **kw: rec.written.append(str(rows))  # type: ignore[attr-defined]
+    rec.session_state = {}  # type: ignore[attr-defined]
 
     def _stop() -> None:
         raise Stopped
@@ -222,28 +242,56 @@ def _page_recorder(monkeypatch: pytest.MonkeyPatch, **extra: Any) -> Recorder:
     return rec
 
 
-def test_unreachable_yahoo_shows_an_error_and_stops(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Without credentials the page must explain itself, not traceback."""
+def test_no_configured_sports_explains_what_to_set(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _app()
     rec = _page_recorder(monkeypatch)
-
-    def _boom() -> Any:
-        raise RuntimeError("no credentials")
-
-    monkeypatch.setattr(app, "_load_leagues", _boom)
+    monkeypatch.setattr(app.data, "available_sports", lambda: [])
     with pytest.raises(Stopped):
         app.main()
-    assert "Could not reach Yahoo" in rec.text
-    assert "no credentials" in rec.text
+    assert "SLEEPER_USERNAME" in rec.text
 
 
-def test_no_leagues_warns_and_stops(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_choosing_a_sport_builds_only_that_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Building the NBA provider opens an OAuth flow; a football-only user must
+    never trigger it."""
+    app = _app()
+    _page_recorder(monkeypatch)
+    built: list[str] = []
+    monkeypatch.setattr(app.data, "available_sports", lambda: [FakeEntry()])
+    monkeypatch.setattr(app.data, "build_provider", lambda sport: built.append(sport) or object())
+    monkeypatch.setattr(app, "scout_page", lambda entry, provider, mock: None)
+    app.main()
+    assert built == ["nfl"]
+
+
+def test_an_unconfigured_provider_surfaces_its_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    from the_front_office.exceptions import LeagueNotFoundError
+
     app = _app()
     rec = _page_recorder(monkeypatch)
-    monkeypatch.setattr(app, "_load_leagues", lambda: [])
+    monkeypatch.setattr(app.data, "available_sports", lambda: [FakeEntry()])
+
+    def _boom(sport: str) -> Any:
+        raise LeagueNotFoundError("SLEEPER_USERNAME is not set in .env")
+
+    monkeypatch.setattr(app.data, "build_provider", _boom)
     with pytest.raises(Stopped):
         app.main()
-    assert "No NBA leagues found" in rec.text
+    assert "SLEEPER_USERNAME" in rec.text
+
+
+def test_trade_is_offered_only_where_it_is_supported(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A declared capability, not a hardcoded sport check."""
+    app = _app()
+    rec = _page_recorder(monkeypatch)
+    seen: list[list[str]] = []
+    rec.radio = lambda label, options: (seen.append(options), options[0])[1]  # type: ignore[attr-defined]
+    monkeypatch.setattr(app.data, "available_sports", lambda: [FakeEntry()])
+    monkeypatch.setattr(app.data, "build_provider", lambda sport: object())
+    monkeypatch.setattr(app, "scout_page", lambda entry, provider, mock: None)
+    app.main()
+    views = next(o for o in seen if "Scout" in o)
+    assert "Trade" not in views
 
 
 def test_scout_page_renders_a_domain_error_instead_of_raising(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -251,61 +299,16 @@ def test_scout_page_renders_a_domain_error_instead_of_raising(monkeypatch: pytes
 
     app = _app()
     rec = _page_recorder(monkeypatch)
-    rec.button = lambda label, type=None, disabled=False: True  # type: ignore[attr-defined]
-    rec.spinner = lambda label: _NullContext()  # type: ignore[attr-defined]
-    rec.session_state = {}  # type: ignore[attr-defined]
 
     class Boom:
-        def __init__(self, *a: Any, **k: Any) -> None:
-            pass
-
-        def start_analysis(self, league_id: str = "") -> Any:
+        def list_leagues(self) -> Any:
             raise TeamNotFoundError("Some League")
 
-    monkeypatch.setattr(app, "ScoutEngine", Boom)
-    monkeypatch.setattr(app, "NBAProvider", lambda *a, **k: None)
-    monkeypatch.setattr(app, "_nba_client", lambda: None)
-    app.scout_page(object(), mock=True)
+    app.scout_page(FakeEntry(), Boom(), mock=True)
     assert "Some League" in rec.text
 
 
-# ── sport routing ───────────────────────────────────────────────────────
-
-
-def test_football_is_reachable_without_any_yahoo_call(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Sleeper needs no auth, so picking football must not block on a Yahoo
-    handshake it does not use."""
-    app = _app()
-    rec = _page_recorder(monkeypatch)
-    rec.radio = lambda label, options: "NFL (Sleeper)"  # type: ignore[attr-defined]
-
-    def _yahoo_must_not_run() -> Any:
-        raise AssertionError("Yahoo was contacted on the football path")
-
-    monkeypatch.setattr(app, "_load_leagues", _yahoo_must_not_run)
-    called: list[bool] = []
-    monkeypatch.setattr(app, "football_page", lambda mock: called.append(True))
-
-    app.main()
-    assert called == [True]
-
-
-def test_football_page_surfaces_a_configuration_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    from the_front_office.exceptions import LeagueNotFoundError
-
-    app = _app()
-    rec = _page_recorder(monkeypatch)
-
-    class NoUsername:
-        def list_leagues(self) -> Any:
-            raise LeagueNotFoundError("SLEEPER_USERNAME is not set in .env")
-
-    monkeypatch.setattr(app, "NFLProvider", lambda *a, **k: NoUsername())
-    app.football_page(mock=True)
-    assert "SLEEPER_USERNAME" in rec.text
-
-
-def test_football_page_warns_when_there_are_no_leagues(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_scout_page_warns_when_there_are_no_leagues(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _app()
     rec = _page_recorder(monkeypatch)
 
@@ -313,6 +316,39 @@ def test_football_page_warns_when_there_are_no_leagues(monkeypatch: pytest.Monke
         def list_leagues(self) -> Any:
             return []
 
-    monkeypatch.setattr(app, "NFLProvider", lambda *a, **k: NoLeagues())
-    app.football_page(mock=True)
-    assert "No Sleeper NFL leagues" in rec.text
+    app.scout_page(FakeEntry(), NoLeagues(), mock=True)
+    assert "No NFL (Sleeper) leagues" in rec.text
+
+
+def test_team_page_renders_the_squad_rows(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _app()
+    rec = _page_recorder(monkeypatch)
+
+    class Provider:
+        def list_leagues(self) -> Any:
+            return [FakeRef()]
+
+        def squad_rows(self, league_id: str) -> Any:
+            return [{"Player": "Star QB", "Pos": "QB"}]
+
+    app.team_page(FakeEntry(), Provider())
+    assert "Star QB" in rec.text
+    assert "My League" in rec.text
+
+
+def test_a_single_league_is_not_offered_as_a_choice(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hierarchy in the model, collapsed in the UI."""
+    app = _app()
+    rec = _page_recorder(monkeypatch)
+    asked: list[str] = []
+    rec.selectbox = lambda label, options: asked.append(label) or options[0]  # type: ignore[attr-defined]
+    assert app._pick_league([FakeRef()]).league_id == "L1"
+    assert asked == []
+
+
+def test_several_leagues_are_offered_as_a_choice(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _app()
+    rec = _page_recorder(monkeypatch)
+    rec.selectbox = lambda label, options: options[1]  # type: ignore[attr-defined]
+    picked = app._pick_league([FakeRef("L1", "One"), FakeRef("L2", "Two")])
+    assert picked.league_id == "L2"

@@ -1,59 +1,50 @@
-"""Cached data access for the Streamlit UI.
+"""Data access for the Streamlit UI.
 
 Streamlit reruns the whole script on every interaction, so anything expensive or
 side-effecting has to be cached or it repeats on each click. Kept separate from
-app.py so it can be tested without a Streamlit runtime: every function here is a
-thin wrapper whose uncached body is importable and exercised directly.
+app.py so it can be tested without a Streamlit runtime.
+
+Sport-neutral: providers supply leagues and rosters. What is left here is the
+one helper that reads a rendered situation block back into table rows, plus the
+NBA client the Yahoo provider wants to share across reruns.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from the_front_office.clients.nba.client import NBAClient
-from the_front_office.clients.yahoo.client import YahooFantasyClient
+from the_front_office.exceptions import LeagueNotFoundError
+from the_front_office.sports.registry import SportEntry, configured_sports, find
 
 
-def season_year(now: datetime | None = None) -> int:
-    """The NBA season a date belongs to. Seasons start in October."""
-    moment = now or datetime.now()
-    return moment.year if moment.month >= 9 else moment.year - 1
+def available_sports() -> list[SportEntry]:
+    """The sports this user has credentials for."""
+    return configured_sports()
 
 
-def load_leagues() -> list[Any]:
-    """Authenticate once and list this season's NBA leagues."""
-    YahooFantasyClient.login()
-    ctx = YahooFantasyClient.get_context()
-    return list(ctx.get_leagues("nba", season_year()))
+def build_provider(sport: str) -> Any:
+    """Construct the provider for `sport`, or raise if it is not configured.
+
+    Deferred until a sport is actually chosen: constructing the NBA provider
+    opens a Yahoo OAuth flow, which a football-only user must never sit through.
+    """
+    entry = find(sport)
+    if entry is None:
+        raise LeagueNotFoundError(f"unknown sport {sport!r}")
+    if not entry.is_configured():
+        raise LeagueNotFoundError(f"{entry.label} is not configured — set {entry.requires} in .env")
+    return entry.build()
 
 
-def roster_rows(team: Any) -> list[dict[str, str]]:
-    """Flatten a Yahoo roster into table rows."""
-    rows = []
-    for player in team.players():
-        slot = getattr(getattr(player, "selected_position", None), "position", "")
-        status = getattr(player, "status", "") or ""
-        rows.append(
-            {
-                "Player": player.name.full,
-                "Pos": player.display_position,
-                "Team": player.editorial_team_abbr,
-                "Slot": slot,
-                "Status": status,
-            }
-        )
-    return rows
+def situation_rows(situation: str) -> list[dict[str, str]]:
+    """Parse the "- LABEL: mine vs theirs" lines out of a situation block.
 
-
-def matchup_rows(context: str) -> list[dict[str, str]]:
-    """Parse the category breakdown out of a matchup context string.
-
-    The context is built for the AI prompt; this pulls the same numbers back out
-    for display rather than making a second Yahoo round trip.
+    Reuses the context already built for the AI rather than making a second
+    round trip to the platform for numbers we have in hand.
     """
     rows = []
-    for line in context.splitlines():
+    for line in situation.splitlines():
         stripped = line.strip()
         if not stripped.startswith("- ") or " vs " not in stripped:
             continue

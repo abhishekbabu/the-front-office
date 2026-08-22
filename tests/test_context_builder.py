@@ -5,7 +5,7 @@ from datetime import date
 from conftest import FakeNBA, make_player
 
 from the_front_office.clients.nba.types import NineCatStats, PlayerStats
-from the_front_office.services.context_builder import PlayerContextBuilder
+from the_front_office.sports.nba.context import PlayerContextBuilder
 
 START, END = date(2026, 2, 9), date(2026, 2, 15)
 

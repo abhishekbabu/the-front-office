@@ -7,6 +7,10 @@ is Yahoo's weekly add limit.
 
 import logging
 from datetime import date
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 from yahoofantasy import League, Player  # type: ignore[import-untyped]
 
@@ -14,50 +18,87 @@ from the_front_office.clients.nba.client import NBAClient
 from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
 from the_front_office.config.settings import settings
+from the_front_office.exceptions import LeagueNotFoundError
 from the_front_office.report.types import SportContext
-from the_front_office.services import PlayerContextBuilder
 from the_front_office.sports.base import LeagueRef
+from the_front_office.sports.nba.context import PlayerContextBuilder
 
 logger = logging.getLogger(__name__)
 
 
-class NBAProvider:
+class YahooNBAProvider:
     """SportProvider for Yahoo category-league basketball."""
 
     sport = "nba"
     label = "NBA (Yahoo)"
 
+    @staticmethod
+    def season_year(now: "datetime | None" = None) -> int:
+        """The NBA season a date belongs to. Seasons start in October."""
+        from datetime import datetime as _dt
+
+        moment = now or _dt.now()
+        return moment.year if moment.month >= 9 else moment.year - 1
+
     def __init__(
         self,
         league: League,
         *,
+        all_leagues: list[League] | None = None,
         nba: NBAClient | None = None,
         yahoo: YahooFantasyClient | None = None,
     ):
         """Collaborators default to real clients; pass them in to test or reuse."""
         self.league = league
+        self._all_leagues = all_leagues or [league]
         self.nba = nba or NBAClient()
         self.yahoo = yahoo or YahooFantasyClient(league)
         self.context_builder = PlayerContextBuilder(self.nba)
 
     def list_leagues(self) -> list[LeagueRef]:
-        """The single league this provider was constructed around.
-
-        Yahoo league discovery needs an authenticated Context, which main.py and
-        the UI already hold — they construct one provider per league.
-        """
+        """Every Yahoo NBA league this login is in."""
         return [
             LeagueRef(
-                league_id=str(self.league.id),
-                name=str(self.league.name),
+                league_id=str(lg.id),
+                name=str(lg.name),
                 sport=self.sport,
-                detail=str(getattr(self.league, "league_type", "")),
+                detail=str(getattr(lg, "league_type", "")),
             )
+            for lg in self._all_leagues
         ]
+
+    def _select(self, league_id: str) -> League:
+        """The league object for `league_id`, defaulting to the current one."""
+        if not league_id:
+            return self.league
+        for lg in self._all_leagues:
+            if str(lg.id) == str(league_id):
+                return lg
+        raise LeagueNotFoundError(f"Yahoo league {league_id} is not one of yours")
 
     def build_context(self, league_id: str = "") -> SportContext:
         """Gather league state and render the scouting prompt."""
+        league = self._select(league_id)
+        if league is not self.league:
+            self.league = league
+            self.yahoo = YahooFantasyClient(league)
         return self._build_context()
+
+    def squad_rows(self, league_id: str = "") -> list[dict[str, str]]:
+        """The user's roster as table rows, for a team view."""
+        team = self.yahoo.get_user_team()
+        rows = []
+        for player in team.players():
+            rows.append(
+                {
+                    "Player": str(player.name.full),
+                    "Pos": str(player.display_position),
+                    "Team": str(player.editorial_team_abbr),
+                    "Slot": str(getattr(getattr(player, "selected_position", None), "position", "")),
+                    "Status": str(getattr(player, "status", "") or ""),
+                }
+            )
+        return rows
 
     def _build_context(self) -> SportContext:
         """Gather all data and build the initial AI prompt.

@@ -42,10 +42,10 @@ class ScoutEngine:
             FrontOfficeError: the platform failed, or the model returned an
                 unusable report.
         """
-        from the_front_office.report.mocks import MOCK_SCOUT_REPORT
+        from the_front_office.report.mocks import mock_report_for
 
         context = self.provider.build_context(league_id)
-        report = self.ai.generate_structured(context.prompt, ScoutReport, mock=MOCK_SCOUT_REPORT)
+        report = self.ai.generate_structured(context.prompt, ScoutReport, mock=mock_report_for(self.provider.sport))
 
         briefing = context.briefing(report)
         logger.debug(

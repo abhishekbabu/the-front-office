@@ -1,25 +1,22 @@
-"""
-main.py — Interactive entry point for The Front Office.
+"""Interactive entry point.
 
-Authenticates once with Yahoo Fantasy, then waits for slash commands
-to run scouting reports, view rosters, etc.
+Sport-neutral: the registry decides which sports are available, and a platform
+is only contacted when a command actually needs it. Nothing here knows about
+Yahoo or Sleeper.
 """
 
 import contextlib
 import sys
+import textwrap
 from datetime import datetime
 from typing import TYPE_CHECKING, Union
 
-from yahoofantasy import League, Team  # type: ignore[import-untyped]
-
-from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.config.logging import setup_logging
 from the_front_office.exceptions import FrontOfficeError
 from the_front_office.render import render_scout_report, render_trade_verdict
 from the_front_office.report.engine import ScoutEngine
-from the_front_office.sports.nba.provider import NBAProvider
-from the_front_office.sports.nfl.provider import NFLProvider
-from the_front_office.trade.engine import TradeEvaluator
+from the_front_office.sports.base import SportProvider
+from the_front_office.sports.registry import SportEntry, configured_sports, find
 
 if TYPE_CHECKING:
     from google.genai.chats import Chat
@@ -29,6 +26,29 @@ if TYPE_CHECKING:
 # Graceful fallback on systems without readline
 with contextlib.suppress(ImportError):
     import readline  # noqa: F401 — enables up/down arrow history in input()
+
+
+# ---------------------------------------------------------------------------
+# Providers, built once and only when needed
+# ---------------------------------------------------------------------------
+
+
+class Session:
+    """Holds providers, building each on first use.
+
+    Deferring construction is what lets a football-only user reach `/football`:
+    building the NBA provider opens a Yahoo OAuth flow, and doing that at
+    startup made the CLI exit before the prompt for anyone without Yahoo
+    credentials.
+    """
+
+    def __init__(self) -> None:
+        self._providers: dict[str, SportProvider] = {}
+
+    def provider(self, entry: SportEntry) -> SportProvider:
+        if entry.sport not in self._providers:
+            self._providers[entry.sport] = entry.build()
+        return self._providers[entry.sport]
 
 
 # ---------------------------------------------------------------------------
@@ -44,24 +64,21 @@ def _print_header(text: str) -> None:
     print("═" * width)
 
 
-def _print_roster(team: Team) -> None:
-    """Pretty-print a team's roster."""
-    players = team.players()
-    if not players:
+def _print_rows(rows: list[dict[str, str]]) -> None:
+    """Print table rows with columns sized to their content."""
+    if not rows:
         print("  (no players found)")
         return
-
-    print(f"  {'Player':<30} {'Position':<10} {'Team':<6}")
-    print(f"  {'─' * 30} {'─' * 10} {'─' * 6}")
-    for player in players:
-        name = player.name.full
-        position = player.display_position
-        nba_team = player.editorial_team_abbr
-        print(f"  {name:<30} {position:<10} {nba_team:<6}")
+    columns = list(rows[0])
+    widths = {c: max(len(c), max(len(str(r.get(c, ""))) for r in rows)) for c in columns}
+    print("  " + "  ".join(c.ljust(widths[c]) for c in columns))
+    print("  " + "  ".join("─" * widths[c] for c in columns))
+    for row in rows:
+        print("  " + "  ".join(str(row.get(c, "")).ljust(widths[c]) for c in columns))
 
 
 def _interactive_followup(
-    chat: Union["Chat", "MockChatSession"] | None,
+    chat: Union["Chat", "MockChatSession", None],
     noun: str,
 ) -> None:
     """Run a follow-up Q&A loop against an open AI chat session."""
@@ -70,7 +87,7 @@ def _interactive_followup(
 
     print("\n  " + "─" * 60)
     print(f"  💬 Interactive Mode: Ask follow-up questions about this {noun}.")
-    print("     Type your question or press Enter to continue to next league.")
+    print("     Type your question or press Enter to continue.")
     print("  " + "─" * 60)
 
     while True:
@@ -94,7 +111,7 @@ def parse_command(raw: str) -> tuple[str, list[str], bool]:
 
     The command token is case-insensitive, but positional arguments are not:
     `/trade Give LeBron, Get Tatum` must reach the AI with its casing intact,
-    since player-name lookups against Yahoo depend on it.
+    since player-name lookups against the platform depend on it.
     """
     parts = raw.split()
     if not parts:
@@ -107,22 +124,53 @@ def parse_command(raw: str) -> tuple[str, list[str], bool]:
     return (cmd, args, mock)
 
 
-def _print_help() -> None:
-    """Print available commands."""
+def _print_help(entries: list[SportEntry]) -> None:
+    """Print available commands, naming the sports that are configured."""
+    keys = " | ".join(e.sport for e in entries) or "none configured"
+    tradeable = ", ".join(e.sport for e in entries if e.supports_trades) or "none"
     print()
     print("  Available commands:")
     print("  ─────────────────────────────────────")
-    print("  /scout               NBA: Morning Scout Report (Yahoo waiver analysis)")
-    print("  /football            NFL: weekly report — start/sit and waivers (Sleeper)")
-    print("  /scout --mock        Use mock AI responses (for testing)")
-    print("  /trade <txt>         Evaluate a trade (e.g. '/trade Give LeBron, Get Tatum')")
-    print("  /trade --mock <txt>  Evaluate a trade with mock AI responses")
-    print("  /rosters             Show all team rosters in the league")
-    print("  /my-roster           Show only your roster")
-    print("  /matchup             Show current matchup scores")
-    print("  /help                Show this help message")
-    print("  /quit                Exit the program")
+    rows = [
+        (f"/scout [{keys}]", "Scouting report. No sport runs every configured one."),
+        ("/roster [sport]", "Your roster"),
+        ("/leagues", "Every league, per sport"),
+        ("/trade <txt>", f"Evaluate a trade ({tradeable})"),
+        ("/help", "Show this help message"),
+        ("/quit", "Exit the program"),
+    ]
+    width = max(len(c) for c, _ in rows)
+    for command, description in rows:
+        print(f"  {command.ljust(width)}   {description}")
     print()
+    print("  Add --mock to /scout or /trade to skip the AI call.")
+    print()
+
+
+def _resolve_sports(args: list[str], entries: list[SportEntry]) -> list[SportEntry]:
+    """Which sports a command should run for.
+
+    No argument means every configured sport; a named one means just that,
+    provided it is configured.
+    """
+    if not args:
+        return entries
+
+    key = args[0].lower().lstrip("/")
+    # Match within the configured set first. Consulting the global registry
+    # first and then testing membership lets the two disagree — which is how a
+    # caller passing its own entries gets told a sport it just supplied is
+    # unconfigured.
+    for entry in entries:
+        if entry.sport == key:
+            return [entry]
+
+    known = find(key)
+    if known is None:
+        print(f"  ❓ Unknown sport: {args[0]}")
+    else:
+        print(f"  ⚠️  {known.label} is not configured. Set {known.requires} in .env.")
+    return []
 
 
 # ---------------------------------------------------------------------------
@@ -130,110 +178,90 @@ def _print_help() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _cmd_football(mock: bool = False) -> None:
-    """Run the weekly football report for every Sleeper league."""
-    provider = NFLProvider()
-    engine = ScoutEngine(provider, mock_ai=mock)
-    try:
-        refs = provider.list_leagues()
-    except FrontOfficeError as e:
-        print(f"  ❌ {e}")
-        return
-
-    if not refs:
-        print("  ⚠️  No Sleeper NFL leagues found for this season.")
-        return
-
-    for ref in refs:
-        _print_header(f"Football Report: {ref.name}")
-        print(f"  {ref.detail}")
-        print("  ⏳ Pulling rosters, projections and waiver pool...")
+def _cmd_scout(session: Session, entries: list[SportEntry], args: list[str], mock: bool) -> None:
+    """Run a scouting report for each requested sport and league."""
+    for entry in _resolve_sports(args, entries):
         try:
-            report, chat = engine.start_analysis(ref.league_id)
+            provider = session.provider(entry)
+            refs = provider.list_leagues()
+        except FrontOfficeError as e:
+            print(f"  ❌ {entry.label}: {e}")
+            continue
+
+        if not refs:
+            print(f"  ⚠️  No {entry.label} leagues found for this season.")
+            continue
+
+        engine = ScoutEngine(provider, mock_ai=mock)
+        for ref in refs:
+            _print_header(f"{entry.label} — {ref.name}")
+            if ref.detail:
+                print(f"  {ref.detail}")
+            print("  ⏳ Gathering league state and building the report...")
+            try:
+                report, chat = engine.start_analysis(ref.league_id)
+            except FrontOfficeError as e:
+                print(f"  ❌ {e}")
+                continue
+            print("\n" + render_scout_report(report))
+            _interactive_followup(chat, "report")
+
+
+def _cmd_roster(session: Session, entries: list[SportEntry], args: list[str]) -> None:
+    """Show the user's roster for each requested sport."""
+    for entry in _resolve_sports(args, entries):
+        try:
+            provider = session.provider(entry)
+            for ref in provider.list_leagues():
+                _print_header(f"{entry.label} — {ref.name}")
+                _print_rows(provider.squad_rows(ref.league_id))
+        except FrontOfficeError as e:
+            print(f"  ❌ {entry.label}: {e}")
+
+
+def _cmd_leagues(session: Session, entries: list[SportEntry]) -> None:
+    """List every league across configured sports."""
+    for entry in entries:
+        _print_header(entry.label)
+        try:
+            refs = session.provider(entry).list_leagues()
         except FrontOfficeError as e:
             print(f"  ❌ {e}")
             continue
-        print("\n" + render_scout_report(report))
-        _interactive_followup(chat, "report")
+        if not refs:
+            print("  (none this season)")
+        for ref in refs:
+            print(f"  • {ref.name}" + (f"  —  {ref.detail}" if ref.detail else ""))
 
 
-def _cmd_scout(leagues: list[League], mock: bool = False) -> None:
-    """Run the scout report for all leagues."""
-    for league in leagues:
-        _print_header(f"Scouting Report: {league.name}")
-        scout = ScoutEngine(NBAProvider(league), mock_ai=mock)
+def _cmd_trade(session: Session, entries: list[SportEntry], args: list[str], mock: bool) -> None:
+    """Evaluate a trade. NBA only for now."""
+    from the_front_office.trade.engine import TradeEvaluator
 
-        print("  ⏳ Analyzing roster, free agents, and schedule... (this may take a moment)")
-        try:
-            report, chat = scout.start_analysis("")
-        except FrontOfficeError as e:
-            print(f"  ❌ {e}")
-            continue
-        print("\n" + render_scout_report(report))
-
-        _interactive_followup(chat, "report")
-
-
-def _cmd_trade(leagues: list[League], args: list[str], mock: bool = False) -> None:
-    """Run the trade evaluator."""
     if not args:
         print("  ⚠️  Usage: /trade <trade description>")
         print("  Example: /trade Give LeBron James, Get Jayson Tatum")
-        print("  Mock Example: /trade --mock Give LeBron James, Get Jayson Tatum")
         return
 
+    tradeable = [e for e in entries if e.supports_trades]
+    if not tradeable:
+        print("  ⚠️  No configured sport supports trade evaluation yet.")
+        return
+    entry = tradeable[0]
+
     trade_text = " ".join(args)
-
-    for league in leagues:
-        _print_header(f"Trade Evaluation: {league.name}")
-        evaluator = TradeEvaluator(league, mock_ai=mock)
-
-        print("  ⏳ Analyzing trade... (parsing & enriching data)")
+    provider = session.provider(entry)
+    for ref in provider.list_leagues():
+        _print_header(f"Trade Evaluation — {ref.name}")
+        print("  ⏳ Parsing, enriching and evaluating...")
         try:
-            verdict, chat = evaluator.evaluate(trade_text)
+            league = getattr(provider, "_select")(ref.league_id)  # noqa: B009
+            verdict, chat = TradeEvaluator(league, mock_ai=mock).evaluate(trade_text)
         except FrontOfficeError as e:
             print(f"  ❌ {e}")
             continue
         print("\n" + render_trade_verdict(verdict))
-
         _interactive_followup(chat, "trade")
-
-
-def _cmd_rosters(leagues: list[League]) -> None:
-    """Show all team rosters."""
-    for league in leagues:
-        _print_header(f"League: {league.name}")
-        print(f"  ID: {league.id}  •  Type: {league.league_type}\n")
-
-        for team in league.teams():
-            is_mine = "(YOU)" if hasattr(team, "is_owned_by_current_login") and team.is_owned_by_current_login else ""
-            print(f"\n  📋 {team.name} — managed by {team.manager.nickname} {is_mine}")
-            _print_roster(team)
-
-
-def _cmd_my_roster(leagues: list[League]) -> None:
-    """Show only the user's roster."""
-    for league in leagues:
-        try:
-            my_team = YahooFantasyClient(league).get_user_team()
-        except FrontOfficeError as e:
-            print(f"  ⚠️  {e}")
-            continue
-        _print_header(f"Your Roster: {my_team.name} ({league.name})")
-        _print_roster(my_team)
-
-
-def _cmd_matchup(leagues: list[League]) -> None:
-    """Show current matchup context."""
-    for league in leagues:
-        yahoo = YahooFantasyClient(league)
-        try:
-            my_team = yahoo.get_user_team()
-        except FrontOfficeError as e:
-            print(f"  ⚠️  {e}")
-            continue
-        _print_header(f"Matchup: {league.name}")
-        print(f"  {yahoo.get_matchup_context(my_team)}")
 
 
 # ---------------------------------------------------------------------------
@@ -263,30 +291,62 @@ def _configure_console() -> None:
             reconfigure(encoding="utf-8", errors="replace")
 
 
+class QuitRequested(Exception):
+    """Raised by _dispatch when the user asks to exit."""
+
+
+def _dispatch(session: Session, entries: list[SportEntry], cmd: str, args: list[str], mock: bool) -> None:
+    """Route one parsed command to its handler.
+
+    Raises:
+        QuitRequested: the user asked to exit.
+    """
+    if cmd == "/scout":
+        _cmd_scout(session, entries, args, mock)
+    elif cmd in ("/roster", "/rosters", "/my-roster"):
+        _cmd_roster(session, entries, args)
+    elif cmd == "/leagues":
+        _cmd_leagues(session, entries)
+    elif cmd == "/trade":
+        _cmd_trade(session, entries, args, mock)
+    elif cmd == "/help":
+        _print_help(entries)
+    elif cmd in ("/quit", "/exit", "/q"):
+        raise QuitRequested
+    else:
+        print(f"  ❓ Unknown command: {cmd}. Type /help for available commands.")
+
+
 def main() -> None:
-    """Authenticate once, then run an interactive command loop."""
+    """Start a REPL over whichever sports are configured."""
     _configure_console()
     setup_logging()
 
-    _print_header("🏀 The Front Office — NBA Fantasy Intelligence")
+    _print_header("🏆 The Front Office — Fantasy Intelligence")
     print(f"  {datetime.now().strftime('%A, %B %d %Y  •  %I:%M %p')}")
 
-    # --- Auth (once) ---
-    print("\n  🔐 Authenticating with Yahoo Fantasy...")
-    YahooFantasyClient.login()
-    ctx = YahooFantasyClient.get_context()
+    entries = configured_sports()
+    if not entries:
+        print("\n  ⚠️  No sports configured. Set one of these in .env:")
+        from the_front_office.sports.registry import all_sports
 
-    # --- Fetch leagues (once) ---
-    now = datetime.now()
-    season_year = now.year if now.month >= 9 else now.year - 1
-    leagues: list[League] = ctx.get_leagues("nba", season_year)
+        for entry in all_sports():
+            print(f"       {entry.label}: {entry.requires}")
+        sys.exit(1)
 
-    if not leagues:
-        print("  ⚠️  No NBA leagues found for this season.")
-        sys.exit(0)
+    print(f"\n  ✅ Configured: {', '.join(e.label for e in entries)}")
+    unconfigured = _unconfigured()
+    if unconfigured:
+        print(
+            textwrap.fill(
+                "  Also available: " + "; ".join(f"{e.label} (set {e.requires})" for e in unconfigured),
+                width=78,
+                subsequent_indent="    ",
+            )
+        )
+    _print_help(entries)
 
-    print(f"  ✅ Found {len(leagues)} league(s): {', '.join(lg.name for lg in leagues)}")
-    _print_help()
+    session = Session()
 
     # --- REPL ---
     while True:
@@ -303,7 +363,7 @@ def main() -> None:
         cmd, args, mock = parse_command(raw)
 
         try:
-            _dispatch(leagues, cmd, args, mock)
+            _dispatch(session, entries, cmd, args, mock)
         except FrontOfficeError as e:
             # Safety net — handlers render their own errors, but a session must
             # never die because one command raised.
@@ -315,34 +375,11 @@ def main() -> None:
     _print_header("Done ✅")
 
 
-class QuitRequested(Exception):
-    """Raised by _dispatch when the user asks to exit."""
+def _unconfigured() -> list[SportEntry]:
+    from the_front_office.sports.registry import all_sports
 
-
-def _dispatch(leagues: list[League], cmd: str, args: list[str], mock: bool) -> None:
-    """Route one parsed command to its handler.
-
-    Raises:
-        QuitRequested: the user asked to exit.
-    """
-    if cmd == "/scout":
-        _cmd_scout(leagues, mock=mock)
-    elif cmd in ("/football", "/nfl"):
-        _cmd_football(mock=mock)
-    elif cmd == "/trade":
-        _cmd_trade(leagues, args, mock=mock)
-    elif cmd == "/rosters":
-        _cmd_rosters(leagues)
-    elif cmd in ("/my-roster", "/roster"):
-        _cmd_my_roster(leagues)
-    elif cmd == "/matchup":
-        _cmd_matchup(leagues)
-    elif cmd == "/help":
-        _print_help()
-    elif cmd in ("/quit", "/exit", "/q"):
-        raise QuitRequested
-    else:
-        print(f"  ❓ Unknown command: {cmd}. Type /help for available commands.")
+    configured = {e.sport for e in configured_sports()}
+    return [e for e in all_sports() if e.sport not in configured]
 
 
 if __name__ == "__main__":

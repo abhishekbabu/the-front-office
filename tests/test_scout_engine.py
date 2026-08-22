@@ -13,11 +13,11 @@ from the_front_office.exceptions import TeamNotFoundError
 from the_front_office.report.engine import ScoutEngine
 from the_front_office.report.mocks import MOCK_SCOUT_REPORT
 from the_front_office.report.types import ScoutReport
-from the_front_office.sports.nba.provider import NBAProvider
+from the_front_office.sports.nba.yahoo import YahooNBAProvider
 
 
 def _scout(yahoo: FakeYahoo, ai: FakeAI | None = None, nba: FakeNBA | None = None) -> ScoutEngine:
-    provider = NBAProvider(league=None, nba=nba or FakeNBA(), yahoo=yahoo)  # type: ignore[arg-type]
+    provider = YahooNBAProvider(league=None, nba=nba or FakeNBA(), yahoo=yahoo)  # type: ignore[arg-type]
     return ScoutEngine(provider, ai=ai or FakeAI())  # type: ignore[arg-type]
 
 
@@ -192,3 +192,38 @@ def test_il_players_are_flagged_so_they_are_not_dropped_carelessly() -> None:
     prompt = _prompt_for(yahoo)
     assert "[IN IL SPOT]" in prompt
     assert "[O]" in prompt
+
+
+# ── multi-league selection ──────────────────────────────────────────────
+
+
+def test_a_specific_league_can_be_selected() -> None:
+    """A Yahoo login with several leagues must be able to scout each one."""
+    from types import SimpleNamespace
+
+    one = SimpleNamespace(id="1", name="One", league_type="head")
+    two = SimpleNamespace(id="2", name="Two", league_type="head")
+    provider = YahooNBAProvider(one, all_leagues=[one, two], nba=FakeNBA(), yahoo=FakeYahoo())  # type: ignore[arg-type]
+    assert [r.league_id for r in provider.list_leagues()] == ["1", "2"]
+    assert provider._select("2") is two
+    assert provider._select("") is one
+
+
+def test_selecting_an_unknown_league_raises() -> None:
+    from types import SimpleNamespace
+
+    from the_front_office.exceptions import LeagueNotFoundError
+
+    one = SimpleNamespace(id="1", name="One")
+    provider = YahooNBAProvider(one, all_leagues=[one], nba=FakeNBA(), yahoo=FakeYahoo())  # type: ignore[arg-type]
+    with pytest.raises(LeagueNotFoundError, match="not one of yours"):
+        provider._select("999")
+
+
+def test_squad_rows_flatten_the_roster() -> None:
+    from types import SimpleNamespace
+
+    yahoo = FakeYahoo(roster=[make_player("A B", position="PF,C", team="LAL", selected_position="IL", status="O")])
+    provider = YahooNBAProvider(SimpleNamespace(id="1", name="One"), nba=FakeNBA(), yahoo=yahoo)  # type: ignore[arg-type]
+    rows = provider.squad_rows()
+    assert rows == [{"Player": "A B", "Pos": "PF,C", "Team": "LAL", "Slot": "IL", "Status": "O"}]

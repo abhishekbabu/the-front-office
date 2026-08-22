@@ -41,7 +41,7 @@ AVAILABLE_PLAYER_LIMIT = 25
 TRENDING_LIMIT = 10
 
 
-class NFLProvider:
+class SleeperNFLProvider:
     """SportProvider for Sleeper points-league football."""
 
     sport = "nfl"
@@ -88,6 +88,27 @@ class NFLProvider:
             if roster.owner_id == user_id:
                 return roster
         raise LeagueNotFoundError(f"you do not own a roster in league {league_id}")
+
+    def squad_rows(self, league_id: str) -> list[dict[str, str]]:
+        """The user's roster as table rows, without pulling the waiver pool."""
+        roster = self._my_roster(league_id)
+        players = self.client.get_players()
+        starters = set(roster.starter_ids)
+        rows = []
+        for player_id in roster.player_ids:
+            meta = players.get(player_id)
+            if not meta:
+                continue
+            rows.append(
+                {
+                    "Player": str(meta.get("name") or player_id),
+                    "Pos": str(meta.get("position") or ""),
+                    "Team": str(meta.get("team") or "FA"),
+                    "Slot": "START" if player_id in starters else "BN",
+                    "Status": str(meta.get("injury_status") or ""),
+                }
+            )
+        return rows
 
     # ── context ─────────────────────────────────────────────────────
 
