@@ -179,14 +179,14 @@ def test_trade_reports_when_no_sport_supports_it(capsys: pytest.CaptureFixture[s
 
 
 def test_trade_usage_is_shown_without_arguments(capsys: pytest.CaptureFixture[str]) -> None:
-    cmd._cmd_trade(Session(), [fake_entry("nfl")], [], False)
+    cmd._cmd_trade(Session(), [_tradeable("nfl")], [], False)
     assert "Usage: /trade" in capsys.readouterr().out
 
 
 def test_help_names_which_sports_can_trade(capsys: pytest.CaptureFixture[str]) -> None:
+    """`fake_entry` does not declare trade support, so there is nothing to name."""
     cmd._print_help([fake_entry("nfl")])
-    out = capsys.readouterr().out
-    assert "Evaluate a trade (none)" in out
+    assert "/trade [none]" in capsys.readouterr().out
 
 
 # ── command bodies ──────────────────────────────────────────────────────
@@ -281,3 +281,74 @@ def test_trade_reports_a_domain_error(monkeypatch: pytest.MonkeyPatch, capsys: p
     monkeypatch.setattr(cmd, "trade_engine", lambda p, mock: TradeEngine(p, ai=FakeAI()))
     cmd._cmd_trade(Session(), [_entry_with(provider, trades=True)], ["x"], True)
     assert "Ghost" in capsys.readouterr().out
+
+
+# ── trade sport selection ───────────────────────────────────────────────
+
+
+def _tradeable(sport: str) -> Any:
+    from the_front_office.bootstrap import SportEntry
+
+    def _build() -> Any:
+        return FakeProvider()
+
+    return SportEntry(
+        sport=sport,
+        label=f"{sport.upper()} label",
+        build=_build,
+        is_configured=lambda: True,
+        requires="X",
+        supports_trades=True,
+    )
+
+
+def test_a_lone_trading_sport_needs_no_argument() -> None:
+    """Nothing to disambiguate, so the whole line is the trade description."""
+    entry, args = cmd._trade_sport([_tradeable("nfl")], ["Give", "A,", "Get", "B"])
+    assert entry is not None
+    assert entry.sport == "nfl"
+    assert args == ["Give", "A,", "Get", "B"]
+
+
+def test_a_named_sport_is_split_off_the_description() -> None:
+    entries = [_tradeable("nba"), _tradeable("nfl")]
+    entry, args = cmd._trade_sport(entries, ["nfl", "Give", "A,", "Get", "B"])
+    assert entry is not None
+    assert entry.sport == "nfl"
+    assert args == ["Give", "A,", "Get", "B"]
+
+
+def test_several_sports_without_one_named_refuses_to_guess(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A trade names players on one platform; running it against both is meaningless."""
+    entries = [_tradeable("nba"), _tradeable("nfl")]
+    entry, _ = cmd._trade_sport(entries, ["Give", "A,", "Get", "B"])
+    assert entry is None
+    out = capsys.readouterr().out
+    assert "Name one" in out
+    assert "nba | nfl" in out
+
+
+def test_a_leading_word_that_is_not_a_sport_stays_in_the_description() -> None:
+    entry, args = cmd._trade_sport([_tradeable("nfl")], ["Give", "nfl-ish", "player"])
+    assert entry is not None
+    assert args == ["Give", "nfl-ish", "player"]
+
+
+def test_a_sport_that_cannot_trade_is_not_selectable(capsys: pytest.CaptureFixture[str]) -> None:
+    """`nba` is a real sport but absent from the trade-capable list here."""
+    entry, args = cmd._trade_sport([_tradeable("nfl")], ["nba", "Give", "A"])
+    assert entry is not None
+    assert entry.sport == "nfl"
+    assert args == ["nba", "Give", "A"]  # left in the text rather than silently dropped
+
+
+def test_no_trading_sport_says_so(capsys: pytest.CaptureFixture[str]) -> None:
+    cmd._cmd_trade(Session(), [fake_entry("nfl")], ["Give A, Get B"], False)
+    assert "supports trade evaluation" in capsys.readouterr().out
+
+
+def test_usage_is_shown_when_only_a_sport_is_given(capsys: pytest.CaptureFixture[str]) -> None:
+    cmd._cmd_trade(Session(), [_tradeable("nfl")], ["nfl"], True)
+    assert "Usage: /trade" in capsys.readouterr().out

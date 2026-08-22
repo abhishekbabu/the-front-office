@@ -10,7 +10,7 @@ from the_front_office.domain.errors import FrontOfficeError
 def _print_help(entries: list[SportEntry]) -> None:
     """Print available commands, naming the sports that are configured."""
     keys = " | ".join(e.sport for e in entries) or "none configured"
-    tradeable = ", ".join(e.sport for e in entries if e.supports_trades) or "none"
+    tradeable = " | ".join(e.sport for e in entries if e.supports_trades) or "none"
     print()
     print("  Available commands:")
     print("  ─────────────────────────────────────")
@@ -18,7 +18,7 @@ def _print_help(entries: list[SportEntry]) -> None:
         (f"/scout [{keys}]", "Scouting report. No sport runs every configured one."),
         ("/roster [sport]", "Your roster"),
         ("/leagues", "Every league, per sport"),
-        ("/trade <txt>", f"Evaluate a trade ({tradeable})"),
+        (f"/trade [{tradeable}] <txt>", "Evaluate a trade"),
         ("/help", "Show this help message"),
         ("/quit", "Exit the program"),
     ]
@@ -110,18 +110,44 @@ def _cmd_leagues(session: Session, entries: list[SportEntry]) -> None:
             print(f"  • {ref.name}" + (f"  —  {ref.detail}" if ref.detail else ""))
 
 
-def _cmd_trade(session: Session, entries: list[SportEntry], args: list[str], mock: bool) -> None:
-    """Evaluate a trade for the first sport that supports it."""
-    if not args:
-        print("  ⚠️  Usage: /trade <trade description>")
-        print("  Example: /trade Give LeBron James, Get Jayson Tatum")
-        return
+def _trade_sport(tradeable: list[SportEntry], args: list[str]) -> tuple[SportEntry | None, list[str]]:
+    """Split an optional leading sport off the trade description.
 
+    A trade names players on one platform, so running the same text against
+    every sport is meaningless. With one trade-capable sport there is nothing to
+    disambiguate; with several the sport must be given rather than guessed.
+    """
+    # Matched within the list passed in, not via the registry: the two can
+    # disagree, and the caller's list is the authority on what is available.
+    if args:
+        key = args[0].lower().lstrip("/")
+        for entry in tradeable:
+            if entry.sport == key:
+                return entry, args[1:]
+
+    if len(tradeable) == 1:
+        return tradeable[0], args
+
+    keys = " | ".join(e.sport for e in tradeable)
+    print(f"  ⚠️  Several sports support trades. Name one: /trade [{keys}] <description>")
+    return None, args
+
+
+def _cmd_trade(session: Session, entries: list[SportEntry], args: list[str], mock: bool) -> None:
+    """Evaluate a trade: `/trade [sport] <description>`."""
     tradeable = [e for e in entries if e.supports_trades]
     if not tradeable:
         print("  ⚠️  No configured sport supports trade evaluation yet.")
         return
-    entry = tradeable[0]
+
+    entry, args = _trade_sport(tradeable, args)
+    if entry is None:
+        return
+
+    if not args:
+        print("  ⚠️  Usage: /trade [sport] <trade description>")
+        print("  Example: /trade Give LeBron James, Get Jayson Tatum")
+        return
 
     trade_text = " ".join(args)
     provider = session.provider(entry)

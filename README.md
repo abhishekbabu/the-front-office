@@ -90,7 +90,7 @@ First run opens a browser for the Yahoo OAuth2 handshake; the token is cached in
 | `/scout [sport]` | Scouting report. No sport runs every configured one |
 | `/roster [sport]` | Your roster |
 | `/leagues` | Every league, per sport |
-| `/trade <text>` | Evaluate a trade, e.g. `/trade Give LeBron James, Get Jayson Tatum` |
+| `/trade [sport] <text>` | Evaluate a trade, e.g. `/trade nfl Give Bijan, Get Puka`. The sport is optional when only one supports trades |
 | `/help` · `/quit` | — |
 
 Add `--mock` to `/scout` or `/trade` to swap Gemini for canned responses and
