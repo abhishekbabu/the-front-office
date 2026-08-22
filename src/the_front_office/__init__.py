@@ -3,14 +3,15 @@
 Layered ports and adapters:
 
     domain/       models and ports. No I/O, no third-party clients.
-    application/  use cases that orchestrate ports (scouting, trading, registry).
+    application/  use cases over ports: scouting and trading.
     adapters/
       inbound/    things that call us: the CLI and the web UI.
       outbound/   things we call: platform APIs, the language model, and the
-                  per-sport providers that implement the SportProvider port.
+                  per-sport providers implementing the SportProvider port.
+    bootstrap.py  the composition root: the sport registry and engine wiring.
 
-Dependencies point inward only: `domain` imports nothing from the rest, and no
-adapter is named anywhere in `domain` or `application`.
+Dependencies point inward only. `bootstrap` is the one module that names a
+concrete implementation.
 """
 
 __version__ = "0.1.0"

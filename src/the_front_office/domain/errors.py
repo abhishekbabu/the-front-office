@@ -1,8 +1,8 @@
 """Domain exceptions.
 
-Services raise these instead of returning `None`, `[]` or an error string that
-the caller cannot distinguish from a real result. The CLI layer in `main.py`
-catches `FrontOfficeError` and renders it; nothing else prints.
+Raised instead of returning `None`, `[]` or an error string, none of which a
+caller can tell apart from a real result. The inbound adapters catch
+`FrontOfficeError` and render it; nothing else prints.
 """
 
 

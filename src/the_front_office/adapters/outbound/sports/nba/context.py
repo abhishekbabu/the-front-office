@@ -50,14 +50,11 @@ class PlayerContextBuilder:
         remaining_games: dict[str, int] | None = None,
         projections: "ProjectionIndex | None" = None,
     ) -> str:
-        """
-        Build a context string for a list of players.
+        """One prompt line per player, concatenated.
 
         Args:
-            players: List of Yahoo Player objects
-            matchup_start: Start date of matchup (for schedule calculation)
-            matchup_end: End date of matchup
-            annotations: Optional map of player_key -> extra text (e.g. "Top in: PTS")
+            annotations: player_key -> extra text, e.g. "[Top in: PTS]".
+            remaining_games: precomputed counts; looked up if omitted.
         """
         return "".join(
             self.build_player_lines(players, matchup_start, matchup_end, annotations, remaining_games).values()
@@ -87,14 +84,11 @@ class PlayerContextBuilder:
 
         lines: dict[str, str] = {}
         for p in players:
-            # Stats
             stats_dict = self.nba.get_player_stats(p.name.full)
 
-            # Schedule
             games_left = remaining_games.get(p.editorial_team_abbr.upper(), None)
             games_str = f" [{games_left}G left]" if games_left is not None else ""
 
-            # Status
             status = getattr(p, "status", None)
             injury_note = getattr(p, "injury_note", None)
             status_str = ""
@@ -103,12 +97,10 @@ class PlayerContextBuilder:
                 if injury_note:
                     status_str += f" ({injury_note})"
 
-            # IL Spot check for rostered players
             il_str = ""
             if hasattr(p, "selected_position") and getattr(p.selected_position, "position", "") in ("IL", "IL+"):
                 il_str = " [IN IL SPOT]"
 
-            # Annotation
             note = ""
             if annotations and p.player_key in annotations:
                 note = f" {annotations[p.player_key]}"
@@ -116,9 +108,8 @@ class PlayerContextBuilder:
             line = f"- {p.name.full} ({p.display_position}){il_str}{status_str}{games_str}{note}"
             if stats_dict:
                 line += f": {self._format_stats(stats_dict)}"
-            # Forward-looking totals, when a projection source is available.
-            # Recent form says what a player has been; this says what the
-            # matchup period is actually expected to yield.
+            # Recent form says what a player has been; PROJ says what the
+            # matchup period is expected to yield.
             if projections is not None and (projected := projections.lookup(p.name.full)):
                 line += f" | PROJ {projected.summary()}"
             lines[p.name.full] = line + "\n"

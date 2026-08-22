@@ -217,7 +217,6 @@ class YahooNBAProvider:
         Returns the prompt plus the pieces that make it up, so a follow-up
         briefing can be assembled without re-deriving or re-sending everything.
         """
-        # 1. Identify User's Team — raises TeamNotFoundError if we own none.
         my_team = self.yahoo.get_user_team()
 
         # One matchup fetch supplies both the context block and the dates.
@@ -228,7 +227,6 @@ class YahooNBAProvider:
             matchup_start = date.fromisoformat(matchup.week_start)
             matchup_end = date.fromisoformat(matchup.week_end)
 
-        # 2. Transaction budget, which decides whether we can add at all.
         used_adds = my_team.roster_adds.value
         limit = settings.yahoo_max_weekly_adds
         remaining_adds = max(0, limit - used_adds)
@@ -246,8 +244,8 @@ class YahooNBAProvider:
                 "**3 players to MONITOR** for next week who fit the team's needs."
             )
 
-        # 3. Roster and free agents, gathered before the schedule so one bulk
-        # lookup can cover every team either of them touches.
+        # Gathered before the schedule so one bulk lookup covers every team
+        # either of them touches.
         players_list = my_team.roster().players if hasattr(my_team, "roster") else my_team.players()
         fa_players, fa_annotations = self._rank_free_agents()
         logger.debug(f"Building context for {len(players_list)} rostered and {len(fa_players)} free agents")
@@ -274,7 +272,7 @@ class YahooNBAProvider:
             projections=projections,
         )
 
-        # 4. Schedule summary, from the counts already in hand.
+        # Schedule summary, from the counts already in hand.
         schedule_context = ""
         if remaining_games:
             rows = "".join(

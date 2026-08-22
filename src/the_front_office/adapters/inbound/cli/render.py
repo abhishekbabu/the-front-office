@@ -1,8 +1,7 @@
-"""Terminal rendering for scout reports.
+"""Terminal rendering for reports.
 
-The engines return validated models; this module is the only place that turns
-them into text. Keeping it separate from main.py means the Streamlit UI renders
-the same models its own way, and one renderer serves every sport.
+The only place that turns the validated models into text. The web UI renders the
+same models its own way, and one renderer serves every sport.
 """
 
 import textwrap

@@ -280,8 +280,7 @@ def test_no_bench_gap_is_reported_when_already_optimal() -> None:
 
 
 def test_a_player_is_never_both_starting_and_benched() -> None:
-    """Regression: the optimal lineup was labelled as the current one, so a
-    player could appear in the lineup block and the bench block at once."""
+    """The lineup block shows what is set; the bench holds everyone else."""
     client = FakeSleeper(
         league=SMALL_LEAGUE,
         projections=dict(DEFAULT_PROJECTIONS),
@@ -298,8 +297,7 @@ def test_a_player_is_never_both_starting_and_benched() -> None:
 
 
 def test_the_bench_gap_matches_the_printed_figures() -> None:
-    """Regression: the delta was computed from unrounded points while the totals
-    were printed rounded, so the prompt could show 124.1 - 121.4 = 2.8."""
+    """The three numbers in the prompt must agree once rounded."""
     import re
 
     projections = {

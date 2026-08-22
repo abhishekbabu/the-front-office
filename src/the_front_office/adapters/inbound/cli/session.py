@@ -7,10 +7,9 @@ from the_front_office.domain.ports import SportProvider
 class Session:
     """Holds providers, building each on first use.
 
-    Deferring construction is what lets a football-only user reach `/football`:
-    building the NBA provider opens a Yahoo OAuth flow, and doing that at
-    startup made the CLI exit before the prompt for anyone without Yahoo
-    credentials.
+    Construction is deferred because building a provider can open an OAuth
+    flow, which a user who does not play that sport must never be made to sit
+    through.
     """
 
     def __init__(self) -> None:

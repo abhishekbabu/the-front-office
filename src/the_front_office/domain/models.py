@@ -1,10 +1,9 @@
 """Sport-agnostic report types.
 
-Basketball, football and FPL differ in almost every detail — categories vs
-points, adds vs FAAB vs transfer budget, matchups vs league rank — but a scout
-report has the same shape in all three: read the situation, propose a ranked set
-of moves, summarise the plan. These models capture that shape so one renderer,
-one chat-seeding path and one UI serve every sport.
+Sports differ in almost every detail — categories versus points, adds versus a
+transfer budget, head-to-head versus league rank — but a report has the same
+shape in each: read the situation, propose a ranked set of moves, summarise the
+plan. One renderer, one chat-seeding path and one UI serve them all.
 """
 
 from dataclasses import dataclass, field
@@ -17,8 +16,8 @@ MoveAction = Literal[
     "DROP",  # cut without a paired add
     "START",  # move into the starting lineup
     "BENCH",  # move out of the starting lineup
-    "TRANSFER",  # FPL-style swap, paired with `replaces`
-    "CAPTAIN",  # FPL captaincy
+    "TRANSFER",  # swap one player for another, paired with `replaces`
+    "CAPTAIN",  # nominate as captain
     "MONITOR",  # no action possible now; watch for later
 ]
 
@@ -60,11 +59,8 @@ class ScoutReport(BaseModel):
 class TradeVerdict(BaseModel):
     """Evaluation of a proposed trade, in any sport.
 
-    The NBA-specific spellings are gone: `categories_gained` became `gains`
-    (categories in a 9-cat league, "RB depth" in football, "attacking returns"
-    in FPL), and `shutdown_risk` — a basketball concept about tanking teams
-    resting stars — became `risk`, which also covers an injury designation or a
-    rotation-prone FPL asset.
+    Field names are in whatever currency the league scores in: `gains` holds
+    categories in a 9-cat league and position depth in a points league.
     """
 
     verdict: Literal["ACCEPT", "REJECT", "COUNTER"] = Field(description="The recommendation.")

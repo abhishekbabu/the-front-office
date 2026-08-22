@@ -124,7 +124,6 @@ def main() -> None:
 
     session = Session()
 
-    # --- REPL ---
     while True:
         try:
             raw = input("  ⚡ ").strip()

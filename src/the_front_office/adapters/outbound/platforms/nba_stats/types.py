@@ -23,7 +23,7 @@ class PlayerStats(TypedDict, total=False):
     last_15: NineCatStats
 
 
-# --- Cache Specific Types ---
+# ── Cache ──────────────────────────────────────────────────────
 
 
 class GameLogRecord(TypedDict):

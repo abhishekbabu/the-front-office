@@ -1,13 +1,11 @@
-"""Which sports exist, and whether each one is usable right now.
+"""The composition root: the one module that names concrete implementations.
 
-Without this, every entry point hardcodes the provider list — `main.py` and
-`ui/app.py` each named NBAProvider and SleeperNFLProvider, so adding a sport
-meant editing both and remembering the CLI, the UI and the help text. Now a
-sport registers itself here and every surface picks it up.
+Registers the available sports and wires engines to a model. Everything else
+works against ports.
 
-`is_configured` matters as much as `build`: a football-only user has no Yahoo
-credentials, and the CLI must not open an OAuth flow for a sport they do not
-play.
+`is_configured` gates whether a platform is contacted at all — building a
+provider can open an OAuth flow, and a user who does not play that sport must
+never be made to sit through one.
 """
 
 import logging

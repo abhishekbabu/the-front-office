@@ -85,7 +85,7 @@ def test_every_provider_satisfies_the_protocol() -> None:
 
 def test_the_nba_entry_discovers_leagues_and_wraps_them(monkeypatch: pytest.MonkeyPatch) -> None:
     """The NBA build performs the Yahoo handshake, then hands the provider every
-    league it found — league discovery used to live in main.py."""
+    league it found."""
     from types import SimpleNamespace
 
     import the_front_office.adapters.outbound.platforms.yahoo.client as yahoo_mod
@@ -123,7 +123,7 @@ def test_no_nba_leagues_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_trade_support_is_declared_not_inferred() -> None:
-    """The CLI and the UI used to test `sport == "nba"` at each call site."""
+    """Declared on the entry so the CLI and UI need no per-sport branch."""
     nba, nfl = registry.find("nba"), registry.find("nfl")
     assert nba is not None and nfl is not None
     assert nba.supports_trades

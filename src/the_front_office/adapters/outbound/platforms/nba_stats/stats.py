@@ -1,6 +1,5 @@
 """Nine-category arithmetic over cached game logs.
 
-Split out of the client, which was doing HTTP, cache lifecycle and this at once.
 Pure functions over records — no network, no disk.
 """
 

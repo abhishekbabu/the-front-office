@@ -1,8 +1,7 @@
 """Canned reports for `--mock`, so the report path runs without credentials.
 
-One per sport: a mock basketball report returned for `/football --mock` would
-exercise the rendering path but tell you nothing about whether the football
-prompt produces a sensible shape.
+One per sport: a basketball report returned for a football run would exercise
+the rendering path while saying nothing about the football prompt.
 """
 
 from the_front_office.domain.models import Move, ScoutReport, TradeVerdict

@@ -1,8 +1,7 @@
 """Streamlit front end.
 
-Renders the same validated models the CLI does — see the_front_office.adapters.inbound.cli.render for
-the terminal equivalent. Nothing here computes anything: the engines produce
-ScoutReport and TradeVerdict, and this module lays them out.
+Lays out the same validated models the CLI renders. Nothing here computes
+anything — the engines produce the reports.
 
 Run with `just ui`.
 """

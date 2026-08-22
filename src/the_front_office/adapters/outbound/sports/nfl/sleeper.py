@@ -128,9 +128,8 @@ class SleeperNFLProvider:
         squad = [p for p in squad if p is not None]  # type: ignore[misc]
 
         slots = league.starting_slots
-        # What is set now, versus the best legal lineup. Showing the optimal one
-        # as "your lineup" would put the same player in both the lineup and the
-        # bench list, which is how the model gets told to start someone twice.
+        # What is set now, versus the best legal lineup. The prompt shows the
+        # current one; the difference between them is the recommendation.
         lineup = current_lineup(slots, roster.starter_ids, squad)  # type: ignore[arg-type]
         best = optimal_lineup(slots, squad)  # type: ignore[arg-type]
         changes = lineup_changes(slots, roster.starter_ids, squad)  # type: ignore[arg-type]
@@ -165,8 +164,8 @@ class SleeperNFLProvider:
         trending_str = self._trending(projections, players)
 
         situation = self._situation(league, roster, league_id, week)
-        # Derive the gap from the same rounded figures that are printed, or the
-        # prompt contradicts itself: 124.1 - 121.4 shown alongside a 2.8 delta.
+        # Derived from the same rounded figures that are printed, so the three
+        # numbers in the prompt agree.
         current_points = round(lineup_points(lineup), 1)
         best_points = round(lineup_points(best), 1)
         on_bench = round(best_points - current_points, 1)

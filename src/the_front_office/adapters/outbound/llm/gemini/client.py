@@ -1,4 +1,4 @@
-"""Gemini AI client wrapper."""
+"""Gemini's implementation of the AnalysisModel port."""
 
 import logging
 import time
@@ -16,8 +16,7 @@ from .types import MockChatSession
 
 logger = logging.getLogger(__name__)
 
-# The same TypeVar the port declares, so the override is recognised as
-# identical rather than merely identical-looking.
+# The TypeVar the port declares, so the override types match exactly.
 
 
 class GeminiClient(AnalysisModel):
@@ -68,13 +67,12 @@ class GeminiClient(AnalysisModel):
     def generate_structured(self, prompt: str, schema: type[TModel], mock: TModel | None = None) -> TModel:
         """Generate a response conforming to `schema`.
 
-        Uses Gemini's response-schema mode rather than asking for a format in
-        prose, so a model that ignores the requested shape fails loudly here
-        instead of producing a report the UI cannot render.
+        Uses response-schema mode rather than asking for a format in prose, so a
+        model that ignores the shape fails here instead of producing something
+        unrenderable.
 
-        Note: response schemas and the Google Search tool are mutually exclusive
-        in the Gemini API, which is why the trade path keeps search and converts
-        its prose afterwards (see structure_text).
+        A response schema cannot be combined with the Google Search tool; see
+        `structure_text` for the path that needs both.
 
         Raises:
             AIUnavailableError: no credentials.
@@ -171,9 +169,6 @@ class GeminiClient(AnalysisModel):
             search_tool = types.Tool(google_search=types.GoogleSearch())
             config = types.GenerateContentConfig(tools=[search_tool])
 
-        # Cast or transform history if needed, but genai accepts flexible types.
-        # Strict typing here ensures we pass structure.
-        # For simplicity with genai API which is complex typed, we can assume it accepts our dicts.
         return self.client.chats.create(
             model=MODEL_PRO,
             history=initial_history,  # type: ignore[arg-type]
@@ -187,13 +182,11 @@ class GeminiClient(AnalysisModel):
         """
 
         if self.mock_mode:
-            # Return a hardcoded mock trade for testing
             return TradeProposal(giving=["LeBron James"], receiving=["Jayson Tatum"])
 
         if not self.client:
             raise AIUnavailableError()
 
-        # Use Gemini Flash for parsing tasks
         prompt = f"""
         Extract the players being given and received in this trade offer.
         Return ONLY a JSON object with keys "giving" and "receiving".
@@ -213,7 +206,7 @@ class GeminiClient(AnalysisModel):
 
             text = response.text or "{}"
             data = json.loads(text)
-            # Ensure we always return lists even if AI returns strings
+            # The model returns a bare string when only one player is involved.
             giving = data.get("giving", [])
             receiving = data.get("receiving", [])
 

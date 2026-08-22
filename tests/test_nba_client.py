@@ -122,14 +122,10 @@ def test_same_side_of_a_boundary_stays_fresh() -> None:
 
 
 def test_boundaries_are_pacific_regardless_of_local_zone() -> None:
-    """The regression this fix exists for.
+    """Boundaries are Pacific, whatever zone the machine is in.
 
     Written 14:00 PT, checked 14:30 PT — no boundary crossed, so the cache is
-    fresh. Expressing the identical instants in Eastern must not change that;
-    the old code compared a naive local clock against the PT boundary, so on an
-    ET machine 17:00/17:30 local straddled the 15:00 boundary and forced a
-    refetch that never should have happened (and, in the other direction, let
-    the pre-tip-off refresh fire three hours late).
+    fresh. Expressing the identical instants in Eastern must not change that.
     """
     eastern = ZoneInfo("America/New_York")
     written_pt = _pt(2026, 2, 9, 14)
@@ -213,13 +209,11 @@ def test_stale_cached_status_does_not_resurrect_a_played_sched_game() -> None:
 
 
 def test_result_does_not_depend_on_the_machines_timezone() -> None:
-    """The regression this fix exists for.
+    """The count is the same in every machine timezone.
 
-    21:30 PT on Feb 10 is already 00:30 ET on Feb 11. The old code compared the
-    game's date label against a local `date.today()`, so on an Eastern machine
-    the date had rolled over and a game tipping at 22:00 PT that night was
-    dropped from the count. The instant is the same either way, so the answer
-    must be too.
+    21:30 PT on Feb 10 is already 00:30 ET on Feb 11, and a game tipping at
+    22:00 PT that night still counts. The instant is the same in every zone, so
+    the answer must be too.
     """
     tonight = _sched_game("2026-02-10", "2026-02-11T06:00:00Z")  # 22:00 PT Feb 10
     instant = datetime(2026, 2, 11, 5, 30, tzinfo=timezone.utc)  # 21:30 PT / 00:30 ET
@@ -262,10 +256,8 @@ def test_unknown_team_returns_zero() -> None:
 
 
 def test_z_suffixed_timestamps_parse_on_python_310() -> None:
-    """Regression: datetime.fromisoformat only accepts "Z" from 3.11, and this
-    project targets 3.10. Every gameDateTimeUTC the NBA returns ends in Z, so
-    without normalisation every game parsed as None and every team reported
-    zero remaining games."""
+    """fromisoformat accepts a trailing "Z" only from 3.11, and every
+    gameDateTimeUTC the NBA returns has one."""
     parsed = _parse_timestamp("2026-02-13T03:00:00Z")
     assert parsed is not None
     assert parsed == datetime(2026, 2, 13, 3, 0, tzinfo=timezone.utc)

@@ -9,8 +9,8 @@ def test_command_token_is_case_insensitive() -> None:
 
 
 def test_argument_casing_is_preserved() -> None:
-    """Regression: the REPL used to lowercase the whole line, so player names
-    reached Gemini and Yahoo's search as 'lebron james'."""
+    """Player-name lookups depend on casing, so only the command token is
+    lowercased."""
     cmd, args, _ = parse_command("/trade Give LeBron James, Get Jayson Tatum")
     assert cmd == "/trade"
     assert args == ["Give", "LeBron", "James,", "Get", "Jayson", "Tatum"]

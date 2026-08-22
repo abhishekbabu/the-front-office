@@ -101,9 +101,9 @@ def lineup_changes(slots: list[str], current_starter_ids: list[str], squad: list
                 bench=going_out[i] if i < len(going_out) else None,
             )
         )
-    # A swap that loses points is not a recommendation. This happens when a slot
-    # is occupied by someone ineligible for it — the replacement is forced, not
-    # an upgrade — and reporting it as "+-2.4" is worse than saying nothing.
+    # A swap that loses points is not a recommendation. It arises when a slot
+    # holds someone ineligible for it, making the replacement forced rather than
+    # an upgrade.
     return sorted((c for c in changes if c.gain > 0), key=lambda c: c.gain, reverse=True)
 
 

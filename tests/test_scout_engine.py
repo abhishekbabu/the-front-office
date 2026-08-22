@@ -75,14 +75,14 @@ def test_briefing_carries_only_the_recommended_free_agents() -> None:
 
 
 def test_briefing_tells_the_model_the_list_is_partial() -> None:
-    """Otherwise it would invent numbers for a player it can no longer see."""
+    """Otherwise the model invents numbers for players it cannot see."""
     ai = FakeAI()
     _scout(_rich_yahoo(), ai=ai).start_analysis("")
     assert "re-run the report" in ai.history[0]["parts"][0]
 
 
 def test_matchup_is_fetched_once_not_twice() -> None:
-    """get_matchup_context and get_matchup_dates each used to sync their own Week."""
+    """The context and the dates come from one scoreboard fetch."""
     yahoo = _rich_yahoo()
     _scout(yahoo).start_analysis("")
     assert yahoo.matchup_fetches == 1
@@ -285,7 +285,7 @@ def _provider_with(sleeper: Any, yahoo: FakeYahoo | None = None) -> Any:
 
 
 def test_projected_totals_are_attached_to_players() -> None:
-    """The forward-looking number the NBA scout previously had no source for."""
+    """Projected totals for the matchup period, beside recent form."""
     sleeper = FakeSleeperProjections([_game("Roster Player 0", "2026-02-10")])
     ctx = _provider_with(sleeper).build_context()
     assert "PROJ 1G" in ctx.squad_lines["Roster Player 0"]

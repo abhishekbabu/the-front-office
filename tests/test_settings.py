@@ -20,7 +20,7 @@ def test_defaults_match_the_documented_values() -> None:
 
 
 def test_non_numeric_add_limit_fails_loudly() -> None:
-    """Previously `int(os.getenv(...))` raised a bare ValueError at import time."""
+    """A malformed value must name the field it came from."""
     with pytest.raises(ValidationError, match="yahoo_max_weekly_adds"):
         _settings(yahoo_max_weekly_adds="three")
 

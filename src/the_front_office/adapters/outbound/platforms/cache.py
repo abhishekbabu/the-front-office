@@ -1,13 +1,11 @@
-"""A small TTL'd JSON cache on disk.
+"""A TTL'd JSON cache on disk, one entry per key.
 
-Sleeper's player catalogue is ~14MB and the docs ask for it "once per day at
-most"; projections and stats for a settled week never change. Caching is
-therefore not an optimisation here, it is what keeps us a good citizen of a
-public API that asks callers to stay under 1000 calls/minute.
+Sleeper asks callers to stay under 1000 requests a minute and to fetch its ~14MB
+player catalogue at most once a day, so caching here is politeness rather than
+optimisation.
 
-NBAClient predates this and carries its own bespoke cache with semantic
-(1AM/3PM Pacific) invalidation, which does not fit a plain TTL. Left as is
-rather than forced into this shape.
+NBAClient uses its own cache instead: its invalidation is tied to when games
+start and end, which a plain TTL cannot express.
 """
 
 import json
@@ -56,7 +54,7 @@ class JsonDiskCache:
         except ValueError:
             return None
         if stored_at.tzinfo is None:
-            return None  # written by an older format with no zone; treat as unusable
+            return None  # no zone, so it cannot be placed on a timeline
         moment = now or datetime.now(timezone.utc)
         if moment - stored_at > ttl:
             return None

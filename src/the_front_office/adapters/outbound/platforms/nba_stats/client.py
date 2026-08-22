@@ -1,6 +1,7 @@
-"""
-NBA.com Data Client (via nba_api).
-Provides player stats and schedule data with a unified local cache.
+"""NBA stats and schedule from nba_api, cached on disk.
+
+Invalidation is tied to when games start and end rather than a plain TTL, so a
+report never mixes yesterday's box scores into a live matchup.
 """
 
 import json
@@ -36,11 +37,9 @@ from the_front_office.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# Cache TTLs
 SCHEDULE_TTL_HOURS = 24
 SCHEDULE_TIMEOUT_SECONDS = 30
 
-# Retry policy for nba_api calls
 NBA_RETRY_MAX_ATTEMPTS = 3
 NBA_RETRY_MULTIPLIER = 5.0
 NBA_RETRY_MIN_WAIT = 5.0
@@ -90,10 +89,8 @@ def _nba_retry() -> Retrying:
     )
 
 
-# The NBA schedules by US Pacific time, so the invalidation boundaries are
-# anchored there rather than to whatever zone this machine happens to be in.
-# Comparing them against a naive local clock put the "before tip-off" refresh
-# three hours late in ET — after some games had already started.
+# The NBA schedules by US Pacific time, so the boundaries are anchored there
+# rather than to the machine's own zone.
 PACIFIC = ZoneInfo("America/Los_Angeles")
 
 PLAYER_STATS_INVALIDATION_TIMES = [
@@ -110,14 +107,11 @@ def _utc_now() -> datetime:
 def _parse_timestamp(value: str) -> datetime | None:
     """Parse a stored cache timestamp into an aware datetime.
 
-    Returns None for anything unusable, including the naive timestamps written
-    by earlier versions: those were local-clock readings with no record of which
-    zone produced them, so they cannot be placed on a real timeline. Treating
-    them as unusable costs one refetch on upgrade and is self-healing.
+    A naive timestamp is unusable: without a zone it cannot be placed on a
+    timeline, so it is treated as absent and the value refetched.
     """
-    # datetime.fromisoformat only learned the "Z" suffix in 3.11, and this
-    # project targets 3.10 — every gameDateTimeUTC the NBA returns ends in Z,
-    # so without this normalisation every schedule timestamp parses as None.
+    # fromisoformat accepts a trailing "Z" only from 3.11, and every NBA
+    # timestamp has one.
     normalised = value[:-1] + "+00:00" if value.endswith("Z") else value
     try:
         parsed = datetime.fromisoformat(normalised)
@@ -129,26 +123,15 @@ def _parse_timestamp(value: str) -> datetime | None:
 
 
 class NBAClient:
-    """
-    Fetches NBA stats and schedule using nba_api with a unified local cache.
+    """Fetches NBA stats and schedule, backed by `.nba_cache.json`.
 
-    Cache structure (.nba_cache.json):
-    {
-        "league_gamelog": {
-            "games": { "<player_name>": [{ "GAME_DATE": ... }, ...] },
-            "updated_at": "<ISO timestamp>"
-        },
-        "schedule": {
-            "teams": { "<TRICODE>": [...], ... },
-            "updated_at": "<ISO timestamp>"
-        }
-    }
+    The cache holds two independently-dated sections: `league_gamelog`, keyed by
+    player name, and `schedule`, keyed by team tricode.
     """
 
     def __init__(self) -> None:
         self._last_call_time: float = 0.0
         self._cache_file: Path = Path(settings.nba_cache_file)
-        # Initialize with empty structure
         self._cache_data: NBACacheData = {
             "league_gamelog": {"games": {}, "updated_at": ""},
             "schedule": {"teams": {}, "updated_at": ""},
@@ -165,7 +148,6 @@ class NBAClient:
         try:
             raw_data = json.loads(self._cache_file.read_text(encoding="utf-8"))
 
-            # Type-safe migration/validation
             league_gamelog = cast("LeagueGamelogCache", raw_data.get("league_gamelog", {"games": {}, "updated_at": ""}))
             schedule = cast("ScheduleCache", raw_data.get("schedule", {"teams": {}, "updated_at": ""}))
 
@@ -251,10 +233,9 @@ class NBAClient:
             df = _nba_retry()(self._fetch_league_gamelog_frame)
 
             games_by_player: dict[str, list[GameLogRecord]] = {}
-            # to_dict("records") rather than itertuples: the row values are
-            # then plain objects we convert explicitly, which keeps the cache
-            # JSON-serialisable (a stray pandas Timestamp in GAME_DATE would
-            # blow up _save_cache) and keeps the dict key a real str.
+            # to_dict("records") rather than itertuples: the values are plain
+            # objects we convert explicitly, which keeps the cache
+            # JSON-serialisable and the dict key a real str.
             for row in df.to_dict("records"):
                 player_name = str(row["PLAYER_NAME"])
                 record: GameLogRecord = {
@@ -287,10 +268,8 @@ class NBAClient:
         games = self._cache_data["league_gamelog"]["games"].get(full_name)
 
         if not games:
-            # Player not found or has no games
             return None
 
-        # Sort games descending by date
         games.sort(key=lambda g: g["GAME_DATE"], reverse=True)
 
         stats_dict: PlayerStats = PlayerStats()
@@ -328,10 +307,9 @@ class NBAClient:
             for game_date_obj in data["leagueSchedule"]["gameDates"]:
                 for game in game_date_obj["games"]:
                     game_info: GameRecord = {
-                        # gameDateEst is midnight-anchored — a date *label*, not a
-                        # timestamp. Verified across a full 1400-game season: it is
-                        # always 00:00 and always equals the Eastern tip-off date,
-                        # because no game tips after 23:00 ET.
+                        # gameDateEst is midnight-anchored: a date label, not
+                        # a timestamp. It equals the Eastern tip-off date,
+                        # since no game tips after 23:00 ET.
                         "date": str(game["gameDateEst"])[:10],
                         "tipoff_utc": str(game["gameDateTimeUTC"]),
                         "status": int(game["gameStatus"]),
@@ -349,24 +327,18 @@ class NBAClient:
     def get_remaining_games(self, team_abbr: str, start_date: date, end_date: date, now: datetime | None = None) -> int:
         """Count a team's not-yet-started games inside a matchup window.
 
-        Two different notions of time, deliberately kept apart:
+        Two notions of time, kept apart:
 
-        * The **window** test uses the NBA game-date label, which is what Yahoo's
-          matchup start/end dates also mean. Comparing labels to labels avoids
-          any zone question.
-        * The **already-played** test uses the real tip-off instant in UTC. The
-          previous implementation used `date.today()` on the local clock, so on
-          an Eastern machine after 9pm PT the date had already rolled over and a
-          game that had not yet tipped on the West coast was dropped from the
-          count.
+        * The **window** test compares game-date labels, which is what Yahoo's
+          matchup dates also mean — labels to labels, no zone question.
+        * The **already-played** test uses the tip-off instant in UTC, so the
+          answer does not depend on the machine's zone.
 
-        "Remaining" means not yet started: a game in progress has already begun
-        producing its stats, so it does not represent future production. The
-        status filter still runs, because a cached schedule can be up to
-        SCHEDULE_TTL_HOURS old and its statuses correspondingly stale.
+        "Remaining" means not yet started. The status filter still runs, since a
+        cached schedule can be hours old and its statuses stale.
 
         Args:
-            now: override the current instant; must be timezone-aware. For tests.
+            now: override the current instant; must be timezone-aware.
         """
         self._ensure_schedule_loaded()
         games = self._cache_data["schedule"]["teams"].get(team_abbr.upper(), [])

@@ -97,8 +97,7 @@ Add `--mock` to `/scout` or `/trade` to swap Gemini for canned responses and
 exercise the report path without spending tokens. League data stays live.
 
 The web UI covers the same ground with a sport picker in the sidebar. Both
-front ends render the same validated models — the CLI through `render.py`, the
-UI through `ui/app.py`.
+front ends render the same validated models.
 
 `/scout` and `/trade` accept `--mock`, which swaps Gemini for canned responses so
 you can exercise the report path without spending tokens. Yahoo stays live —
@@ -147,7 +146,8 @@ the-front-office/
 │   ├── bootstrap.py       # composition root: sport registry + engine wiring
 │   └── config/            # validated settings + prompt templates
 ├── tests/                 # hermetic pytest suite
-├── .agent/rules/rules.md  # agent-facing project rules
+├── AGENTS.md              # agent-facing rules (CLAUDE.md symlinks to it)
+├── .agents/skills/        # shared agent skills
 ├── Brewfile               # system tooling (just, uv)
 ├── justfile               # task runner
 ├── pyproject.toml         # package metadata, dependencies, tool config

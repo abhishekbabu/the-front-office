@@ -12,23 +12,23 @@ for the index.
 pre-commit hooks run the same gates, so a commit that skips them will fail anyway.
 
 Update `README.md` in the same commit when behaviour, commands, dependencies or
-environment variables change. It is the only prose documentation — do not add
-new doc files.
+environment variables change. Prose documentation lives there and in this file;
+do not add new doc files.
 
 ## Hard rules
 
 **Errors.** Services never signal failure by return value — no `None`, no `[]`,
 no `"❌ ..."` string, all of which a caller cannot tell from a real result.
-Raise a `FrontOfficeError` subclass from `the_front_office.exceptions`. An empty
-list is a valid *answer* (no search matches); a failed request is not. Only
-`main.py` and `ui/` render errors. `raise ... from e`, and log before raising.
+Raise a `FrontOfficeError` subclass from `domain/errors.py`. An empty list is a
+valid *answer* (no search matches); a failed request is not. Only the inbound
+adapters render errors. `raise ... from e`, and log before raising.
 
-**No `print()` outside `main.py` and `ui/`.** Library code uses a module-level
+**No `print()` outside `adapters/inbound/`.** Everything else uses a module-level
 `logger = logging.getLogger(__name__)`.
 
 **Dates and times.** Never use naive `datetime.now()` or `date.today()` for
 anything persisted or compared — store aware UTC, convert at the comparison.
-NBA-schedule logic is anchored to `PACIFIC` in `clients/nba/client.py`, because
+NBA-schedule logic is anchored to `PACIFIC` in the nba_stats client, because
 the league schedules by Pacific and a local clock shifts the boundaries by the
 machine's offset. `datetime.fromisoformat` cannot parse a trailing `Z` on
 Python 3.10 and every NBA timestamp has one, so parse via `_parse_timestamp`.
@@ -49,7 +49,8 @@ an explicit short `persist_ttl`; the default is an hour.
 the generation prompt, and say explicitly what was left out.
 
 **Player identity across platforms.** Yahoo and Sleeper share no identifier, so
-the NBA projection join is by normalised name (`sports/nba/projections.py`).
+the NBA projection join is by normalised name (`adapters/outbound/sports/nba/
+projections.py`).
 Never guess: an ambiguous surname must resolve to nothing rather than to
 whichever player was indexed first, and an unmatched player carries no
 projection rather than borrowing someone else's.
@@ -75,8 +76,8 @@ config through the `settings` singleton, never `os.getenv` at a call site.
 
 **UI.** Streamlit reruns the whole script on every interaction, so anything
 expensive or side-effecting must be cached (`st.cache_resource` for clients,
-`st.cache_data` for values). Put computation in `ui/data.py` where it is
-testable; `ui/app.py` only lays out widgets. Keep `main()` behind the
+`st.cache_data` for values). Put computation in the web adapter's `data.py`
+where it is testable; the app module only lays out widgets. Keep `main()` behind the
 `__name__ == "__main__"` guard so the module stays importable.
 
 **Layering.** Dependencies point inward only: `domain` imports nothing else in
@@ -86,36 +87,28 @@ Never import an adapter from `domain/` or `application/` — if an engine needs 
 capability, add a port and let `bootstrap` wire it. Engines take their
 collaborators as required arguments rather than constructing defaults.
 
-**Adding a sport.** Implement `SportProvider` in `adapters/outbound/sports/<sport>/<platform>.py`
-(`list_leagues`, `build_context`, `squad_rows`), add a prompt template and a
-canned mock report, then add one `SportEntry` to `bootstrap.py`. The CLI,
-the UI and the help text pick it up from there — do not name a provider in an
-entry point. `is_configured` must be true only when the credentials actually
-exist: building a provider may open an OAuth flow, and a user who does not play
-that sport must never be made to sit through it. Do not add sport
-specifics to `domain/`, `application/` or the inbound adapters — those are the shared seam. If a
-sport needs a field the shared `Move` / `ScoutReport` / `TradeVerdict` lacks,
-widen those models rather than forking them. Keep their field names in the
-league's own vocabulary, not one sport's: `gains`, not `categories_gained`.
+**Adding a sport.** See the `adding-a-sport` skill. In short: a provider under
+`adapters/outbound/sports/`, a prompt template, a canned mock, one `SportEntry`
+in `bootstrap.py`. Never name a provider in an entry point, and never put sport
+specifics in `domain/`, `application/` or the inbound adapters. If a sport needs
+a field the shared models lack, widen them — and name it in the league's own
+vocabulary, `gains` rather than `categories_gained`.
 
 ## Testing
 
 Mirror the source layout. The default suite must stay hermetic: no network, no
-credentials, no cache file on disk. Engines take their collaborators by keyword
-(`Scout(league, ai=..., nba=..., yahoo=...)`) — use the fakes in
-`tests/conftest.py` rather than monkeypatching. Anything hitting a live API gets
+credentials, no cache file on disk. Engines and providers take their collaborators
+by keyword — use the fakes in `tests/conftest.py` rather than monkeypatching. Anything hitting a live API gets
 `@pytest.mark.integration`, which is deselected by default.
 
 New code needs tests in the same commit. Coverage is gated at 95%.
 
 ## CI
 
-`.github/workflows/ci.yml` runs `just lint`, `just typecheck` and
-`just coverage-gate` on Linux, macOS and Windows, plus the non-duplicated
-pre-commit hooks. `.python-version` pins 3.10 — the floor in `requires-python`,
-and what pyrefly and ruff target — so CI reproduces local rather than silently
-testing a newer interpreter; one extra leg runs 3.13 for forward compatibility. It calls the same recipes you run locally — add a gate to the
-`justfile` and CI picks it up, rather than duplicating the command in YAML.
+CI runs the same `just` recipes you run locally on Linux, macOS and Windows, so
+adding a gate to the `justfile` extends CI too. `.python-version` pins 3.10 —
+the floor in `requires-python`, and what pyrefly and ruff target — with one
+extra leg on 3.13 for forward compatibility.
 
 ## Agent documentation
 

@@ -1,6 +1,4 @@
-"""
-Yahoo Fantasy Data Client.
-"""
+"""Yahoo Fantasy league data: rosters, matchups and player queries."""
 
 import logging
 import subprocess
@@ -57,7 +55,6 @@ class YahooFantasyClient:
             print("⚠️  YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET must be set in .env")
             sys.exit(1)
 
-        # Find the yahoofantasy executable
         python_dir = Path(sys.executable).parent
         yahoofantasy_bin_path = python_dir / "yahoofantasy.exe"
         yahoofantasy_bin = str(yahoofantasy_bin_path) if yahoofantasy_bin_path.exists() else "yahoofantasy"
@@ -101,30 +98,13 @@ class YahooFantasyClient:
         position: PlayerPosition | None = None,
         **extra_params: str,
     ) -> list[Player]:
-        """
-        Fetch players from the Yahoo Fantasy API.
+        """Fetch players, building the Yahoo query string directly.
 
-        This is the single entry point for all player queries. It builds
-        the API query string directly, bypassing the yahoofantasy library's
-        limited ``league.players()`` method.
+        The SDK's `league.players()` cannot sort by an individual stat over a
+        time window, which is what free-agent discovery needs.
 
-        Args:
-            count: Max number of players to return.
-            status: Player availability filter (default: ALL_AVAILABLE).
-            sort: Sort field (e.g. PlayerStat.ACTUAL_RANK, PlayerStat.BLOCKS).
-            sort_type: Time window for sort (e.g. Timeframe.LAST_WEEK).
-            position: Position filter (e.g. PlayerPosition.CENTER).
-            **extra_params: Any additional Yahoo API query params.
-
-        Returns:
-            List of Player objects, up to ``count``.
-
-        Examples:
-            # Top available players by ownership %
-            fetch_players(count=25)
-
-            # Available point guards, sorted by fantasy points last week
-            fetch_players(sort=PlayerStat.FANTASY_POINTS, sort_type=Timeframe.LAST_WEEK, position=PlayerPosition.POINT_GUARD)
+        Raises:
+            YahooAPIError: the request failed. An empty list means no matches.
         """
         query, cache_key = self._player_query(count, status, sort, sort_type, position, **extra_params)
         logger.debug(f"Fetching players with query: {query}")
@@ -146,7 +126,6 @@ class YahooFantasyClient:
         **extra_params: str,
     ) -> tuple[str, str]:
         """Build the Yahoo query string and its persistence key."""
-        # Enums serialize to their .value via str(Enum)
         params: dict[str, str] = {"count": str(count), "status": status.value}
         if sort is not None:
             params["sort"] = sort.value
@@ -178,18 +157,9 @@ class YahooFantasyClient:
         per_stat: int = 10,
         sort_type: Timeframe = Timeframe.LAST_WEEK,
     ) -> dict[str, list[Player]]:
-        """
-        Fetch the top available players for each scoutable stat category.
+        """Top available players per scoutable category, keyed by category name.
 
-        Iterates over SCOUT_STAT_IDS (all 9-cat stats except turnovers),
-        making one API call per category.
-
-        Args:
-            per_stat: Number of players to fetch per stat category.
-            sort_type: Time window for sorting (default: last week).
-
-        Returns:
-            Dict mapping stat display name → list of Player objects.
+        One request per category in SCOUT_CATEGORIES, run concurrently.
         """
         specs = {
             stat_name: self._player_query(per_stat, PlayerStatus.ALL_AVAILABLE, stat, sort_type, None)
@@ -267,14 +237,12 @@ class YahooFantasyClient:
         raise TeamNotFoundError(self.league.name)
 
     def _sync_current_week(self) -> Week | None:
-        """Fetch the current week's scoreboard, once, and freshly.
+        """Fetch the current week's scoreboard, once and freshly.
 
-        yahoofantasy persists every response for DEFAULT_TTL (1 hour). That is
-        fine for rosters, but the scoreboard is the basis for "which categories
-        are close" — an hour-old copy reasons about margins from before the
-        night's games. Pre-warming the same persistence key with a short TTL
-        forces a refetch when the copy is stale; Week.sync then reads the value
-        we just refreshed.
+        The SDK persists every response for an hour, which is far too long for
+        the scoreboard the "which categories are close" analysis rests on.
+        Pre-warming the same persistence key with a short TTL forces a refetch,
+        and Week.sync then reads the value just refreshed.
         """
         current_week = getattr(self.league, "current_week", None)
         if not current_week:
@@ -304,11 +272,7 @@ class YahooFantasyClient:
         return None
 
     def get_matchup(self, my_team: Team) -> MatchupInfo:
-        """Fetch the current matchup once, returning both context and dates.
-
-        get_matchup_context and get_matchup_dates each used to build and sync
-        their own Week, doubling the work for callers (the scout) that need both.
-        """
+        """Fetch the current matchup once, returning both context and dates."""
         try:
             week = self._sync_current_week()
             if week is None:
@@ -371,19 +335,14 @@ class YahooFantasyClient:
         Uses league/{id}/players;search={query}
         """
         try:
-            # Construct league-specific search query
-            # league/{league_key}/players;search={query}
             league_key = self.league.league_key
             query_str = f"league/{league_key}/players;search={query}"
             cache_key = f"player_search_{league_key}_{query}"
 
             logger.debug(f"Searching players in league: {query_str}")
 
-            # _load_or_fetch expects the relative URL part
             data = self.league.ctx._load_or_fetch(cache_key, query_str)
 
-            # Navigate response structure:
-            # fantasy_content -> league -> players -> player
             try:
                 base = data["fantasy_content"]["league"]
                 players_container = base.get("players", {})
@@ -396,7 +355,6 @@ class YahooFantasyClient:
             results: list[Player] = []
             if "player" in players_container:
                 for player_data in as_list(players_container["player"]):
-                    # Create player bound to this league/context
                     p = Player(self.league)
                     from_response_object(p, player_data)
                     results.append(p)

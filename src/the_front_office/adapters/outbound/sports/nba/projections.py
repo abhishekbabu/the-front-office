@@ -36,9 +36,8 @@ def normalise_name(name: str) -> str:
     """
     decomposed = unicodedata.normalize("NFKD", name)
     ascii_only = "".join(c for c in decomposed if not unicodedata.combining(c))
-    # A hyphen separates words, an apostrophe does not: "Karl-Anthony" has to
-    # land on "karl anthony" while "De'Aaron" lands on "deaaron". Stripping both
-    # alike collapsed the first into "karlanthony" and lost the match.
+    # A hyphen separates words, an apostrophe does not: "Karl-Anthony" becomes
+    # "karl anthony", "De'Aaron" becomes "deaaron".
     spaced = ascii_only.lower().replace("-", " ").replace(".", " ")
     cleaned = re.sub(r"[^a-z ]", "", spaced)
     parts = [p for p in cleaned.split() if p and p not in _SUFFIXES]

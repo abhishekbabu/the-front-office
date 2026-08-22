@@ -40,10 +40,8 @@ def _resolve_sports(args: list[str], entries: list[SportEntry]) -> list[SportEnt
         return entries
 
     key = args[0].lower().lstrip("/")
-    # Match within the configured set first. Consulting the global registry
-    # first and then testing membership lets the two disagree — which is how a
-    # caller passing its own entries gets told a sport it just supplied is
-    # unconfigured.
+    # Match within the configured set first; the registry is only consulted to
+    # tell an unknown sport apart from an unconfigured one.
     for entry in entries:
         if entry.sport == key:
             return [entry]

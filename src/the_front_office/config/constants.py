@@ -1,9 +1,5 @@
-"""
-Static constants for The Front Office.
-"""
+"""Prompt templates, one per report type."""
 
-# AI Prompt Templates
-# The Master Prompt Template for Gemini Scouting Reports
 SCOUT_PROMPT_TEMPLATE = """
 You are an elite NBA Fantasy General Manager and data analyst.
 Your goal is to provide a concise, high-impact "Scout Report" for a fantasy basketball league.

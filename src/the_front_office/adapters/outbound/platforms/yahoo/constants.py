@@ -7,8 +7,6 @@ All stat-related logic (matchup context, scout discovery) derives from this.
 
 from the_front_office.adapters.outbound.platforms.yahoo.types import PlayerStat
 
-# Maps stat-category PlayerStat members to their display names.
-# Used by matchup context to show all 9-cat breakdowns.
 STAT_CATEGORIES: dict[PlayerStat, str] = {
     PlayerStat.FG_PCT: "FG%",
     PlayerStat.FT_PCT: "FT%",
