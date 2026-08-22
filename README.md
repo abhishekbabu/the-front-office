@@ -32,6 +32,7 @@ the-front-office/
 │   └── the_front_office/
 │       ├── clients/        # External API wrappers (Gemini, Yahoo, NBA)
 │       ├── config/         # Configuration layer (constants, settings)
+│       ├── exceptions.py   # Domain exceptions raised by services
 │       ├── main.py         # Entry point & Interactive CLI
 │       └── scout/          # Scout orchestrator (AI waiver analysis)
 ├── tests/                  # Hermetic unit tests (pytest)

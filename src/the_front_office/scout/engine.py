@@ -39,10 +39,8 @@ class Scout:
         """
         Gather all data and build the initial AI prompt.
         """
-        # 1. Identify User's Team
+        # 1. Identify User's Team — raises TeamNotFoundError if we own none.
         my_team = self.yahoo.get_user_team()
-        if not my_team:
-            return "⚠️ Could not identify your team in this league."
 
         matchup_context = self.yahoo.get_matchup_context(my_team)
 
@@ -149,8 +147,6 @@ class Scout:
             return f"❌ Error: {e}", None
 
     def get_report(self) -> str:
-        """
-        Generate a scout report (non-interactive wrapper).
-        """
+        """Generate a scout report (non-interactive wrapper)."""
         report, _ = self.start_analysis()
         return report

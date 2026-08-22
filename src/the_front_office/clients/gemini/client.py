@@ -9,6 +9,7 @@ from google import genai
 from google.genai.chats import Chat
 
 from the_front_office.config.settings import settings
+from the_front_office.exceptions import AIResponseError, AIUnavailableError
 
 from .constants import MODEL_FLASH, MODEL_PRO
 from .types import HistoryItem, MockChatSession
@@ -33,36 +34,6 @@ class GeminiClient:
         else:
             self.client = genai.Client(api_key=api_key)
 
-    def generate(self, prompt: str) -> str:
-        """
-        Generate content using the Gemini model (or return mock response).
-        """
-        if self.mock_mode:
-            return self._get_mock_response()
-
-        if not self.client:
-            return "⚠️ AI Features Unavailable: API key not set."
-
-        try:
-            response = self.client.models.generate_content(model=MODEL_PRO, contents=prompt)
-            return response.text or "❌ No response from AI"
-        except Exception as e:
-            logger.error(f"Gemini generation error: {e}")
-            return f"❌ Error generating AI response: {e}"
-
-    def _get_mock_response(self) -> str:
-        """Return a canned mock response for testing."""
-        return """### **Scout Report**
-
-**Matchup Insight**: [MOCK] We are positioned for a 6-3 victory. Focus on securing REB and protecting our FG% lead.
-
-**Top Targets**:
-- **ADD Mock Player 1 (PF)**: [MOCK] Provides elite rebounding and efficient shooting. -> **DROP Bench Warmer**: Minimal production.
-- **ADD Mock Player 2 (C)**: [MOCK] Strong blocks and rebounds contributor. -> **DROP Injured Reserve**: Currently out.
-- **ADD Mock Player 3 (SG)**: [MOCK] High-volume 3PT shooter to secure our lead. -> **DROP Inconsistent Guard**: Poor recent performance.
-
-**Final Strategy**: [MOCK] Add efficient, multi-category contributors to secure the win."""
-
     def start_chat(
         self, initial_history: list[HistoryItem] | None = None, enable_search: bool = False
     ) -> Chat | MockChatSession:
@@ -71,7 +42,7 @@ class GeminiClient:
             return MockChatSession()
 
         if not self.client:
-            raise RuntimeError("Gemini Client not initialized (missing API key)")
+            raise AIUnavailableError()
 
         config = None
         if enable_search:
@@ -101,7 +72,7 @@ class GeminiClient:
             return TradeProposal(giving=["LeBron James"], receiving=["Jayson Tatum"])
 
         if not self.client:
-            raise RuntimeError("AI not initialized")
+            raise AIUnavailableError()
 
         # Use Gemini Flash for parsing tasks
         prompt = f"""
@@ -133,4 +104,4 @@ class GeminiClient:
             return TradeProposal(giving=giving, receiving=receiving)
         except Exception as e:
             logger.error(f"Error parsing trade string: {e}")
-            return TradeProposal()
+            raise AIResponseError(f"Trade parsing failed: {e}") from e

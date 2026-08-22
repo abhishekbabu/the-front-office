@@ -3,6 +3,7 @@ Trade Engine — Orchestrates trade analysis using Gemini AI.
 """
 
 import logging
+from datetime import date
 from typing import TYPE_CHECKING, Union
 
 from yahoofantasy import League, Player  # type: ignore[import-untyped]
@@ -10,6 +11,7 @@ from yahoofantasy import League, Player  # type: ignore[import-untyped]
 from the_front_office.clients.nba.client import NBAClient
 from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.config.constants import TRADE_PROMPT_TEMPLATE
+from the_front_office.exceptions import AIResponseError, PlayerNotFoundError, TradeParseError
 from the_front_office.services.context_builder import PlayerContextBuilder
 
 if TYPE_CHECKING:
@@ -34,29 +36,36 @@ class TradeEvaluator:
         self.context_builder = PlayerContextBuilder(self.nba)
 
     def _resolve_players(self, player_names: list[str]) -> list[Player]:
+        """Resolve player names to Yahoo Player objects.
+
+        Raises:
+            PlayerNotFoundError: any name failed to resolve. Silently dropping
+                one would hand the AI a different trade than the user asked
+                about, which is worse than refusing to evaluate.
         """
-        Resolve player names to Yahoo Player objects with better robustness.
-        """
-        resolved = []
+        resolved: list[Player] = []
+        unresolved: list[str] = []
         for name in player_names:
             clean_name = name.strip()
             # 1. Try exact/standard search via Yahoo
             players = self.yahoo.search_players(clean_name)
 
             if not players:
-                # 2. Try case-insensitive substring match against roster + free agents
-                # This helps if names are slightly different (e.g. "Lebron" vs "LeBron")
-                # For now, let's keep it simple and just log a better warning.
-                # Heuristic: try searching for just the last name if it's a multi-word query
+                # 2. Fall back to the last name alone, which tolerates casing and
+                # first-name spelling differences (e.g. "Lebron" vs "LeBron").
                 parts = clean_name.split()
                 if len(parts) > 1:
                     players = self.yahoo.search_players(parts[-1])
 
             if players:
-                # heuristic: take the first one
+                if len(players) > 1:
+                    logger.warning(f"{len(players)} matches for {clean_name!r}; using {players[0].name.full!r}")
                 resolved.append(players[0])
             else:
-                logger.warning(f"Could not find player: {name}")
+                unresolved.append(clean_name)
+
+        if unresolved:
+            raise PlayerNotFoundError(unresolved)
         return resolved
 
     def evaluate(self, trade_text: str) -> tuple[str, Union["Chat", "MockChatSession"] | None]:
@@ -66,9 +75,9 @@ class TradeEvaluator:
         # 1. Parse
         proposal = self.ai.parse_trade_string(trade_text)
         if not proposal.is_valid:
-            return "❌ Could not parse trade. format: 'Give [players], Get [players]'", None
+            raise TradeParseError(trade_text)
 
-        print(f"  🔍 Parsed: Giving {proposal.giving} -> Receiving {proposal.receiving}")
+        logger.info(f"Parsed trade — giving {proposal.giving}, receiving {proposal.receiving}")
 
         # 2. Resolve Players
         giving_players = self._resolve_players(proposal.giving)
@@ -81,41 +90,32 @@ class TradeEvaluator:
 
         # 4. Team Context
         my_team = self.yahoo.get_user_team()
-        matchup_context = ""
-        roster_str = "(Roster data unavailable)"
+        matchup_context = self.yahoo.get_matchup_context(my_team)
 
-        if my_team:
-            matchup_context = self.yahoo.get_matchup_context(my_team)
-
-            # Fetch full roster stats for context
-            try:
-                week_start, week_end = self.yahoo.get_matchup_dates(my_team)
-                m_start = None
-                m_end = None
-                from datetime import date
-
-                if week_start and week_end:
-                    m_start = date.fromisoformat(week_start)
-                    m_end = date.fromisoformat(week_end)
-
-                players = my_team.players()
-                roster_str = self.context_builder.build_context_for_players(players, m_start, m_end)
-            except Exception as e:
-                logger.warning(f"Failed to build roster context for trade: {e}")
-                roster_str = "(Error fetching roster)"
+        # Roster context is enrichment: a failure here degrades the prompt but
+        # should not block the evaluation the user asked for.
+        try:
+            week_start, week_end = self.yahoo.get_matchup_dates(my_team)
+            m_start = date.fromisoformat(week_start) if week_start else None
+            m_end = date.fromisoformat(week_end) if week_end else None
+            roster_str = self.context_builder.build_context_for_players(my_team.players(), m_start, m_end)
+        except Exception as e:
+            logger.warning(f"Failed to build roster context for trade: {e}")
+            roster_str = "(Roster data unavailable)"
 
         # 5. Prompt
         prompt = TRADE_PROMPT_TEMPLATE.format(
             giving_str=giving_str, receiving_str=receiving_str, matchup_context=matchup_context, roster_str=roster_str
         )
 
-        # 6. AI Analysis
+        # 6. AI Analysis — Google Search enabled for live injury/standings data
+        chat = self.ai.start_chat(enable_search=True)
         try:
-            # Enable Google Search for live data (injuries, standings, etc.)
-            chat = self.ai.start_chat(enable_search=True)
             response = chat.send_message(prompt)
-            text = response.text or "❌ No response from AI"
-            return text, chat
         except Exception as e:
             logger.error(f"Error evaluating trade: {e}")
-            return f"❌ Error: {e}", None
+            raise AIResponseError(f"Trade evaluation failed: {e}") from e
+
+        if not response.text:
+            raise AIResponseError("Gemini returned an empty trade evaluation.")
+        return response.text, chat

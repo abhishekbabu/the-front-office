@@ -59,9 +59,14 @@ the-front-office/
 
 ### Error Handling
 - Use specific exception types, not bare `except:`
-- Log errors with `logger.error()` before returning fallback values
-- Provide user-friendly error messages
+- **Services never signal failure by return value.** No `None`, no `[]`, no `"❌ ..."` string — a caller
+  cannot tell those apart from a real result. Raise a `FrontOfficeError` subclass from
+  `the_front_office.exceptions` instead.
+- An empty list is a valid *answer* (no search matches); a failed request is not — those raise.
+- Only `main.py` renders errors to the user. It catches `FrontOfficeError` and prints the message.
+- Log with `logger.error()` before raising; use `raise ... from e` to keep the cause.
 - Never expose API keys or sensitive data in error messages
+- **No `print()` outside `main.py`** — library code uses a module-level logger
 
 ### Git Workflow
 - **Feature branches**: `feature/descriptive-name`

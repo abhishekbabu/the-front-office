@@ -13,6 +13,7 @@ from yahoofantasy.api.parse import as_list, from_response_object
 from the_front_office.clients.yahoo.constants import SCOUT_CATEGORIES, STAT_CATEGORIES
 from the_front_office.clients.yahoo.types import PlayerPosition, PlayerStat, PlayerStatus, Timeframe
 from the_front_office.config.settings import settings
+from the_front_office.exceptions import TeamNotFoundError, YahooAPIError
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +143,7 @@ class YahooFantasyClient:
             return players[:count]
         except Exception as e:
             logger.error(f"Error fetching players (query={query}): {e}")
-            return []
+            raise YahooAPIError(f"Yahoo player query failed ({query}): {e}") from e
 
     def fetch_top_by_stat(
         self,
@@ -173,14 +174,16 @@ class YahooFantasyClient:
             results[stat_name] = players
         return results
 
-    def get_user_team(self) -> Team | None:
-        """
-        Identify the team owned by the current user.
+    def get_user_team(self) -> Team:
+        """Identify the team owned by the current user.
+
+        Raises:
+            TeamNotFoundError: the login owns no team in this league.
         """
         for team in self.league.teams():
             if hasattr(team, "is_owned_by_current_login") and team.is_owned_by_current_login:
                 return team
-        return None
+        raise TeamNotFoundError(self.league.name)
 
     def get_matchup_dates(self, my_team: Team) -> tuple[str, str]:
         """
@@ -285,9 +288,8 @@ class YahooFantasyClient:
             try:
                 base = data["fantasy_content"]["league"]
                 players_container = base.get("players", {})
-            except KeyError:
-                logger.warning(f"Unexpected response structure for search '{query}'")
-                return []
+            except KeyError as e:
+                raise YahooAPIError(f"Unexpected Yahoo response structure for search {query!r}") from e
 
             if not players_container or isinstance(players_container, str):
                 return []
@@ -302,6 +304,8 @@ class YahooFantasyClient:
 
             return results
 
+        except YahooAPIError:
+            raise
         except Exception as e:
             logger.error(f"Error searching for player '{query}': {e}")
-            return []
+            raise YahooAPIError(f"Yahoo player search failed for {query!r}: {e}") from e

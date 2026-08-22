@@ -14,6 +14,7 @@ from yahoofantasy import League, Team  # type: ignore[import-untyped]
 
 from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.config.logging import setup_logging
+from the_front_office.exceptions import FrontOfficeError
 from the_front_office.scout import Scout
 from the_front_office.trade.engine import TradeEvaluator
 
@@ -132,7 +133,11 @@ def _cmd_scout(leagues: list[League], mock: bool = False) -> None:
         scout = Scout(league, mock_ai=mock)
 
         print("  ⏳ Analyzing roster, free agents, and schedule... (this may take a moment)")
-        report, chat = scout.start_analysis()
+        try:
+            report, chat = scout.start_analysis()
+        except FrontOfficeError as e:
+            print(f"  ❌ {e}")
+            continue
         print("\n" + report)
 
         _interactive_followup(chat, "report")
@@ -153,7 +158,11 @@ def _cmd_trade(leagues: list[League], args: list[str], mock: bool = False) -> No
         evaluator = TradeEvaluator(league, mock_ai=mock)
 
         print("  ⏳ Analyzing trade... (parsing & enriching data)")
-        report, chat = evaluator.evaluate(trade_text)
+        try:
+            report, chat = evaluator.evaluate(trade_text)
+        except FrontOfficeError as e:
+            print(f"  ❌ {e}")
+            continue
         print("\n" + report)
 
         _interactive_followup(chat, "trade")
@@ -174,26 +183,26 @@ def _cmd_rosters(leagues: list[League]) -> None:
 def _cmd_my_roster(leagues: list[League]) -> None:
     """Show only the user's roster."""
     for league in leagues:
-        yahoo = YahooFantasyClient(league)
-        my_team = yahoo.get_user_team()
-        if my_team:
-            _print_header(f"Your Roster: {my_team.name} ({league.name})")
-            _print_roster(my_team)
-        else:
-            print(f"  ⚠️  Could not identify your team in {league.name}")
+        try:
+            my_team = YahooFantasyClient(league).get_user_team()
+        except FrontOfficeError as e:
+            print(f"  ⚠️  {e}")
+            continue
+        _print_header(f"Your Roster: {my_team.name} ({league.name})")
+        _print_roster(my_team)
 
 
 def _cmd_matchup(leagues: list[League]) -> None:
     """Show current matchup context."""
     for league in leagues:
         yahoo = YahooFantasyClient(league)
-        my_team = yahoo.get_user_team()
-        if my_team:
-            _print_header(f"Matchup: {league.name}")
-            context = yahoo.get_matchup_context(my_team)
-            print(f"  {context}")
-        else:
-            print(f"  ⚠️  Could not identify your team in {league.name}")
+        try:
+            my_team = yahoo.get_user_team()
+        except FrontOfficeError as e:
+            print(f"  ⚠️  {e}")
+            continue
+        _print_header(f"Matchup: {league.name}")
+        print(f"  {yahoo.get_matchup_context(my_team)}")
 
 
 # ---------------------------------------------------------------------------
@@ -239,25 +248,45 @@ def main() -> None:
 
         cmd, args, mock = parse_command(raw)
 
-        if cmd == "/scout":
-            _cmd_scout(leagues, mock=mock)
-        elif cmd == "/trade":
-            _cmd_trade(leagues, args, mock=mock)
-        elif cmd == "/rosters":
-            _cmd_rosters(leagues)
-        elif cmd in ("/my-roster", "/roster"):
-            _cmd_my_roster(leagues)
-        elif cmd == "/matchup":
-            _cmd_matchup(leagues)
-        elif cmd == "/help":
-            _print_help()
-        elif cmd in ("/quit", "/exit", "/q"):
+        try:
+            _dispatch(leagues, cmd, args, mock)
+        except FrontOfficeError as e:
+            # Safety net — handlers render their own errors, but a session must
+            # never die because one command raised.
+            print(f"  ❌ {e}")
+        except QuitRequested:
             _print_header("Goodbye 👋")
             break
-        else:
-            print(f"  ❓ Unknown command: {cmd}. Type /help for available commands.")
 
     _print_header("Done ✅")
+
+
+class QuitRequested(Exception):
+    """Raised by _dispatch when the user asks to exit."""
+
+
+def _dispatch(leagues: list[League], cmd: str, args: list[str], mock: bool) -> None:
+    """Route one parsed command to its handler.
+
+    Raises:
+        QuitRequested: the user asked to exit.
+    """
+    if cmd == "/scout":
+        _cmd_scout(leagues, mock=mock)
+    elif cmd == "/trade":
+        _cmd_trade(leagues, args, mock=mock)
+    elif cmd == "/rosters":
+        _cmd_rosters(leagues)
+    elif cmd in ("/my-roster", "/roster"):
+        _cmd_my_roster(leagues)
+    elif cmd == "/matchup":
+        _cmd_matchup(leagues)
+    elif cmd == "/help":
+        _print_help()
+    elif cmd in ("/quit", "/exit", "/q"):
+        raise QuitRequested
+    else:
+        print(f"  ❓ Unknown command: {cmd}. Type /help for available commands.")
 
 
 if __name__ == "__main__":
