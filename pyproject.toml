@@ -23,6 +23,9 @@ dependencies = [
     "pandas>=2.2.0,<3",
     "tenacity>=9.0.0,<10",
     "pyreadline3>=3.4,<4; sys_platform == 'win32'",
+    # zoneinfo reads the OS tz database, which Windows does not ship. Without
+    # this, ZoneInfo("America/Los_Angeles") raises ZoneInfoNotFoundError there.
+    "tzdata>=2024.1; sys_platform == 'win32'",
 ]
 
 [project.scripts]

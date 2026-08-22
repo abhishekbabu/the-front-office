@@ -65,6 +65,14 @@ the-front-office/
   loads and validates them, so a malformed value fails at startup with a readable error
 - Read config through the `settings` singleton — never `os.getenv` at a call site
 
+### Dates & Times
+- **Never use naive `datetime.now()` or `date.today()` for anything persisted or compared.**
+  Store timestamps as aware UTC (`datetime.now(timezone.utc)`); convert at the point of comparison.
+- NBA-schedule logic is anchored to `America/Los_Angeles` (`PACIFIC` in `clients/nba/client.py`),
+  not to local time — the league schedules by Pacific, and a local clock silently shifts the
+  boundaries by the machine's UTC offset.
+- `zoneinfo` needs the `tzdata` package on Windows; it is declared with a `sys_platform` marker.
+
 ### Error Handling
 - Use specific exception types, not bare `except:`
 - **Services never signal failure by return value.** No `None`, no `[]`, no `"❌ ..."` string — a caller

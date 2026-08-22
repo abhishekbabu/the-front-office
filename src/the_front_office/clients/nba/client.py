@@ -6,10 +6,11 @@ Provides player stats and schedule data with a unified local cache.
 import json
 import logging
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from datetime import time as dt_time
 from pathlib import Path
 from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import requests
@@ -89,10 +90,38 @@ def _nba_retry() -> Retrying:
     )
 
 
+# The NBA schedules by US Pacific time, so the invalidation boundaries are
+# anchored there rather than to whatever zone this machine happens to be in.
+# Comparing them against a naive local clock put the "before tip-off" refresh
+# three hours late in ET — after some games had already started.
+PACIFIC = ZoneInfo("America/Los_Angeles")
+
 PLAYER_STATS_INVALIDATION_TIMES = [
-    dt_time(1, 0),  # 1:00 AM PT (after games end)
-    dt_time(15, 0),  # 3:00 PM PT (before games start)
+    dt_time(1, 0),  # 1:00 AM PT — after the last game ends
+    dt_time(15, 0),  # 3:00 PM PT — before the first game starts
 ]
+
+
+def _utc_now() -> datetime:
+    """Current time as an aware UTC datetime — what gets written to the cache."""
+    return datetime.now(timezone.utc)
+
+
+def _parse_timestamp(value: str) -> datetime | None:
+    """Parse a stored cache timestamp into an aware datetime.
+
+    Returns None for anything unusable, including the naive timestamps written
+    by earlier versions: those were local-clock readings with no record of which
+    zone produced them, so they cannot be placed on a real timeline. Treating
+    them as unusable costs one refetch on upgrade and is self-healing.
+    """
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed
 
 
 class NBAClient:
@@ -157,36 +186,36 @@ class NBAClient:
         except Exception as e:
             logger.warning(f"Failed to save cache: {e}")
 
-    def _get_schedule_age_hours(self) -> float:
-        """Get age of cached schedule in hours."""
-        updated_at = self._cache_data["schedule"].get("updated_at")
-        if not updated_at:
+    def _get_schedule_age_hours(self, now: datetime | None = None) -> float:
+        """Age of the cached schedule in hours, or 999.0 if it cannot be dated."""
+        ts = _parse_timestamp(self._cache_data["schedule"].get("updated_at", ""))
+        if ts is None:
             return 999.0
-        try:
-            ts = datetime.fromisoformat(updated_at)
-            return (datetime.now() - ts).total_seconds() / 3600
-        except ValueError:
-            return 999.0
+        return ((now or _utc_now()) - ts).total_seconds() / 3600
 
-    def _is_league_gamelog_stale(self) -> bool:
-        """Check if the league gamelog has crossed an invalidation boundary (1AM/3PM PT)."""
-        updated_at_str = self._cache_data["league_gamelog"]["updated_at"]
-        if not updated_at_str:
-            return True
-        try:
-            updated_at = datetime.fromisoformat(updated_at_str)
-        except ValueError:
+    def _is_league_gamelog_stale(self, now: datetime | None = None) -> bool:
+        """Whether the gamelog has crossed a 1AM/3PM *Pacific* invalidation boundary.
+
+        Args:
+            now: override the current time; must be timezone-aware. For tests.
+        """
+        updated_at = _parse_timestamp(self._cache_data["league_gamelog"]["updated_at"])
+        if updated_at is None:
             return True
 
-        now = datetime.now()
-        # If record is from a previous day, it's definitely stale relative to today's 1AM/3PM
-        if updated_at.date() < now.date():
+        # Both sides are converted to Pacific so the comparison is against the
+        # zone the boundaries are defined in, whatever the machine's own is.
+        now_pt = (now or _utc_now()).astimezone(PACIFIC)
+        updated_pt = updated_at.astimezone(PACIFIC)
+
+        # From an earlier Pacific day: stale relative to today's boundaries.
+        if updated_pt.date() < now_pt.date():
             return True
 
-        # If updated today, check if we crossed a boundary since the update
+        # Updated today — stale only if a boundary fell between then and now.
         for boundary_time in PLAYER_STATS_INVALIDATION_TIMES:
-            boundary_dt = datetime.combine(now.date(), boundary_time)
-            if updated_at < boundary_dt <= now:
+            boundary = datetime.combine(now_pt.date(), boundary_time, tzinfo=PACIFIC)
+            if updated_pt < boundary <= now_pt:
                 return True
         return False
 
@@ -242,7 +271,7 @@ class NBAClient:
 
             self._cache_data["league_gamelog"] = {
                 "games": games_by_player,
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": _utc_now().isoformat(),
             }
             self._save_cache()
         except Exception as e:
@@ -320,7 +349,7 @@ class NBAClient:
                     team_games.setdefault(game_info["home"], []).append(game_info)
                     team_games.setdefault(game_info["away"], []).append(game_info)
 
-            self._cache_data["schedule"] = {"teams": team_games, "updated_at": datetime.now().isoformat()}
+            self._cache_data["schedule"] = {"teams": team_games, "updated_at": _utc_now().isoformat()}
             self._save_cache()
         except Exception as e:
             logger.warning(f"Failed to fetch NBA schedule: {e}")

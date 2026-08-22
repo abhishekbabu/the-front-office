@@ -171,8 +171,10 @@ strategy: target close categories, do not chase blowouts, a 5-4 win counts the
 same as 9-0. Points and dynasty leagues are out of scope.
 
 **Two caches, two invalidation strategies.** The NBA schedule is TTL-based (24h).
-The league game log invalidates at 1:00 AM and 3:00 PM PT — after games end and
-before they start — so a report never mixes stale box scores into a live matchup.
+The league game log invalidates at 1:00 AM and 3:00 PM **Pacific** — after games
+end and before they start — so a report never mixes stale box scores into a live
+matchup. Both boundaries are anchored to `America/Los_Angeles` and timestamps are
+stored as UTC, so the behaviour is identical wherever the machine is.
 
 **Services raise, `main.py` renders.** No service returns `None`, `[]`, or an
 error string to signal failure; those are indistinguishable from real results.

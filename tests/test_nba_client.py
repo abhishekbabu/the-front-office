@@ -1,10 +1,11 @@
 """Tests for the pure logic in NBAClient — no network, no cache file on disk."""
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 
-from the_front_office.clients.nba.client import NBAClient
+from the_front_office.clients.nba.client import PACIFIC, NBAClient
 from the_front_office.clients.nba.types import GameLogRecord
 
 
@@ -73,69 +74,88 @@ def test_zero_attempts_does_not_divide_by_zero() -> None:
 # ── _is_league_gamelog_stale ────────────────────────────────────────────
 
 
+def _pt(y: int, m: int, d: int, hour: int, minute: int = 0) -> datetime:
+    """A Pacific-time wall clock instant."""
+    return datetime(y, m, d, hour, minute, tzinfo=PACIFIC)
+
+
+def _with_updated_at(ts: datetime | str) -> NBAClient:
+    c = _client()
+    c._cache_data["league_gamelog"]["updated_at"] = ts if isinstance(ts, str) else ts.isoformat()
+    return c
+
+
 def test_empty_cache_is_stale() -> None:
     assert _client()._is_league_gamelog_stale() is True
 
 
 def test_unparseable_timestamp_is_stale() -> None:
-    c = _client()
-    c._cache_data["league_gamelog"]["updated_at"] = "not-a-timestamp"
-    assert c._is_league_gamelog_stale() is True
+    assert _with_updated_at("not-a-timestamp")._is_league_gamelog_stale() is True
 
 
-def test_yesterdays_cache_is_stale() -> None:
-    c = _client()
-    c._cache_data["league_gamelog"]["updated_at"] = (datetime.now() - timedelta(days=1)).isoformat()
-    assert c._is_league_gamelog_stale() is True
+def test_legacy_naive_timestamp_is_stale() -> None:
+    """Pre-fix caches stored a local-clock reading with no zone, so it cannot be
+    placed on a timeline. One refetch on upgrade, then self-healing."""
+    c = _with_updated_at("2026-02-09T14:00:00")
+    assert c._is_league_gamelog_stale(now=_pt(2026, 2, 9, 14, 5)) is True
 
 
-def test_cache_written_seconds_ago_is_fresh() -> None:
-    """No 1AM/3PM boundary can fall between a moment ago and now."""
-    c = _client()
-    c._cache_data["league_gamelog"]["updated_at"] = (datetime.now() - timedelta(seconds=5)).isoformat()
-    assert c._is_league_gamelog_stale() is False
+def test_previous_pacific_day_is_stale() -> None:
+    c = _with_updated_at(_pt(2026, 2, 8, 20))
+    assert c._is_league_gamelog_stale(now=_pt(2026, 2, 9, 10)) is True
 
 
-def test_crossing_the_3pm_boundary_invalidates() -> None:
-    """Written at 14:00, checked at 15:30 — the 15:00 boundary was crossed."""
-    c = _client()
-    today = date.today()
-    c._cache_data["league_gamelog"]["updated_at"] = (
-        datetime.combine(today, datetime.min.time()).replace(hour=14).isoformat()
-    )
-
-    now = datetime.combine(today, datetime.min.time()).replace(hour=15, minute=30)
-    assert _stale_at(c, now) is True
+def test_crossing_the_3pm_pacific_boundary_invalidates() -> None:
+    c = _with_updated_at(_pt(2026, 2, 9, 14))
+    assert c._is_league_gamelog_stale(now=_pt(2026, 2, 9, 15, 30)) is True
 
 
 def test_same_side_of_a_boundary_stays_fresh() -> None:
-    """Written at 16:00, checked at 17:00 — no boundary in between."""
+    c = _with_updated_at(_pt(2026, 2, 9, 16))
+    assert c._is_league_gamelog_stale(now=_pt(2026, 2, 9, 17)) is False
+
+
+def test_boundaries_are_pacific_regardless_of_local_zone() -> None:
+    """The regression this fix exists for.
+
+    Written 14:00 PT, checked 14:30 PT — no boundary crossed, so the cache is
+    fresh. Expressing the identical instants in Eastern must not change that;
+    the old code compared a naive local clock against the PT boundary, so on an
+    ET machine 17:00/17:30 local straddled the 15:00 boundary and forced a
+    refetch that never should have happened (and, in the other direction, let
+    the pre-tip-off refresh fire three hours late).
+    """
+    eastern = ZoneInfo("America/New_York")
+    written_pt = _pt(2026, 2, 9, 14)
+    checked_pt = _pt(2026, 2, 9, 14, 30)
+
+    c = _with_updated_at(written_pt.astimezone(eastern))
+    assert c._is_league_gamelog_stale(now=checked_pt.astimezone(eastern)) is False
+    # And identical to the PT-expressed answer.
+    assert c._is_league_gamelog_stale(now=checked_pt) is False
+
+
+def test_utc_stored_timestamp_is_interpreted_in_pacific() -> None:
+    """Timestamps are written as UTC; the boundary check must convert."""
+    # 2026-02-09 22:00 UTC == 14:00 PST. Checking at 23:30 UTC == 15:30 PST
+    # crosses the 15:00 PT boundary.
+    c = _with_updated_at(datetime(2026, 2, 9, 22, 0, tzinfo=timezone.utc))
+    now = datetime(2026, 2, 9, 23, 30, tzinfo=timezone.utc)
+    assert c._is_league_gamelog_stale(now=now) is True
+
+
+def test_schedule_age_is_computed_across_zones() -> None:
     c = _client()
-    today = date.today()
-    c._cache_data["league_gamelog"]["updated_at"] = (
-        datetime.combine(today, datetime.min.time()).replace(hour=16).isoformat()
-    )
-
-    now = datetime.combine(today, datetime.min.time()).replace(hour=17)
-    assert _stale_at(c, now) is False
+    c._cache_data["schedule"]["updated_at"] = datetime(2026, 2, 9, 12, 0, tzinfo=timezone.utc).isoformat()
+    now = datetime(2026, 2, 10, 12, 0, tzinfo=timezone.utc)
+    assert c._get_schedule_age_hours(now=now) == pytest.approx(24.0)
 
 
-def _stale_at(client: NBAClient, now: datetime) -> bool:
-    """Evaluate staleness as if `now` were the current time."""
-    import the_front_office.clients.nba.client as mod
-
-    real = mod.datetime
-
-    class FrozenDatetime(real):  # type: ignore[misc, valid-type]
-        @classmethod
-        def now(cls, tz=None):  # type: ignore[no-untyped-def]
-            return now
-
-    mod.datetime = FrozenDatetime  # type: ignore[misc]
-    try:
-        return client._is_league_gamelog_stale()
-    finally:
-        mod.datetime = real  # type: ignore[misc]
+def test_undateable_schedule_reports_max_age() -> None:
+    assert _client()._get_schedule_age_hours() == 999.0
+    c = _client()
+    c._cache_data["schedule"]["updated_at"] = "2026-02-09T12:00:00"  # naive, legacy
+    assert c._get_schedule_age_hours() == 999.0
 
 
 # ── get_remaining_games ─────────────────────────────────────────────────
