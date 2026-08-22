@@ -155,21 +155,25 @@ class NBAClient:
                 df = log.get_data_frames()[0]
 
                 games_by_player: dict[str, list[GameLogRecord]] = {}
-                for row in df.itertuples(index=False):
-                    player_name = row.PLAYER_NAME
+                # to_dict("records") rather than itertuples: the row values are
+                # then plain objects we convert explicitly, which keeps the cache
+                # JSON-serialisable (a stray pandas Timestamp in GAME_DATE would
+                # blow up _save_cache) and keeps the dict key a real str.
+                for row in df.to_dict("records"):
+                    player_name = str(row["PLAYER_NAME"])
                     record: GameLogRecord = {
-                        "GAME_DATE": row.GAME_DATE,
-                        "PTS": float(row.PTS),
-                        "REB": float(row.REB),
-                        "AST": float(row.AST),
-                        "STL": float(row.STL),
-                        "BLK": float(row.BLK),
-                        "TOV": float(row.TOV),
-                        "FG3M": float(row.FG3M),
-                        "FGA": float(row.FGA),
-                        "FGM": float(row.FGM),
-                        "FTA": float(row.FTA),
-                        "FTM": float(row.FTM),
+                        "GAME_DATE": str(row["GAME_DATE"]),
+                        "PTS": float(row["PTS"]),
+                        "REB": float(row["REB"]),
+                        "AST": float(row["AST"]),
+                        "STL": float(row["STL"]),
+                        "BLK": float(row["BLK"]),
+                        "TOV": float(row["TOV"]),
+                        "FG3M": float(row["FG3M"]),
+                        "FGA": float(row["FGA"]),
+                        "FGM": float(row["FGM"]),
+                        "FTA": float(row["FTA"]),
+                        "FTM": float(row["FTM"]),
                     }
                     if player_name not in games_by_player:
                         games_by_player[player_name] = []

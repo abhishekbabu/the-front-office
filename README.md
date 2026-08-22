@@ -20,7 +20,7 @@ The Front Office now operates as an interactive shell for real-time fantasy mana
     - **Google Gemini API** (via `google-genai` SDK)
     - **NBA Data** (via `nba_api`)
 - **AI Engine:** Gemini 2.5 (Pro for strategy, Flash for parsing)
-- **Dev Tools:** uv (Env & Locking), Ruff (Lint & Format), Mypy (Typesafety), pre-commit (Enforcement)
+- **Dev Tools:** uv (Env & Locking), Ruff (Lint & Format), Pyrefly (Typesafety), pre-commit (Enforcement)
 
 ---
 
@@ -35,7 +35,7 @@ the-front-office/
 │       └── scout/          # Scout orchestrator (AI waiver analysis)
 ├── .agent/rules/rules.md    # Project rules & Assistant guidelines
 ├── .env                    # Local secrets (Client IDs/Secrets)
-├── mypy.ini                # Type checking configuration
+├── pyrefly.toml            # Type checking configuration
 └── pyproject.toml          # Package metadata & Dependencies
 ```
 
@@ -58,7 +58,7 @@ cd the-front-office
 uv venv --python 3.10
 uv pip install -e ".[dev]"
 
-# Install the git hooks (ruff, ruff-format, mypy run on every commit)
+# Install the git hooks (ruff, ruff-format, pyrefly run on every commit)
 uv run pre-commit install
 ```
 
@@ -106,5 +106,5 @@ Once inside the shell, use the following commands:
 
 ## 🔒 Security & Quality
 - Never commit `.env` or `.yahoofantasy` (token) files.
-- **Type Safety:** Always run `mypy src/the_front_office` before committing changes (also enforced by pre-commit).
+- **Type Safety:** Always run `pyrefly check` before committing changes (also enforced by pre-commit).
 - **Lint & Format:** `ruff check src/ --fix` and `ruff format src/`. Both run automatically via pre-commit.

@@ -1,0 +1,34 @@
+# Type checking config — replaces mypy.ini.
+python-version = "3.10"
+project-includes = ["src"]
+search-path = ["src"]
+project-excludes = [
+    "**/__pycache__/**",
+    "**/.venv/**",
+]
+
+[errors]
+# yahoofantasy's League/Player/Team attributes are assigned at runtime by
+# `from_response_object`, which setattr()s each key of the API response onto the
+# object. No static analyser can see `player.name.full` or `team.roster_adds`,
+# so this category is pure noise wherever those SDK types are handled. mypy hid
+# the same thing behind `ignore_missing_imports` in mypy.ini.
+# It is re-enabled below for every module that does NOT touch the SDK.
+missing-attribute = false
+
+# Modules with no yahoofantasy import: hold them to the full bar so a genuine
+# typo or bad attribute access still fails the check.
+[[sub-config]]
+matches = "src/the_front_office/config/**"
+[sub-config.errors]
+missing-attribute = true
+
+[[sub-config]]
+matches = "src/the_front_office/clients/nba/**"
+[sub-config.errors]
+missing-attribute = true
+
+[[sub-config]]
+matches = "src/the_front_office/clients/gemini/**"
+[sub-config.errors]
+missing-attribute = true

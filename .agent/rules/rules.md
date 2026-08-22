@@ -6,12 +6,12 @@ The Front Office is an AI-powered NBA fantasy sports assistant that provides wai
 ## Code Style & Standards
 
 ### Type Safety
-- **ALWAYS** run `mypy src/the_front_office` before committing
+- **ALWAYS** run `pyrefly check` before committing
 - **AVOID** using `Any`. Use specific types from libraries or `object` if truly generic.
 - Add type hints to all function signatures
 - Use builtin generics (`list[str]`, `dict[str, int]`) and PEP 604 unions (`str | None`), not `typing.List`/`Dict`/`Optional` — enforced by ruff's `UP` rules
 - Handle `None` values explicitly with assertions or conditional checks
-- Add `# type: ignore[import-untyped]` for untyped third-party libraries
+- Untyped third-party libraries need no per-import marker; suppressions live in `pyrefly.toml`
 
 ### Metadata & Documentation
 - **ALWAYS** update `README.md`, `project_spec.md`, `pyproject.toml`, and other metadata files before committing new changes.
@@ -35,7 +35,7 @@ the-front-office/
 │   └── main.py               # Interactive REPL entry point
 ├── tests/                    # Unit tests (when added)
 ├── .agent/rules/rules.md     # Project configuration and rules
-├── mypy.ini                  # Type checking config
+├── pyrefly.toml              # Type checking config
 └── pyproject.toml            # Project metadata & dependencies
 ```
 
@@ -93,7 +93,7 @@ the-front-office/
 ## Code Quality Checklist
 Before committing:
 - [ ] `ruff check src/` and `ruff format --check src/` pass
-- [ ] `mypy src/the_front_office` passes
+- [ ] `pyrefly check` passes
 - [ ] (all three run automatically if `pre-commit install` has been run)
 - [ ] No debug print statements (use `logger` instead)
 - [ ] No hardcoded credentials

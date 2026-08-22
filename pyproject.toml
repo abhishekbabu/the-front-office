@@ -22,7 +22,7 @@ front-office = "the_front_office.main:main"
 
 [project.optional-dependencies]
 dev = [
-    "mypy>=1.10.0,<2",
+    "pyrefly>=1.1.1,<2",
     "ruff>=0.15.0,<1",
     "pre-commit>=4.0.0,<5",
     "pandas-stubs>=2.2.0,<3",

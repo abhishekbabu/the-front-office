@@ -11,6 +11,7 @@ build/
 *.egg
 .mypy_cache/
 .ruff_cache/
+.pyrefly_cache/
 
 # Virtual environments
 .venv/
