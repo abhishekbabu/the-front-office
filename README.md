@@ -15,7 +15,7 @@ The Front Office now operates as an interactive shell for real-time fantasy mana
 
 ## 🛠 Technical Stack
 - **Language:** Python 3.10
-- **APIs:** 
+- **APIs:**
     - **Yahoo Fantasy Sports API** (via `yahoofantasy` SDK)
     - **Google Gemini API** (via `google-genai` SDK)
     - **NBA Data** (via `nba_api`)
