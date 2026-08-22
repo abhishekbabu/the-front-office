@@ -1341,6 +1341,7 @@ dependencies = [
     { name = "pandas" },
     { name = "pydantic-settings" },
     { name = "pyreadline3", marker = "sys_platform == 'win32'" },
+    { name = "tenacity" },
     { name = "yahoofantasy" },
 ]
 
@@ -1365,6 +1366,7 @@ requires-dist = [
     { name = "pyrefly", marker = "extra == 'dev'", specifier = ">=1.1.1,<2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0,<10" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.0,<1" },
+    { name = "tenacity", specifier = ">=9.0.0,<10" },
     { name = "yahoofantasy", specifier = ">=1.4.9,<2" },
 ]
 provides-extras = ["dev"]

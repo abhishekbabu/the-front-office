@@ -9,10 +9,18 @@ import time
 from datetime import date, datetime
 from datetime import time as dt_time
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pandas as pd
+import requests
 from nba_api.stats.endpoints import leaguegamelog, scheduleleaguev2  # type: ignore[import-untyped]
+from tenacity import (
+    Retrying,
+    before_sleep_log,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from the_front_office.clients.nba.types import (
     GameLogRecord,
@@ -29,6 +37,58 @@ logger = logging.getLogger(__name__)
 
 # Cache TTLs
 SCHEDULE_TTL_HOURS = 24
+SCHEDULE_TIMEOUT_SECONDS = 30
+
+# Retry policy for nba_api calls
+NBA_RETRY_MAX_ATTEMPTS = 3
+NBA_RETRY_MULTIPLIER = 5.0
+NBA_RETRY_MIN_WAIT = 5.0
+NBA_RETRY_MAX_WAIT = 40.0
+
+# nba_api wraps requests; these are the transient failures worth a second try.
+# stats.nba.com rate-limits by stalling the connection, so timeouts dominate.
+_RETRYABLE_NETWORK_EXCEPTIONS = (
+    requests.exceptions.Timeout,
+    requests.exceptions.ConnectionError,
+    requests.exceptions.ChunkedEncodingError,
+)
+
+
+def _is_nba_retryable_error(exc: BaseException) -> bool:
+    """Decide whether an nba_api failure is transient.
+
+    Retries on: network timeouts/connection drops, 5xx, and the invalid-JSON
+    response nba_api raises when stats.nba.com serves a rate-limit stub.
+
+    Does NOT retry on: 4xx client errors, or the KeyError/TypeError that means
+    the response shape changed — retrying those just burns the rate-limit budget
+    on a request that will fail identically.
+    """
+    if isinstance(exc, _RETRYABLE_NETWORK_EXCEPTIONS):
+        return True
+    if isinstance(exc, requests.exceptions.HTTPError):
+        response = exc.response
+        return response is not None and response.status_code >= 500
+    # nba_api raises a bare Exception for a non-JSON body, which is what a
+    # throttled response looks like.
+    return type(exc) is Exception and "InvalidResponse" in str(exc)
+
+
+def _nba_retry() -> Retrying:
+    """Build a tenacity Retrying instance for nba_api calls."""
+    return Retrying(
+        stop=stop_after_attempt(NBA_RETRY_MAX_ATTEMPTS),
+        wait=wait_exponential(
+            multiplier=NBA_RETRY_MULTIPLIER,
+            min=NBA_RETRY_MIN_WAIT,
+            max=NBA_RETRY_MAX_WAIT,
+        ),
+        retry=retry_if_exception(_is_nba_retryable_error),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )
+
+
 PLAYER_STATS_INVALIDATION_TIMES = [
     dt_time(1, 0),  # 1:00 AM PT (after games end)
     dt_time(15, 0),  # 3:00 PM PT (before games start)
@@ -141,57 +201,52 @@ class NBAClient:
 
     # ── Player Stats ───────────────────────────────────────────────
 
-    def _ensure_league_gamelog_loaded(self, retries: int = 2) -> None:
+    def _fetch_league_gamelog_frame(self) -> pd.DataFrame:
+        """One nba_api call for the full-season player gamelog."""
+        self._wait_for_rate_limit()
+        # A much larger timeout than other calls: this pulls the entire
+        # season's table in one request.
+        log = leaguegamelog.LeagueGameLog(player_or_team_abbreviation="P", timeout=60)
+        return log.get_data_frames()[0]
+
+    def _ensure_league_gamelog_loaded(self) -> None:
         if not self._is_league_gamelog_stale():
             return
 
         logger.debug("Refreshing league gamelog via nba_api...")
-        for attempt in range(retries + 1):
-            try:
-                self._wait_for_rate_limit()
-                # Fetch full season gamelog for all players. Note that the standard timeout is much larger
-                # here as we are doing the entire DB table for the season.
-                log = leaguegamelog.LeagueGameLog(player_or_team_abbreviation="P", timeout=60)
-                df = log.get_data_frames()[0]
+        try:
+            df = _nba_retry()(self._fetch_league_gamelog_frame)
 
-                games_by_player: dict[str, list[GameLogRecord]] = {}
-                # to_dict("records") rather than itertuples: the row values are
-                # then plain objects we convert explicitly, which keeps the cache
-                # JSON-serialisable (a stray pandas Timestamp in GAME_DATE would
-                # blow up _save_cache) and keeps the dict key a real str.
-                for row in df.to_dict("records"):
-                    player_name = str(row["PLAYER_NAME"])
-                    record: GameLogRecord = {
-                        "GAME_DATE": str(row["GAME_DATE"]),
-                        "PTS": float(row["PTS"]),
-                        "REB": float(row["REB"]),
-                        "AST": float(row["AST"]),
-                        "STL": float(row["STL"]),
-                        "BLK": float(row["BLK"]),
-                        "TOV": float(row["TOV"]),
-                        "FG3M": float(row["FG3M"]),
-                        "FGA": float(row["FGA"]),
-                        "FGM": float(row["FGM"]),
-                        "FTA": float(row["FTA"]),
-                        "FTM": float(row["FTM"]),
-                    }
-                    if player_name not in games_by_player:
-                        games_by_player[player_name] = []
-                    games_by_player[player_name].append(record)
-
-                self._cache_data["league_gamelog"] = {
-                    "games": games_by_player,
-                    "updated_at": datetime.now().isoformat(),
+            games_by_player: dict[str, list[GameLogRecord]] = {}
+            # to_dict("records") rather than itertuples: the row values are
+            # then plain objects we convert explicitly, which keeps the cache
+            # JSON-serialisable (a stray pandas Timestamp in GAME_DATE would
+            # blow up _save_cache) and keeps the dict key a real str.
+            for row in df.to_dict("records"):
+                player_name = str(row["PLAYER_NAME"])
+                record: GameLogRecord = {
+                    "GAME_DATE": str(row["GAME_DATE"]),
+                    "PTS": float(row["PTS"]),
+                    "REB": float(row["REB"]),
+                    "AST": float(row["AST"]),
+                    "STL": float(row["STL"]),
+                    "BLK": float(row["BLK"]),
+                    "TOV": float(row["TOV"]),
+                    "FG3M": float(row["FG3M"]),
+                    "FGA": float(row["FGA"]),
+                    "FGM": float(row["FGM"]),
+                    "FTA": float(row["FTA"]),
+                    "FTM": float(row["FTM"]),
                 }
-                self._save_cache()
-                return
-            except Exception as e:
-                if attempt < retries:
-                    backoff_time = 2**attempt * 5
-                    logger.warning(f"Retry {attempt + 1}/{retries} for league gamelog in {backoff_time}s: {e}")
-                    time.sleep(backoff_time)
-                    continue
-                logger.warning(f"Failed to fetch league gamelog: {e}")
+                games_by_player.setdefault(player_name, []).append(record)
+
+            self._cache_data["league_gamelog"] = {
+                "games": games_by_player,
+                "updated_at": datetime.now().isoformat(),
+            }
+            self._save_cache()
+        except Exception as e:
+            logger.warning(f"Failed to fetch league gamelog: {e}")
 
     def _extract_9cat_from_records(self, records: list[GameLogRecord]) -> NineCatStats:
         """Extract 9-cat stats from a list of structured game records."""
@@ -218,9 +273,9 @@ class NBAClient:
             FT_PCT=round(float(ft_pct), 3),
         )
 
-    def get_player_stats(self, full_name: str, retries: int = 2) -> PlayerStats | None:
+    def get_player_stats(self, full_name: str) -> PlayerStats | None:
         """Fetch recent stats (L5/L10/L15) for a player using the cached league gamelog."""
-        self._ensure_league_gamelog_loaded(retries)
+        self._ensure_league_gamelog_loaded()
         games = self._cache_data["league_gamelog"]["games"].get(full_name)
 
         if not games:
@@ -239,6 +294,11 @@ class NBAClient:
 
     # ── Schedule ───────────────────────────────────────────────────
 
+    def _fetch_schedule_dict(self) -> dict[str, Any]:
+        """One nba_api call for the full-season league schedule."""
+        self._wait_for_rate_limit()
+        return scheduleleaguev2.ScheduleLeagueV2(timeout=SCHEDULE_TIMEOUT_SECONDS).get_dict()
+
     def _ensure_schedule_loaded(self) -> None:
         """Fetch full season schedule via nba_api if stale or missing."""
         if self._cache_data["schedule"]["updated_at"] and self._get_schedule_age_hours() < SCHEDULE_TTL_HOURS:
@@ -246,9 +306,7 @@ class NBAClient:
 
         logger.debug("Refreshing NBA schedule via nba_api...")
         try:
-            self._wait_for_rate_limit()
-            sched = scheduleleaguev2.ScheduleLeagueV2(timeout=5)
-            data = sched.get_dict()
+            data = _nba_retry()(self._fetch_schedule_dict)
 
             team_games: dict[str, list[GameRecord]] = {}
             for game_date_obj in data["leagueSchedule"]["gameDates"]:

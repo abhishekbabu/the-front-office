@@ -14,6 +14,7 @@ dependencies = [
     "google-genai>=1.63.0,<2",
     "nba_api>=1.11.0,<2",
     "pandas>=2.2.0,<3",
+    "tenacity>=9.0.0,<10",
     "pyreadline3>=3.4,<4; sys_platform == 'win32'",
 ]
 
