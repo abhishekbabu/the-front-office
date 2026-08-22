@@ -80,6 +80,7 @@ REGISTRY: tuple[SportEntry, ...] = (
         build=_build_nfl,
         is_configured=lambda: bool(settings.sleeper_username),
         requires="SLEEPER_USERNAME",
+        supports_trades=True,
     ),
 )
 

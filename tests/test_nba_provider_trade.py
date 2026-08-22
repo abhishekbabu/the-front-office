@@ -19,6 +19,12 @@ def _provider(yahoo: FakeYahoo) -> YahooNBAProvider:
     )
 
 
+def _resolve(yahoo: FakeYahoo, names: list[str]) -> Any:
+    """Resolve one side through the pair-resolving entry point."""
+    giving, _ = _provider(yahoo)._resolve_sides(TradeProposal(giving=names, receiving=[]))
+    return giving
+
+
 def _yahoo_with(*names: str) -> FakeYahoo:
     return FakeYahoo(search_results={n: [make_player(n)] for n in names})
 
@@ -28,14 +34,14 @@ def _yahoo_with(*names: str) -> FakeYahoo:
 
 def test_an_exact_match_resolves() -> None:
     yahoo = _yahoo_with("LeBron James")
-    assert len(_provider(yahoo)._resolve_players(["LeBron James"])) == 1
+    assert len(_resolve(yahoo, ["LeBron James"])) == 1
     assert yahoo.searches == ["LeBron James"]
 
 
 def test_the_surname_is_tried_when_the_full_name_misses() -> None:
     """'Lebron James' (wrong casing) misses, but 'James' still finds him."""
     yahoo = FakeYahoo(search_results={"James": [make_player("LeBron James")]})
-    assert len(_provider(yahoo)._resolve_players(["Lebron James"])) == 1
+    assert len(_resolve(yahoo, ["Lebron James"])) == 1
     assert yahoo.searches == ["Lebron James", "James"]
 
 
@@ -43,25 +49,27 @@ def test_an_unresolved_name_raises_rather_than_being_dropped() -> None:
     """Dropping one would evaluate a different trade than was described."""
     yahoo = _yahoo_with("LeBron James")
     with pytest.raises(PlayerNotFoundError) as excinfo:
-        _provider(yahoo)._resolve_players(["LeBron James", "Notarealplayer"])
+        _resolve(yahoo, ["LeBron James", "Notarealplayer"])
     assert excinfo.value.names == ["Notarealplayer"]
 
 
 def test_every_unresolved_name_is_reported_at_once() -> None:
+    """Across both sides, so one message covers the whole trade."""
+    proposal = TradeProposal(giving=["Ghost One"], receiving=["Ghost Two"])
     with pytest.raises(PlayerNotFoundError) as excinfo:
-        _provider(FakeYahoo())._resolve_players(["Ghost One", "Ghost Two"])
+        _provider(FakeYahoo())._resolve_sides(proposal)
     assert excinfo.value.names == ["Ghost One", "Ghost Two"]
 
 
 def test_surrounding_whitespace_is_stripped() -> None:
     yahoo = _yahoo_with("LeBron James")
-    assert len(_provider(yahoo)._resolve_players(["  LeBron James  "])) == 1
+    assert len(_resolve(yahoo, ["  LeBron James  "])) == 1
 
 
 def test_an_ambiguous_match_takes_the_first_and_warns(caplog: pytest.LogCaptureFixture) -> None:
     yahoo = FakeYahoo(search_results={"Williams": [make_player("Jalen Williams"), make_player("Jaylen Williams")]})
     with caplog.at_level("WARNING"):
-        resolved = _provider(yahoo)._resolve_players(["Williams"])
+        resolved = _resolve(yahoo, ["Williams"])
     assert len(resolved) == 1
     assert "2 matches" in caplog.text
 

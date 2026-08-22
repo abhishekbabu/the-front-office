@@ -102,8 +102,7 @@ class YahooNBAProvider:
         """Price both sides of a trade against the current roster."""
         self._select_into(league_id)
 
-        giving = self._resolve_players(proposal.giving)
-        receiving = self._resolve_players(proposal.receiving)
+        giving, receiving = self._resolve_sides(proposal)
         giving_str = self.context_builder.build_context_for_players(giving)
         receiving_str = self.context_builder.build_context_for_players(receiving)
 
@@ -128,13 +127,25 @@ class YahooNBAProvider:
         )
         return SportContext(prompt=prompt, situation=matchup.context)
 
-    def _resolve_players(self, player_names: list[str]) -> list[Player]:
-        """Resolve names to Yahoo players.
+    def _resolve_sides(self, proposal: TradeProposal) -> tuple[list[Player], list[Player]]:
+        """Resolve both sides, reporting every failure together.
 
         Raises:
-            PlayerNotFoundError: any name failed to resolve. Silently dropping
-                one would evaluate a different trade than the user described.
+            PlayerNotFoundError: naming every unresolved player, so the user
+                fixes one message rather than finding them one re-run at a time.
+                Silently dropping one would evaluate a different trade than they
+                described.
         """
+        giving, missing_giving = self._resolve_side(proposal.giving)
+        receiving, missing_receiving = self._resolve_side(proposal.receiving)
+
+        unresolved = missing_giving + missing_receiving
+        if unresolved:
+            raise PlayerNotFoundError(unresolved)
+        return giving, receiving
+
+    def _resolve_side(self, player_names: list[str]) -> tuple[list[Player], list[str]]:
+        """Resolve one side, returning what matched and what did not."""
         resolved: list[Player] = []
         unresolved: list[str] = []
         for name in player_names:
@@ -154,10 +165,7 @@ class YahooNBAProvider:
                 resolved.append(players[0])
             else:
                 unresolved.append(clean_name)
-
-        if unresolved:
-            raise PlayerNotFoundError(unresolved)
-        return resolved
+        return resolved, unresolved
 
     def roster_rows(self, league_id: str = "") -> list[dict[str, str]]:
         """The user's roster as table rows, for a team view."""

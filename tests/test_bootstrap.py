@@ -122,12 +122,22 @@ def test_no_nba_leagues_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -> Non
         entry.build()
 
 
-def test_trade_support_is_declared_not_inferred() -> None:
+def test_every_sport_declares_its_trade_support() -> None:
     """Declared on the entry so the CLI and UI need no per-sport branch."""
-    nba, nfl = registry.find("nba"), registry.find("nfl")
-    assert nba is not None and nfl is not None
-    assert nba.supports_trades
-    assert not nfl.supports_trades
+    for entry in registry.all_sports():
+        assert isinstance(entry.supports_trades, bool)
+
+
+def test_a_trading_sport_implements_the_trade_port() -> None:
+    """`supports_trades` and `build_trade_context` must not drift apart."""
+    from the_front_office.adapters.outbound.sports.nba.yahoo import YahooNBAProvider
+    from the_front_office.adapters.outbound.sports.nfl.sleeper import SleeperNFLProvider
+
+    implementations = {"nba": YahooNBAProvider, "nfl": SleeperNFLProvider}
+    for entry in registry.all_sports():
+        provider = implementations[entry.sport]
+        has_method = callable(getattr(provider, "build_trade_context", None))
+        assert has_method == entry.supports_trades, entry.sport
 
 
 def test_requirements_summary_names_every_sport() -> None:

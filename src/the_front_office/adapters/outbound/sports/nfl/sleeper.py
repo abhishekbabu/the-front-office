@@ -10,23 +10,24 @@ is the only configuration.
 
 import logging
 
-from the_front_office.adapters.outbound.platforms.sleeper.client import SleeperClient
+from the_front_office.adapters.outbound.platforms.sleeper.client import NFL, SleeperClient
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
     PlayerMeta,
     SleeperLeague,
     SleeperRoster,
     WeeklyProjection,
 )
+from the_front_office.adapters.outbound.sports.names import NameIndex
 from the_front_office.adapters.outbound.sports.nfl.lineup import (
     current_lineup,
     lineup_changes,
     lineup_points,
     optimal_lineup,
 )
-from the_front_office.config.constants import NFL_SCOUT_PROMPT
+from the_front_office.config.constants import NFL_SCOUT_PROMPT, NFL_TRADE_PROMPT
 from the_front_office.config.settings import settings
-from the_front_office.domain.errors import LeagueNotFoundError, SleeperAPIError
-from the_front_office.domain.models import SportContext
+from the_front_office.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError
+from the_front_office.domain.models import SportContext, TradeProposal
 from the_front_office.domain.ports import LeagueRef
 
 logger = logging.getLogger(__name__)
@@ -110,16 +111,97 @@ class SleeperNFLProvider:
             )
         return rows
 
+    # ── trades ──────────────────────────────────────────────────────
+
+    def build_trade_context(self, league_id: str, proposal: TradeProposal) -> SportContext:
+        """Price both sides of a trade against the current roster."""
+        league = self._league(league_id)
+        roster = self._my_roster(league_id)
+        week, season = self._current_week(), self.client.get_state(NFL).season
+
+        projections = self.client.get_projections(season, week, league.scoring_format)
+        players = self.client.get_players()
+        index = self._name_index(projections, players)
+
+        giving, receiving = self._resolve_sides(proposal, index)
+
+        rostered = [self._projection_for(pid, projections, players) for pid in roster.player_ids]
+        roster_lines = {
+            p.name: self._player_line(p) for p in sorted((p for p in rostered if p), key=lambda x: -x.points)
+        }
+
+        situation = self._situation(league, roster, league_id, week)
+        constraints = (
+            f"LINEUP SLOTS: {', '.join(league.starting_slots)}\n"
+            "- Only points from the starting lineup score. Bench depth has value only as "
+            "insurance or as a future starter."
+        )
+        prompt = NFL_TRADE_PROMPT.format(
+            giving_str="".join(self._player_line(p) for p in giving),
+            receiving_str="".join(self._player_line(p) for p in receiving),
+            situation=situation,
+            constraints=constraints,
+            roster_str="".join(roster_lines.values()),
+            scoring_label=SCORING_LABELS.get(league.scoring_format, league.scoring_format),
+        )
+        return SportContext(prompt=prompt, situation=situation, constraints=constraints, roster_lines=roster_lines)
+
+    @staticmethod
+    def _name_index(
+        projections: dict[str, WeeklyProjection], players: dict[str, PlayerMeta]
+    ) -> NameIndex[WeeklyProjection]:
+        """Every projectable player, looked up by the name a user would type."""
+        index: NameIndex[WeeklyProjection] = NameIndex()
+        for projection in projections.values():
+            index.add(projection.name, projection)
+        # Players with no projection are still tradeable — a bye, or a stash.
+        for player_id, meta in players.items():
+            name = meta.get("name")
+            if name and player_id not in projections and meta.get("position"):
+                index.add(name, SleeperNFLProvider._zero_projection(player_id, meta))
+        return index
+
+    @staticmethod
+    def _resolve_sides(
+        proposal: TradeProposal, index: NameIndex[WeeklyProjection]
+    ) -> tuple[list[WeeklyProjection], list[WeeklyProjection]]:
+        """Resolve both sides, reporting every failure together.
+
+        Raises:
+            PlayerNotFoundError: naming every unresolved player, so the user
+                fixes one message rather than finding them one re-run at a time.
+                Silently dropping one would evaluate a different trade than they
+                described.
+        """
+        sides: list[list[WeeklyProjection]] = []
+        unresolved: list[str] = []
+        for names in (proposal.giving, proposal.receiving):
+            resolved = []
+            for name in names:
+                match = index.lookup(name.strip())
+                if match:
+                    resolved.append(match)
+                else:
+                    unresolved.append(name.strip())
+            sides.append(resolved)
+
+        if unresolved:
+            raise PlayerNotFoundError(unresolved)
+        return sides[0], sides[1]
+
     # ── context ─────────────────────────────────────────────────────
+
+    def _current_week(self) -> int:
+        """The week the report is about; the opener while still in preseason."""
+        state = self.client.get_state(NFL)
+        return max(1, state.week if state.is_regular_season else 1)
 
     def build_context(self, league_id: str) -> SportContext:
         league = self._league(league_id)
         roster = self._my_roster(league_id)
         state = self.client.get_nfl_state()
 
-        # In the preseason, project the opening week rather than week 0.
-        week = max(1, state.week if state.is_regular_season else 1)
-        season = state.season
+        week, season = self._current_week(), state.season
 
         projections = self.client.get_projections(season, week, league.scoring_format)
         players = self.client.get_players()
@@ -198,6 +280,19 @@ class SleeperNFLProvider:
         )
 
     # ── helpers ─────────────────────────────────────────────────────
+
+    @staticmethod
+    def _zero_projection(player_id: str, meta: PlayerMeta) -> WeeklyProjection:
+        """A player with no projection this week: a bye, or inactive."""
+        return WeeklyProjection(
+            player_id=player_id,
+            name=str(meta.get("name") or player_id),
+            position=str(meta.get("position") or ""),
+            team=str(meta.get("team") or "FA"),
+            opponent="",
+            points=0.0,
+            injury_status=str(meta.get("injury_status") or ""),
+        )
 
     @staticmethod
     def _projection_for(

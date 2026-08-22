@@ -63,8 +63,11 @@ class FakeSleeper:
         self.trending = trending or []
         self.trending_error = trending_error
 
-    def get_nfl_state(self) -> SeasonState:
+    def get_state(self, sport: str = "nfl") -> SeasonState:
         return SeasonState(week=3, season="2026", season_type="regular")
+
+    def get_nfl_state(self) -> SeasonState:
+        return self.get_state()
 
     def get_user(self, username: str) -> SleeperUser:
         return SleeperUser(user_id=MY_ID, username=username, display_name=username)

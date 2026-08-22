@@ -11,37 +11,18 @@ matched simply carries no projection instead of borrowing someone else's.
 """
 
 import logging
-import re
-import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 
 from the_front_office.adapters.outbound.platforms.sleeper.types import GameProjection
+from the_front_office.adapters.outbound.sports.names import NameIndex, normalise_name
 
 logger = logging.getLogger(__name__)
 
 # The nine scoring categories, plus the makes/attempts the percentages need.
 COUNTING_STATS = ("pts", "reb", "ast", "stl", "blk", "to", "tpm")
 SHOOTING_STATS = ("fgm", "fga", "ftm", "fta")
-
-_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
-
-
-def normalise_name(name: str) -> str:
-    """Reduce a name to a comparable key.
-
-    Strips accents, punctuation and generational suffixes, so "Luka Dončić",
-    "Luka Doncic" and "Jaren Jackson Jr." all match across platforms.
-    """
-    decomposed = unicodedata.normalize("NFKD", name)
-    ascii_only = "".join(c for c in decomposed if not unicodedata.combining(c))
-    # A hyphen separates words, an apostrophe does not: "Karl-Anthony" becomes
-    # "karl anthony", "De'Aaron" becomes "deaaron".
-    spaced = ascii_only.lower().replace("-", " ").replace(".", " ")
-    cleaned = re.sub(r"[^a-z ]", "", spaced)
-    parts = [p for p in cleaned.split() if p and p not in _SUFFIXES]
-    return " ".join(parts)
 
 
 @dataclass(frozen=True)
@@ -101,51 +82,27 @@ class ProjectionIndex:
     """Projections for a matchup period, looked up by player name."""
 
     def __init__(self, rows: Iterable[GameProjection], start: date | None, end: date | None) -> None:
-        self._by_name: dict[str, list[GameProjection]] = {}
-        self._ambiguous_surnames: set[str] = set()
-        by_surname: dict[str, set[str]] = {}
-
+        grouped: dict[str, list[GameProjection]] = {}
         for row in rows:
-            if not _within(row.date, start, end):
-                continue
-            key = normalise_name(row.name)
-            if not key:
-                continue
-            self._by_name.setdefault(key, []).append(row)
-            surname = key.rsplit(" ", 1)[-1]
-            by_surname.setdefault(surname, set()).add(key)
+            if _within(row.date, start, end):
+                grouped.setdefault(normalise_name(row.name), []).append(row)
 
-        self._by_surname = {s: next(iter(k)) for s, k in by_surname.items() if len(k) == 1}
-        self._ambiguous_surnames = {s for s, k in by_surname.items() if len(k) > 1}
+        self._index: NameIndex[list[GameProjection]] = NameIndex()
+        for key, games in grouped.items():
+            self._index.add(key, games)
 
     def __len__(self) -> int:
-        return len(self._by_name)
+        return len(self._index)
 
     @property
     def is_empty(self) -> bool:
         """True out of season, when Sleeper publishes no projections yet."""
-        return not self._by_name
+        return self._index.is_empty
 
     def lookup(self, name: str) -> ProjectedTotals | None:
-        """Projected totals for `name`, or None if it cannot be matched.
-
-        Falls back to a surname match only when that surname is unique in the
-        index — two Jacksons must not resolve to whichever came first.
-        """
-        key = normalise_name(name)
-        rows = self._by_name.get(key)
-
-        if rows is None:
-            surname = key.rsplit(" ", 1)[-1] if key else ""
-            if surname in self._ambiguous_surnames:
-                logger.debug(f"Ambiguous surname for {name!r}; no projection applied")
-                return None
-            matched = self._by_surname.get(surname)
-            rows = self._by_name.get(matched) if matched else None
-
-        if not rows:
-            return None
-        return aggregate(rows)
+        """Projected totals for `name`, or None if it cannot be matched."""
+        rows = self._index.lookup(name)
+        return aggregate(rows) if rows else None
 
 
 def _within(value: str, start: date | None, end: date | None) -> bool:

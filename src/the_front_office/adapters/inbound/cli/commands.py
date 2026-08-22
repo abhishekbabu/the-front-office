@@ -111,7 +111,7 @@ def _cmd_leagues(session: Session, entries: list[SportEntry]) -> None:
 
 
 def _cmd_trade(session: Session, entries: list[SportEntry], args: list[str], mock: bool) -> None:
-    """Evaluate a trade. NBA only for now."""
+    """Evaluate a trade for the first sport that supports it."""
     if not args:
         print("  ⚠️  Usage: /trade <trade description>")
         print("  Example: /trade Give LeBron James, Get Jayson Tatum")

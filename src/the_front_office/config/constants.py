@@ -121,3 +121,42 @@ Return your analysis in the required structured form. Field guidance:
   (e.g. "14.2 proj pts, +4.1 over Smith"). Pair every ADD with the player it `replaces`.
 - Be specific and tactical. Do not restate the inputs.
 """
+
+
+NFL_TRADE_PROMPT = """
+# Trade Evaluation Request
+
+## 1. The Trade
+**Giving Away:**
+{giving_str}
+
+**Receiving:**
+{receiving_str}
+
+## 2. Team Context
+{situation}
+
+{constraints}
+
+## 3. Current Roster
+{roster_str}
+
+## 4. Analysis Instructions
+Act as a ruthless NFL fantasy general manager. Scoring is {scoring_label}, and every
+projection above is in that currency. Judge this trade on:
+1. **Starting-lineup impact**: only points that reach the starting lineup count. Upgrading a
+   bench player behind an entrenched starter is worth little.
+2. **Positional scarcity**: a mid-range RB is not interchangeable with a mid-range WR when the
+   lineup slots differ, and depth at a position you already start two of is worth less.
+3. **Byes and availability**: a bye week or an injury designation is a zero, not a reduced
+   score. Check whether the incoming side leaves a hole in a given week.
+4. **Rest of season**: weigh the remaining schedule, especially the fantasy playoff weeks.
+5. **Roster awareness**: do not recommend acquiring a player already on this roster.
+
+Return the evaluation in the required structured form. Field guidance:
+- gains / losses: short labels in this league's own terms, e.g. ['RB depth', 'WR ceiling'].
+- impact: the net weekly change to the starting lineup, in points.
+- schedule: bye weeks and the playoff-week fixtures on both sides.
+- risk: availability risk on the incoming side — injury designations, committee usage.
+- strategy: what to do next, including any counter worth offering.
+"""
