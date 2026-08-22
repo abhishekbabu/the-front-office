@@ -58,7 +58,7 @@ def test_mock_chat_only_answers_follow_ups() -> None:
 
 
 def test_parsing_uses_flash_and_strategy_uses_pro() -> None:
-    """Flash for high-volume parsing, Pro for strategy — per project_spec.md."""
+    """Flash for parsing and structuring, Pro for analysis — per .agent/rules/rules.md."""
     import inspect
 
     from the_front_office.clients.gemini import client as mod

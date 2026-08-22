@@ -8,91 +8,43 @@ remaining schedule.
 
 ## Tech Stack
 
-**Application** (`src/the_front_office/`, Python pinned by [`pyproject.toml`](pyproject.toml), managed with `uv`)
-- Interactive slash-command REPL in `main.py` — the only layer that prints
-- `scout/` and `trade/` orchestrate a run: gather league state, build a prompt, open a Gemini chat
+**Application** (`src/the_front_office/`, Python managed with `uv`)
+- Interactive slash-command REPL in `main.py`
+- `scout/` and `trade/` orchestrate a run: gather league state, build a prompt, return a validated report
 - `services/context_builder.py` renders players into the prompt lines both engines share
-- `exceptions.py` defines the `FrontOfficeError` hierarchy that services raise instead of returning error values
+- `render.py` turns reports into terminal output; `exceptions.py` holds the `FrontOfficeError` hierarchy services raise
 - `config/` holds validated settings (`pydantic-settings`) and the prompt templates
 
 **External clients** (`src/the_front_office/clients/`)
 - **Yahoo Fantasy** via `yahoofantasy` — OAuth2, rosters, matchups, and hand-built player queries that sort free agents by an individual stat category
-- **NBA.com** via `nba_api` — one full-season `LeagueGameLog` call bucketed by player, cached in `.nba_cache.json`; retries are classified by `tenacity`
-- **Gemini** via `google-genai` — `gemini-2.5-pro` for strategy, `gemini-2.5-flash` for parsing trade text
+- **NBA.com** via `nba_api` — one full-season `LeagueGameLog` call bucketed by player, cached in `.nba_cache.json`, with `tenacity` retries classified by error type
+- **Gemini** via `google-genai` — `gemini-2.5-pro` for analysis, `gemini-2.5-flash` for parsing
 
-**Tooling**
-- `ruff` for lint and format, `pyrefly` for type checking, `pytest` for the hermetic suite
-- `pre-commit` runs all three on every commit; `just` is the entry point for everything
-- Every recipe and hook invokes tools through `uv run`, so the same commands work on macOS, Linux and Windows
+**Tooling** — `ruff`, `pyrefly`, `pytest`, `pre-commit`, `just`. Every recipe and
+hook runs tools through `uv run`, so the same commands work on macOS, Linux and Windows.
 
-## First-Time Setup
+## Setup
 
-### One-Time Machine Setup
-
-The project needs two CLIs: [`uv`](https://docs.astral.sh/uv/) and
-[`just`](https://just.systems). Python itself is not installed separately — `uv`
+**1. Install the two CLIs.** Python itself is not installed separately — `uv`
 provisions an interpreter matching `requires-python`.
 
-**macOS / Linux**
+```bash
+brew bundle                                    # macOS / Linux
+winget install --id=astral-sh.uv --id=Casey.Just -e   # Windows
+```
+
+**2. Get credentials.** A [Yahoo developer app](https://developer.yahoo.com/apps/)
+with Fantasy Sports **Read** permission and redirect URI `https://localhost:8080`,
+and a [Gemini API key](https://aistudio.google.com/app/apikey).
+
+**3. Install and configure.**
 
 ```bash
-brew bundle
+just install                 # uv sync + git hooks
+cp .env.template .env        # PowerShell: Copy-Item .env.template .env
 ```
 
-**Windows** (PowerShell)
-
-```powershell
-winget install --id=astral-sh.uv -e
-winget install --id=Casey.Just -e
-```
-
-<details>
-<summary>Scoop, or no package manager</summary>
-
-```powershell
-scoop install uv just
-```
-
-Or install `uv` from [astral.sh/uv](https://docs.astral.sh/uv/getting-started/installation/)
-and `just` from [just.systems](https://just.systems/man/en/packages.html).
-</details>
-
-### Yahoo Developer App
-
-Create an app at [developer.yahoo.com/apps](https://developer.yahoo.com/apps/) with:
-
-| Setting | Value |
-|---------|-------|
-| Permissions | Fantasy Sports — **Read** |
-| Redirect URI | `https://localhost:8080` |
-
-### Google Gemini API Key
-
-Create a key at [aistudio.google.com](https://aistudio.google.com/app/apikey).
-
-### Install
-
-```bash
-just install
-cp .env.template .env    # PowerShell: Copy-Item .env.template .env
-```
-
-Then fill in your credentials.
-
-`just install` runs `uv sync` (the exact versions in [`uv.lock`](uv.lock)) and
-installs the git hooks.
-
-<details>
-<summary>Without <code>just</code></summary>
-
-```bash
-uv sync
-uv run pre-commit install
-```
-
-Every recipe in the `justfile` is a thin wrapper over `uv run <tool>`, so any of
-them can be run directly this way.
-</details>
+Without `just`: `uv sync && uv run pre-commit install`.
 
 ### Environment
 
@@ -103,168 +55,91 @@ them can be run directly this way.
 | `GOOGLE_API_KEY` | for AI features | — | Omit to run `--mock` only |
 | `YAHOO_MAX_WEEKLY_ADDS` | no | `3` | Integer ≥ 0; drives the scout's add budget |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG` \| `INFO` \| `WARNING` \| `ERROR` \| `CRITICAL` |
+| `NBA_API_DELAY` | no | `4.0` | Seconds between nba_api calls |
 
-Every variable is a validated field on `AppSettings` in
+Each is a validated field on `AppSettings` in
 [`config/settings.py`](src/the_front_office/config/settings.py) — a malformed
-value fails at startup with a message naming the field, not mid-report.
+value fails at startup naming the field, not mid-report.
 
-## Daily Development
+## Usage
 
 ```bash
-just run                # Start the interactive CLI
-just check              # Lint + format check + type check + tests
-just fmt                # Auto-fix lint findings, then format
-just test               # Hermetic test suite (add args: just test "-k scout")
+just run
 ```
 
-First run opens a browser for the Yahoo OAuth2 handshake. The token is cached in
-`.yahoofantasy` and reused, so this happens once.
-
-### Slash Commands
+First run opens a browser for the Yahoo OAuth2 handshake; the token is cached in
+`.yahoofantasy` and reused.
 
 | Command | Description |
 |---------|-------------|
 | `/scout` | Morning Scout Report — AI waiver wire analysis for the current matchup |
-| `/trade <text>` | Evaluate a trade in natural language, e.g. `/trade Give LeBron James, Get Jayson Tatum` |
-| `/rosters` | Every team roster in the league |
-| `/my-roster` | Your roster only |
+| `/trade <text>` | Evaluate a trade, e.g. `/trade Give LeBron James, Get Jayson Tatum` |
+| `/rosters` · `/my-roster` | Team rosters |
 | `/matchup` | Current matchup score and category breakdown |
-| `/help` | List commands |
-| `/quit` | Exit |
+| `/help` · `/quit` | — |
 
 `/scout` and `/trade` accept `--mock`, which swaps Gemini for canned responses so
-you can exercise the report path without spending tokens. Yahoo is still live —
-`--mock` mocks the AI, not the league data.
+you can exercise the report path without spending tokens. Yahoo stays live —
+`--mock` mocks the AI, not the league data. Both drop you into a follow-up chat
+afterwards; press Enter on an empty line to move on.
 
-Both drop you into a follow-up chat after the report. Press Enter on an empty
-line to move on.
-
-## Common Commands
+## Development
 
 ```bash
-# Quality gates
-just check              # Everything the git hooks run
-just lint               # ruff check + ruff format --check
-just fmt                # ruff check --fix + ruff format
-just typecheck          # pyrefly
-just hooks              # Run all pre-commit hooks against every file
-
-# Tests
-just test               # Hermetic suite — no network, no credentials
-just test-integration   # Tests that hit live APIs (needs credentials)
-
-# Dependencies
-just lock               # Re-resolve uv.lock after editing pyproject.toml
-just verify-lock        # Assert the environment matches uv.lock exactly
-
-# Cleanup
-just clean              # Caches and build artefacts
-just clean-nba-cache    # Force a refetch of NBA stats and schedule
+just check              # lint + format + types + tests + 95% coverage floor
+just fmt                # auto-fix lint findings, then format
+just test               # hermetic suite (args pass through: just test "-k scout")
+just coverage           # coverage report
+just lock               # re-resolve uv.lock after editing pyproject.toml
+just clean              # caches and build artefacts
 ```
 
-Run `just --list` for the full catalog.
+`just --list` for the full catalog. Agent-facing rules are in
+[`.agent/rules/rules.md`](.agent/rules/rules.md).
+
+Tests are hermetic — no network, no credentials, no cache file on disk. Engines
+take their collaborators by keyword, so `tests/conftest.py` fakes stand in for
+Yahoo, NBA and Gemini. Anything hitting a live API is marked
+`@pytest.mark.integration` and deselected by default.
 
 ## Architecture Notes
 
 **Category-league specific.** Prompts assume a 9-cat league and encode the
-strategy: target close categories, do not chase blowouts, a 5-4 win counts the
+strategy: target close categories, don't chase blowouts, a 5-4 win counts the
 same as 9-0. Points and dynasty leagues are out of scope.
+
+**Reports are typed, not prose.** Gemini returns `ScoutReport` and `TradeVerdict`
+as response schemas, so a model that ignores the requested shape fails loudly
+instead of producing something unrenderable. A schema cannot be combined with
+the Google Search tool, so the trade path — which needs live injury news — keeps
+search and structures its prose in a second Flash pass.
+
+**Services raise, callers render.** No service returns `None`, `[]`, or an error
+string to signal failure; those are indistinguishable from real results. An
+empty list is a valid answer (no search matches); a failed request is not.
 
 **Two caches, two invalidation strategies.** The NBA schedule is TTL-based (24h).
 The league game log invalidates at 1:00 AM and 3:00 PM **Pacific** — after games
-end and before they start — so a report never mixes stale box scores into a live
-matchup. Both boundaries are anchored to `America/Los_Angeles` and timestamps are
-stored as UTC, so the behaviour is identical wherever the machine is.
-
-**Services raise, `main.py` renders.** No service returns `None`, `[]`, or an
-error string to signal failure; those are indistinguishable from real results.
-They raise a `FrontOfficeError` subclass, and the CLI catches it. An empty list
-is a valid answer (no search matches); a failed request is not.
+end, before they start — so a report never mixes stale box scores into a live
+matchup. Both are anchored to `America/Los_Angeles` with timestamps stored as
+UTC, so behaviour is identical wherever the machine is.
 
 **Remaining-game counts are zone-independent.** The matchup *window* test uses
-the NBA game-date label (what Yahoo's matchup dates also mean), while the
+the NBA game-date label (what Yahoo's matchup dates also mean); the
 *already-played* test uses the true tip-off instant in UTC. "Remaining" means not
-yet started. The status filter still runs, since a cached schedule can be 24h old
-and its statuses correspondingly stale.
+yet started. The status filter still runs, since a cached schedule can be 24h old.
 
 **Rate limiting is deliberate.** `nba_api` calls are spaced by
-`settings.nba_api_delay` (4s default) and retried only on transient failures —
-timeouts, 5xx, and the non-JSON body stats.nba.com serves when throttling. A 4xx
-or a changed payload shape fails immediately rather than burning the budget.
+`settings.nba_api_delay` and retried only on transient failures — timeouts, 5xx,
+and the non-JSON body stats.nba.com serves when throttling. A 4xx or a changed
+payload shape fails immediately rather than burning the budget.
 
-## Testing
-
-```bash
-just test
-```
-
-The default suite is hermetic: no network, no credentials, no cache file on disk.
-Tests seed state directly rather than letting `__init__` read from disk. Anything
-touching a live API is marked `@pytest.mark.integration` and deselected by
-default.
-
-Coverage targets the logic where a silent error changes a real decision —
-volume-weighted FG%/FT%, cache staleness boundaries, remaining-game counting,
-retry classification, and command parsing.
-
-## Platform Support
-
-Runs on macOS, Linux and Windows.
-
-**In the application**
-- `pyreadline3` is installed only on Windows (`sys_platform == 'win32'`), giving
-  the REPL the arrow-key history `readline` provides elsewhere. The import is
-  guarded, so a missing module degrades rather than crashes.
-- The Yahoo OAuth2 flow shells out to the `yahoofantasy` CLI — `yahoofantasy.exe`
-  under `.venv\Scripts\` on Windows, `yahoofantasy` on PATH elsewhere.
-  `YahooFantasyClient.login` probes for the former and falls back to the latter.
-- `main()` reconfigures stdout/stderr to UTF-8. The UI prints emoji and
-  box-drawing characters; Windows sends those to a console as UTF-16 without
-  trouble, but falls back to cp1252 as soon as output is redirected to a file or
-  pipe, where they would raise `UnicodeEncodeError` and kill the process.
-- All filesystem access goes through `pathlib`, and cache reads/writes pass
-  `encoding="utf-8"` explicitly rather than inheriting the locale default.
-
-**In the tooling**
-- Recipes and hooks call tools through `uv run`, never a `.venv/bin` or
-  `.venv\Scripts` path.
-- Nothing depends on a POSIX shell — `just clean` is `scripts/clean.py` for
-  exactly this reason.
-- `.gitattributes` pins `eol=lf` and ruff is configured to match, so a Windows
-  checkout cannot produce a diff that only changes line endings.
-- `uv.lock` is resolved universally: `pyreadline3` and `colorama` carry
-  `sys_platform == 'win32'` markers, so `uv sync` installs the right set.
+**Platform.** Runs on macOS, Linux and Windows. `pyreadline3` and `tzdata` are
+installed only on Windows; `main()` reconfigures stdout to UTF-8 so redirected
+output survives a cp1252 locale; `.gitattributes` pins `eol=lf`.
 
 ## Security
 
-- Never commit `.env`, `.yahoofantasy`, or `.nba_cache.json` — all three are gitignored
-- `detect-private-key` runs as a pre-commit hook
-- Credentials are read only through `AppSettings`; no `os.getenv` at call sites
-
-## Project Layout
-
-```text
-the-front-office/
-├── src/the_front_office/
-│   ├── clients/           # External API wrappers (yahoo, nba, gemini)
-│   ├── config/            # Validated settings + AI prompt templates
-│   ├── scout/             # Waiver wire orchestrator
-│   ├── trade/             # Trade evaluation orchestrator
-│   ├── services/          # Shared player-context builder
-│   ├── exceptions.py      # Domain exception hierarchy
-│   └── main.py            # Interactive REPL
-├── tests/                 # Hermetic pytest suite
-├── .agent/rules/rules.md  # Agent-facing project rules
-├── Brewfile               # System tooling (just, uv)
-├── justfile               # Task runner
-├── pyproject.toml         # Package metadata, dependencies, tool config
-└── uv.lock                # Pinned dependency graph
-```
-
-## Roadmap
-
-- [x] Connectivity — OAuth2 and roster sync
-- [x] Waiver engine — free agent scan summarised with matchup context
-- [x] Interactive CLI
-- [x] Trade war room — shutdown risk, roster awareness, live search
-- [ ] Dashboard MVP — web-based Morning Scout Report
+Never commit `.env`, `.yahoofantasy`, or `.nba_cache.json` — all three are
+gitignored, and `detect-private-key` runs as a pre-commit hook. Credentials are
+read only through `AppSettings`.
