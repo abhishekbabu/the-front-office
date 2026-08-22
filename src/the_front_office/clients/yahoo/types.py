@@ -2,6 +2,7 @@
 Yahoo Fantasy API type definitions.
 """
 
+from dataclasses import dataclass
 from enum import Enum
 
 
@@ -54,3 +55,16 @@ class PlayerPosition(str, Enum):
     GUARD = "G"
     FORWARD = "F"
     UTILITY = "Util"
+
+
+@dataclass
+class MatchupInfo:
+    """The current matchup, fetched once and used for both context and dates."""
+
+    context: str = ""
+    week_start: str = ""
+    week_end: str = ""
+
+    @property
+    def has_dates(self) -> bool:
+        return bool(self.week_start and self.week_end)
