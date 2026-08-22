@@ -64,7 +64,8 @@ value fails at startup naming the field, not mid-report.
 ## Usage
 
 ```bash
-just run
+just ui     # web UI at http://localhost:8501
+just run    # interactive CLI
 ```
 
 First run opens a browser for the Yahoo OAuth2 handshake; the token is cached in
@@ -77,6 +78,11 @@ First run opens a browser for the Yahoo OAuth2 handshake; the token is cached in
 | `/rosters` · `/my-roster` | Team rosters |
 | `/matchup` | Current matchup score and category breakdown |
 | `/help` · `/quit` | — |
+
+The web UI covers the same ground: a Scout page, a Trade page, and a team view
+with the matchup category table and roster. Both render the same validated
+`ScoutReport` and `TradeVerdict` models — the CLI through `render.py`, the UI
+through `ui/app.py`.
 
 `/scout` and `/trade` accept `--mock`, which swaps Gemini for canned responses so
 you can exercise the report path without spending tokens. Yahoo stays live —
@@ -107,6 +113,10 @@ Yahoo, NBA and Gemini. Anything hitting a live API is marked
 **Category-league specific.** Prompts assume a 9-cat league and encode the
 strategy: target close categories, don't chase blowouts, a 5-4 win counts the
 same as 9-0. Points and dynasty leagues are out of scope.
+
+**One set of models, two front ends.** The engines return validated
+`ScoutReport` / `TradeVerdict` and know nothing about presentation, so the CLI
+and the Streamlit UI are interchangeable renderers over the same data.
 
 **Reports are typed, not prose.** Gemini returns `ScoutReport` and `TradeVerdict`
 as response schemas, so a model that ignores the requested shape fails loudly

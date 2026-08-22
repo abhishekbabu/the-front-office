@@ -22,6 +22,7 @@ dependencies = [
     "requests>=2.32.0,<3",
     "pandas>=2.2.0,<3",
     "tenacity>=9.0.0,<10",
+    "streamlit>=1.40.0,<2",
     "pyreadline3>=3.4,<4; sys_platform == 'win32'",
     # zoneinfo reads the OS tz database, which Windows does not ship. Without
     # this, ZoneInfo("America/Los_Angeles") raises ZoneInfoNotFoundError there.
@@ -96,7 +97,9 @@ omit = [
     # Presentation shells: exercised by hand, not worth mocking a terminal or
     # a Streamlit runtime for. The logic they call is covered directly.
     "*/main.py",
-    "*/ui/*",
+    # app.py's page functions wire Streamlit widgets together; its render and
+    # data helpers are tested directly in tests/test_ui_render.py.
+    "*/ui/app.py",
 ]
 
 [tool.coverage.report]

@@ -76,6 +76,10 @@ hooks:
 run:
     uv run python -m the_front_office.main
 
+# Start the web UI (http://localhost:8501)
+ui:
+    uv run streamlit run src/the_front_office/ui/app.py
+
 # ============================================================================
 # Housekeeping
 # ============================================================================

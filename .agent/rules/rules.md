@@ -56,6 +56,12 @@ scripts in `scripts/` instead.
 **Secrets.** Never commit `.env`, `.yahoofantasy`, or `.nba_cache.json`. Read
 config through the `settings` singleton, never `os.getenv` at a call site.
 
+**UI.** Streamlit reruns the whole script on every interaction, so anything
+expensive or side-effecting must be cached (`st.cache_resource` for clients,
+`st.cache_data` for values). Put computation in `ui/data.py` where it is
+testable; `ui/app.py` only lays out widgets. Keep `main()` behind the
+`__name__ == "__main__"` guard so the module stays importable.
+
 ## Testing
 
 Mirror the source layout. The default suite must stay hermetic: no network, no
