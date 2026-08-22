@@ -32,9 +32,57 @@ def test_follow_up_chat_is_seeded_with_the_report() -> None:
     _scout(FakeYahoo(), ai=ai).start_analysis()
     roles = [item["role"] for item in ai.history]
     assert roles == ["user", "model"]
-    assert "LEAGUE RULES" in ai.history[0]["parts"][0]  # the prompt that was sent
     # The model turn is the report itself, as JSON the follow-up can reason over.
     assert ScoutReport.model_validate_json(ai.history[1]["parts"][0]) == MOCK_SCOUT_REPORT
+
+
+def test_follow_up_is_seeded_with_a_briefing_not_the_whole_prompt() -> None:
+    """The history is resent on every follow-up, so the prompt's free-agent
+    block — over half its volume — must not ride along."""
+    ai = FakeAI()
+    _scout(_rich_yahoo(), ai=ai).start_analysis()
+    briefing, prompt = ai.history[0]["parts"][0], ai.prompts[0]
+
+    assert len(briefing) < len(prompt) / 2
+    assert "LEAGUE RULES" not in briefing  # generation-time instructions
+    assert "YOUR TASK" not in briefing
+
+
+def test_briefing_keeps_what_a_follow_up_needs() -> None:
+    ai = FakeAI()
+    _scout(_rich_yahoo(), ai=ai).start_analysis()
+    briefing = ai.history[0]["parts"][0]
+
+    assert "CURRENT MATCHUP" in briefing  # why a category is close
+    assert "TRANSACTION CONTEXT" in briefing  # why only three adds
+    assert "CURRENT ROSTER" in briefing  # why that drop
+    assert "Roster Player 0" in briefing
+
+
+def test_briefing_carries_only_the_recommended_free_agents() -> None:
+    """_rich_yahoo offers nine free agents; the canned report names one."""
+    ai = FakeAI()
+    recommended = MOCK_SCOUT_REPORT.targets[0].player_name
+    _scout(_rich_yahoo(recommended=recommended), ai=ai).start_analysis()
+    briefing = ai.history[0]["parts"][0]
+
+    assert recommended in briefing
+    assert "Free Agent 7" not in briefing
+    assert "Free Agent 3" not in briefing
+
+
+def test_briefing_tells_the_model_the_list_is_partial() -> None:
+    """Otherwise it would invent numbers for a player it can no longer see."""
+    ai = FakeAI()
+    _scout(_rich_yahoo(), ai=ai).start_analysis()
+    assert "re-run the report" in ai.history[0]["parts"][0]
+
+
+def test_matchup_is_fetched_once_not_twice() -> None:
+    """get_matchup_context and get_matchup_dates each used to sync their own Week."""
+    yahoo = _rich_yahoo()
+    _scout(yahoo).start_analysis()
+    assert yahoo.matchup_fetches == 1
 
 
 def test_missing_team_raises_before_any_ai_call() -> None:
@@ -51,6 +99,15 @@ def test_missing_team_raises_before_any_ai_call() -> None:
 
 
 # ── prompt content ──────────────────────────────────────────────────────
+
+
+def _rich_yahoo(recommended: str = "Mock Player One") -> FakeYahoo:
+    """A league with a full roster and several free agents, one of which the
+    canned report recommends."""
+    roster = [make_player(f"Roster Player {i}", key=f"r{i}") for i in range(10)]
+    fas = [make_player(f"Free Agent {i}", key=f"fa{i}") for i in range(8)]
+    fas.append(make_player(recommended, key="rec"))
+    return FakeYahoo(roster=roster, stat_leaders={"BLK": fas, "REB": fas[:3]})
 
 
 def _prompt_for(yahoo: FakeYahoo, nba: FakeNBA | None = None) -> str:

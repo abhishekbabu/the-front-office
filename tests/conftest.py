@@ -53,6 +53,7 @@ class FakeYahoo:
         self.search_results = search_results or {}
         self.adds_used = adds_used
         self.searches: list[str] = []
+        self.matchup_fetches = 0
 
     def get_user_team(self) -> Any:
         team = SimpleNamespace(
@@ -62,11 +63,22 @@ class FakeYahoo:
         )
         return team
 
+    def get_matchup(self, my_team: Any) -> Any:
+        from the_front_office.clients.yahoo.types import MatchupInfo
+
+        self.matchup_fetches += 1
+        return MatchupInfo(
+            context="CURRENT MATCHUP: vs Their Team\n- BLK: 12 vs 17",
+            week_start=self.matchup_dates[0],
+            week_end=self.matchup_dates[1],
+        )
+
     def get_matchup_context(self, my_team: Any) -> str:
-        return "CURRENT MATCHUP: vs Their Team\n- BLK: 12 vs 17"
+        return self.get_matchup(my_team).context
 
     def get_matchup_dates(self, my_team: Any) -> tuple[str, str]:
-        return self.matchup_dates
+        info = self.get_matchup(my_team)
+        return (info.week_start, info.week_end)
 
     def fetch_top_by_stat(self, per_stat: int = 10) -> dict[str, list[Any]]:
         return self.stat_leaders

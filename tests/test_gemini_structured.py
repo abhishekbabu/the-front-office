@@ -139,3 +139,49 @@ def test_unparseable_json_raises_rather_than_returning_an_empty_trade() -> None:
     c, _ = _client(SimpleNamespace(text="not json at all"))
     with pytest.raises(AIResponseError):
         c.parse_trade_string("x")
+
+
+# ── usage logging ───────────────────────────────────────────────────────
+
+
+class Usage:
+    prompt_token_count = 3400
+    candidates_token_count = 310
+    total_token_count = 3710
+    cached_content_token_count = 0
+
+
+def test_token_usage_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+    """Gemini Pro on a large prompt is the only real expense; nothing else
+    measures it."""
+    c, _ = _client(SimpleNamespace(parsed=MOCK_SCOUT_REPORT, text="{}", usage_metadata=Usage()))
+    with caplog.at_level("INFO"):
+        c.generate_structured("p", ScoutReport)
+    assert "3400 in" in caplog.text
+    assert "310 out" in caplog.text
+    assert MODEL_PRO in caplog.text
+
+
+def test_structuring_logs_against_flash(caplog: pytest.LogCaptureFixture) -> None:
+    c, _ = _client(SimpleNamespace(parsed=MOCK_TRADE_VERDICT, text="{}", usage_metadata=Usage()))
+    with caplog.at_level("INFO"):
+        c.structure_text("prose", TradeVerdict, instruction="x")
+    assert MODEL_FLASH in caplog.text
+
+
+def test_missing_usage_metadata_still_logs_latency(caplog: pytest.LogCaptureFixture) -> None:
+    """An SDK change that drops usage_metadata must not break the call."""
+    c, _ = _client(SimpleNamespace(parsed=MOCK_SCOUT_REPORT, text="{}"))
+    with caplog.at_level("INFO"):
+        c.generate_structured("p", ScoutReport)
+    assert "no usage metadata" in caplog.text
+
+
+def test_cached_tokens_are_reported_when_present(caplog: pytest.LogCaptureFixture) -> None:
+    class Cached(Usage):
+        cached_content_token_count = 1200
+
+    c, _ = _client(SimpleNamespace(parsed=MOCK_SCOUT_REPORT, text="{}", usage_metadata=Cached()))
+    with caplog.at_level("INFO"):
+        c.generate_structured("p", ScoutReport)
+    assert "1200 cached" in caplog.text

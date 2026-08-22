@@ -42,6 +42,7 @@ class PlayerContextBuilder:
         matchup_start: date | None = None,
         matchup_end: date | None = None,
         annotations: dict[str, str] | None = None,
+        remaining_games: dict[str, int] | None = None,
     ) -> str:
         """
         Build a context string for a list of players.
@@ -52,17 +53,32 @@ class PlayerContextBuilder:
             matchup_end: End date of matchup
             annotations: Optional map of player_key -> extra text (e.g. "Top in: PTS")
         """
-        if not players:
-            return ""
+        return "".join(
+            self.build_player_lines(players, matchup_start, matchup_end, annotations, remaining_games).values()
+        )
 
-        # 1. Bulk fetch schedule
-        remaining_games: dict[str, int] = {}
-        if matchup_start and matchup_end:
+    def build_player_lines(
+        self,
+        players: list[Player],
+        matchup_start: date | None = None,
+        matchup_end: date | None = None,
+        annotations: dict[str, str] | None = None,
+        remaining_games: dict[str, int] | None = None,
+    ) -> dict[str, str]:
+        """Same as build_context_for_players, keyed by player name.
+
+        Lets a caller keep only the lines it needs — the follow-up briefing
+        carries the recommended free agents rather than all thirty.
+        """
+        if not players:
+            return {}
+
+        remaining_games = remaining_games or {}
+        if not remaining_games and matchup_start and matchup_end:
             teams = [p.editorial_team_abbr for p in players]
             remaining_games = self.nba.get_remaining_games_bulk(teams, matchup_start, matchup_end)
 
-        # 2. Build string
-        context_str = ""
+        lines: dict[str, str] = {}
         for p in players:
             # Stats
             stats_dict = self.nba.get_player_stats(p.name.full)
@@ -90,9 +106,9 @@ class PlayerContextBuilder:
             if annotations and p.player_key in annotations:
                 note = f" {annotations[p.player_key]}"
 
-            context_str += f"- {p.name.full} ({p.display_position}){il_str}{status_str}{games_str}{note}"
+            line = f"- {p.name.full} ({p.display_position}){il_str}{status_str}{games_str}{note}"
             if stats_dict:
-                context_str += f": {self._format_stats(stats_dict)}"
-            context_str += "\n"
+                line += f": {self._format_stats(stats_dict)}"
+            lines[p.name.full] = line + "\n"
 
-        return context_str
+        return lines

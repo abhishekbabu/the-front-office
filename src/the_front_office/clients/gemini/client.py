@@ -1,6 +1,7 @@
 """Gemini AI client wrapper."""
 
 import logging
+import time
 from typing import TYPE_CHECKING, TypeVar
 
 from google import genai
@@ -35,6 +36,27 @@ class GeminiClient:
         else:
             self.client = genai.Client(api_key=api_key)
 
+    @staticmethod
+    def _log_usage(model: str, response: object, elapsed: float) -> None:
+        """Record what a call cost.
+
+        Gemini Pro on a large prompt is the only real expense here, and nothing
+        else measures it — without this there is no way to answer "what does a
+        scout report cost?" from production logs.
+        """
+        usage = getattr(response, "usage_metadata", None)
+        if usage is None:
+            logger.info(f"{model} responded in {elapsed:.2f}s (no usage metadata)")
+            return
+        prompt_tokens = getattr(usage, "prompt_token_count", None)
+        output_tokens = getattr(usage, "candidates_token_count", None)
+        total = getattr(usage, "total_token_count", None)
+        cached = getattr(usage, "cached_content_token_count", None)
+        logger.info(
+            f"{model} responded in {elapsed:.2f}s — "
+            f"{prompt_tokens} in, {output_tokens} out, {total} total" + (f", {cached} cached" if cached else "")
+        )
+
     def generate_structured(self, prompt: str, schema: type[TModel], mock: TModel | None = None) -> TModel:
         """Generate a response conforming to `schema`.
 
@@ -59,11 +81,13 @@ class GeminiClient:
             raise AIUnavailableError()
 
         try:
+            started = time.perf_counter()
             response = self.client.models.generate_content(
                 model=MODEL_PRO,
                 contents=prompt,
                 config={"response_mime_type": "application/json", "response_schema": schema},
             )
+            self._log_usage(MODEL_PRO, response, time.perf_counter() - started)
         except Exception as e:
             logger.error(f"Structured generation failed: {e}")
             raise AIResponseError(f"Gemini call failed: {e}") from e
@@ -90,11 +114,13 @@ class GeminiClient:
             f"{instruction}\n\nConvert the following analysis verbatim — do not add, drop or soften anything:\n\n{text}"
         )
         try:
+            started = time.perf_counter()
             response = self.client.models.generate_content(
                 model=MODEL_FLASH,
                 contents=prompt,
                 config={"response_mime_type": "application/json", "response_schema": schema},
             )
+            self._log_usage(MODEL_FLASH, response, time.perf_counter() - started)
         except Exception as e:
             logger.error(f"Structuring failed: {e}")
             raise AIResponseError(f"Could not structure the AI response: {e}") from e
@@ -169,9 +195,11 @@ class GeminiClient:
         """
 
         try:
+            started = time.perf_counter()
             response = self.client.models.generate_content(
                 model=MODEL_FLASH, contents=prompt, config={"response_mime_type": "application/json"}
             )
+            self._log_usage(MODEL_FLASH, response, time.perf_counter() - started)
 
             import json
 

@@ -146,6 +146,19 @@ the NBA game-date label (what Yahoo's matchup dates also mean); the
 *already-played* test uses the true tip-off instant in UTC. "Remaining" means not
 yet started. The status filter still runs, since a cached schedule can be 24h old.
 
+**Fetching is batched, parallel, and freshness-aware.** The eight category
+queries run concurrently (~7.7x faster than serial on a 150ms round trip), with
+persistence writes kept on one thread because yahoofantasy's cache is a
+read-modify-write of a single pickle. The scoreboard is refreshed on a 120s TTL
+rather than yahoofantasy's default hour, since it is what "which categories are
+close" is computed from.
+
+**Follow-ups are seeded with a briefing, not the prompt.** Chat history is
+resent on every turn, and the free-agent block is over half the prompt by
+volume. The briefing carries the matchup, budget, schedule, full roster and the
+recommended players only — 63% smaller — and tells the model to decline rather
+than invent numbers for a player it can no longer see.
+
 **Rate limiting is deliberate.** `nba_api` calls are spaced by
 `settings.nba_api_delay` and retried only on transient failures — timeouts, 5xx,
 and the non-JSON body stats.nba.com serves when throttling. A 4xx or a changed

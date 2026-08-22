@@ -37,6 +37,14 @@ Keep `GameRecord["date"]` (a game-date label, for window tests) distinct from
 yahoofantasy SDK because it sets attributes via `setattr` at runtime — do not
 re-enable it there, and do not disable anything else globally.
 
+**Yahoo fetching.** yahoofantasy's persistence is a read-modify-write of one
+shared pickle, so never call `_load_or_fetch`/`_save` from a thread pool — only
+`make_request` is safe to parallelise. Live-changing data (the scoreboard) needs
+an explicit short `persist_ttl`; the default is an hour.
+
+**Chat history is resent every turn.** Seed follow-up chats with a briefing, not
+the generation prompt, and say explicitly what was left out.
+
 **AI calls.** `gemini-2.5-pro` for analysis, `gemini-2.5-flash` for parsing and
 structuring. Never a `-preview` model. Reports come back as Pydantic models via
 a response schema, never as prose to be regex'd. A response schema cannot be
