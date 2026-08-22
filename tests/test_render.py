@@ -1,9 +1,8 @@
 """Tests for terminal rendering of structured reports."""
 
 from the_front_office.render import render_scout_report, render_trade_verdict
-from the_front_office.report.mocks import MOCK_SCOUT_REPORT
+from the_front_office.report.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
 from the_front_office.report.types import Move, ScoutReport
-from the_front_office.trade.types import MOCK_TRADE_VERDICT
 
 
 def _rec(**overrides: object) -> Move:
@@ -71,24 +70,24 @@ def test_long_prose_is_wrapped_not_truncated() -> None:
 
 def test_trade_verdict_surfaces_every_field() -> None:
     out = render_trade_verdict(MOCK_TRADE_VERDICT)
-    for heading in ("VERDICT:", "IMPACT", "SCHEDULE", "SHUTDOWN RISK", "STRATEGY"):
+    for heading in ("VERDICT:", "IMPACT", "SCHEDULE", "RISK", "STRATEGY"):
         assert heading in out
     assert MOCK_TRADE_VERDICT.verdict in out
-    for cat in MOCK_TRADE_VERDICT.categories_gained:
+    for cat in MOCK_TRADE_VERDICT.gains:
         assert cat in out
 
 
 def test_empty_category_lists_render_as_a_dash() -> None:
-    from the_front_office.trade.types import TradeVerdict
+    from the_front_office.report.types import TradeVerdict
 
     v = TradeVerdict(
         verdict="REJECT",
         verdict_detail="d",
-        categories_gained=[],
-        categories_lost=[],
+        gains=[],
+        losses=[],
         impact="i",
-        schedule_note="s",
-        shutdown_risk="r",
+        schedule="s",
+        risk="r",
         strategy="st",
     )
     out = render_trade_verdict(v)

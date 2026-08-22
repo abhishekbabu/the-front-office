@@ -6,8 +6,10 @@ import pytest
 from conftest import FakeAI, FakeNBA, FakeYahoo, make_player
 
 from the_front_office.exceptions import PlayerNotFoundError, TradeParseError
+from the_front_office.report.mocks import MOCK_TRADE_VERDICT
+from the_front_office.report.types import TradeVerdict
 from the_front_office.trade.engine import TradeEvaluator
-from the_front_office.trade.types import MOCK_TRADE_VERDICT, TradeProposal, TradeVerdict
+from the_front_office.trade.types import TradeProposal
 
 
 def _evaluator(yahoo: FakeYahoo, ai: FakeAI | None = None) -> TradeEvaluator:

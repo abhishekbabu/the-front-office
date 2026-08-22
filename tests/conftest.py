@@ -10,8 +10,7 @@ from typing import Any
 
 import pytest
 
-from the_front_office.report.mocks import MOCK_SCOUT_REPORT
-from the_front_office.trade.types import MOCK_TRADE_VERDICT
+from the_front_office.report.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
 
 
 def make_player(
@@ -157,6 +156,21 @@ class FakeAI:
             if self.proposal is not None
             else TradeProposal(giving=["LeBron James"], receiving=["Jayson Tatum"])
         )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_from_local_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Blank every credential-derived setting for the duration of a test.
+
+    `settings` is built from the developer's .env at import time. Without this a
+    test asserting "unconfigured" behaviour passes in CI, which has no .env, and
+    fails on a machine that does — or worse, a test quietly exercises a real
+    account. Tests that need a value set it explicitly.
+    """
+    from the_front_office.config.settings import settings
+
+    for field in ("sleeper_username", "sleeper_league_id", "gemini_api_key", "yahoo_client_id", "yahoo_client_secret"):
+        monkeypatch.setattr(settings, field, None)
 
 
 @pytest.fixture

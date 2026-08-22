@@ -8,9 +8,8 @@ import pytest
 from the_front_office.clients.gemini.client import GeminiClient
 from the_front_office.clients.gemini.constants import MODEL_FLASH, MODEL_PRO
 from the_front_office.exceptions import AIResponseError, AIUnavailableError
-from the_front_office.report.mocks import MOCK_SCOUT_REPORT
-from the_front_office.report.types import ScoutReport
-from the_front_office.trade.types import MOCK_TRADE_VERDICT, TradeVerdict
+from the_front_office.report.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
+from the_front_office.report.types import ScoutReport, TradeVerdict
 
 
 class FakeModels:

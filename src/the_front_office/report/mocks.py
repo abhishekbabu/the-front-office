@@ -1,6 +1,6 @@
 """Canned reports for `--mock`, so the report path runs without credentials."""
 
-from the_front_office.report.types import Move, ScoutReport
+from the_front_office.report.types import Move, ScoutReport, TradeVerdict
 
 MOCK_SCOUT_REPORT = ScoutReport(
     situation=(
@@ -41,4 +41,16 @@ MOCK_SCOUT_REPORT = ScoutReport(
         ),
     ],
     strategy="[MOCK] Add multi-category bigs to flip BLK without surrendering FG%.",
+)
+
+
+MOCK_TRADE_VERDICT = TradeVerdict(
+    verdict="ACCEPT",
+    verdict_detail="[MOCK] The incoming side is the better rest-of-season value.",
+    gains=["REB", "BLK"],
+    losses=["AST", "FT%"],
+    impact="[MOCK] Net gain in REB and BLK on recent form, roughly neutral scoring, slight FT% dip.",
+    schedule="[MOCK] Incoming player has one extra game in each playoff week.",
+    risk="[MOCK] Neither incoming player is on a tanking team or carrying a designation.",
+    strategy="[MOCK] Accept, then stream a guard to cover the AST dip.",
 )

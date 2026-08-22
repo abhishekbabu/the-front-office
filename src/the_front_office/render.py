@@ -7,8 +7,7 @@ the same models its own way, and one renderer serves every sport.
 
 import textwrap
 
-from the_front_office.report.types import Move, ScoutReport
-from the_front_office.trade.types import TradeVerdict
+from the_front_office.report.types import Move, ScoutReport, TradeVerdict
 
 _INDENT = "  "
 
@@ -52,8 +51,8 @@ def render_scout_report(report: ScoutReport) -> str:
 
 def render_trade_verdict(verdict: TradeVerdict) -> str:
     """Render a trade verdict for the terminal."""
-    gained = ", ".join(verdict.categories_gained) or "—"
-    lost = ", ".join(verdict.categories_lost) or "—"
+    gained = ", ".join(verdict.gains) or "—"
+    lost = ", ".join(verdict.losses) or "—"
     return "\n".join(
         [
             f"{_INDENT}VERDICT: {verdict.verdict}",
@@ -66,10 +65,10 @@ def render_trade_verdict(verdict: TradeVerdict) -> str:
             _wrap(verdict.impact),
             "",
             f"{_INDENT}SCHEDULE",
-            _wrap(verdict.schedule_note),
+            _wrap(verdict.schedule),
             "",
-            f"{_INDENT}SHUTDOWN RISK",
-            _wrap(verdict.shutdown_risk),
+            f"{_INDENT}RISK",
+            _wrap(verdict.risk),
             "",
             f"{_INDENT}STRATEGY",
             _wrap(verdict.strategy),

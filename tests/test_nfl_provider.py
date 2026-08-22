@@ -295,3 +295,27 @@ def test_a_player_is_never_both_starting_and_benched() -> None:
     starting = {line.split(": ")[1].split(" (")[0] for line in lineup_block.strip().splitlines() if ": " in line}
     benched = {line.split("- ")[1].split(" (")[0] for line in bench_block.strip().splitlines() if line.startswith("- ")}
     assert not (starting & benched), f"{starting & benched} both starting and benched"
+
+
+def test_the_bench_gap_matches_the_printed_figures() -> None:
+    """Regression: the delta was computed from unrounded points while the totals
+    were printed rounded, so the prompt could show 124.1 - 121.4 = 2.8."""
+    import re
+
+    projections = {
+        "qb1": _proj("qb1", "Star QB", "QB", 22.04),
+        "rb1": _proj("rb1", "Good RB", "RB", 18.06),
+        "rb2": _proj("rb2", "Bad RB", "RB", 4.04),
+    }
+    client = FakeSleeper(
+        league=SMALL_LEAGUE,
+        projections=projections,
+        rosters=[
+            SleeperRoster(roster_id=1, owner_id=MY_ID, player_ids=["qb1", "rb1", "rb2"], starter_ids=["qb1", "rb2"])
+        ],
+    )
+    constraints = _provider(client).build_context("L1").constraints
+    current, best = (float(x) for x in re.findall(r"projects (\d+\.\d)", constraints))
+    gap_match = re.search(r"so (\d+\.\d) points are sitting", constraints)
+    assert gap_match is not None
+    assert float(gap_match.group(1)) == round(best - current, 1)

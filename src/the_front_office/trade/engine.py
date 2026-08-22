@@ -12,8 +12,9 @@ from the_front_office.clients.nba.client import NBAClient
 from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.config.constants import TRADE_PROMPT_TEMPLATE
 from the_front_office.exceptions import AIResponseError, PlayerNotFoundError, TradeParseError
+from the_front_office.report.mocks import MOCK_TRADE_VERDICT
+from the_front_office.report.types import TradeVerdict
 from the_front_office.services.context_builder import PlayerContextBuilder
-from the_front_office.trade.types import MOCK_TRADE_VERDICT, TradeVerdict
 
 if TYPE_CHECKING:
     from google.genai.chats import Chat

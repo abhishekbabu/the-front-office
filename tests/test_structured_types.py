@@ -4,9 +4,8 @@ import pytest
 from google.genai import types as genai_types
 from pydantic import ValidationError
 
-from the_front_office.report.mocks import MOCK_SCOUT_REPORT
-from the_front_office.report.types import Move, ScoutReport
-from the_front_office.trade.types import MOCK_TRADE_VERDICT, TradeVerdict
+from the_front_office.report.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
+from the_front_office.report.types import Move, ScoutReport, TradeVerdict
 
 # Validated from dicts rather than constructors: the runtime rejection is the
 # point, and a deliberately-invalid literal in a constructor call is a static
@@ -25,11 +24,11 @@ VALID_MOVE: dict[str, object] = {
 VALID_VERDICT: dict[str, object] = {
     "verdict": "ACCEPT",
     "verdict_detail": "d",
-    "categories_gained": ["REB"],
-    "categories_lost": ["AST"],
+    "gains": ["REB"],
+    "losses": ["AST"],
     "impact": "i",
-    "schedule_note": "s",
-    "shutdown_risk": "r",
+    "schedule": "s",
+    "risk": "r",
     "strategy": "st",
 }
 

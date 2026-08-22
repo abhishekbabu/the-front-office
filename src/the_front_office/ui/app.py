@@ -16,11 +16,10 @@ import streamlit as st
 from the_front_office.config.logging import setup_logging
 from the_front_office.exceptions import FrontOfficeError
 from the_front_office.report.engine import ScoutEngine
-from the_front_office.report.types import Move, ScoutReport
+from the_front_office.report.types import Move, ScoutReport, TradeVerdict
 from the_front_office.sports.nba.provider import NBAProvider
 from the_front_office.sports.nfl.provider import NFLProvider
 from the_front_office.trade.engine import TradeEvaluator
-from the_front_office.trade.types import TradeVerdict
 from the_front_office.ui import data
 
 VERDICT_COLOURS = {"ACCEPT": "green", "REJECT": "red", "COUNTER": "orange"}
@@ -80,15 +79,15 @@ def render_verdict(verdict: TradeVerdict) -> None:
     st.write(verdict.verdict_detail)
 
     gained, lost = st.columns(2)
-    gained.metric("Categories gained", len(verdict.categories_gained))
-    gained.write(" ".join(f"`{c}`" for c in verdict.categories_gained) or "—")
-    lost.metric("Categories lost", len(verdict.categories_lost))
-    lost.write(" ".join(f"`{c}`" for c in verdict.categories_lost) or "—")
+    gained.metric("Gains", len(verdict.gains))
+    gained.write(" ".join(f"`{c}`" for c in verdict.gains) or "—")
+    lost.metric("Losses", len(verdict.losses))
+    lost.write(" ".join(f"`{c}`" for c in verdict.losses) or "—")
 
     for heading, body in [
         ("Impact", verdict.impact),
-        ("Schedule", verdict.schedule_note),
-        ("Shutdown risk", verdict.shutdown_risk),
+        ("Schedule", verdict.schedule),
+        ("Risk", verdict.risk),
         ("Strategy", verdict.strategy),
     ]:
         st.subheader(heading)

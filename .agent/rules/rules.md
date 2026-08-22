@@ -73,8 +73,9 @@ testable; `ui/app.py` only lays out widgets. Keep `main()` behind the
 **Adding a sport.** Implement `SportProvider` in `sports/<sport>/provider.py`
 (`list_leagues` + `build_context`) and add a prompt template. Do not add sport
 specifics to `report/`, `render.py` or `ui/` — those are the shared seam. If a
-sport needs a field the shared `Move`/`ScoutReport` lacks, widen those models
-rather than forking them.
+sport needs a field the shared `Move` / `ScoutReport` / `TradeVerdict` lacks,
+widen those models rather than forking them. Keep their field names in the
+league's own vocabulary, not one sport's: `gains`, not `categories_gained`.
 
 ## Testing
 

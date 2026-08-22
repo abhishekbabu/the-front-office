@@ -10,9 +10,8 @@ from typing import Any
 
 import pytest
 
-from the_front_office.report.mocks import MOCK_SCOUT_REPORT
-from the_front_office.report.types import ScoutReport
-from the_front_office.trade.types import MOCK_TRADE_VERDICT, TradeVerdict
+from the_front_office.report.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
+from the_front_office.report.types import ScoutReport, TradeVerdict
 
 
 class Recorder:
@@ -114,7 +113,7 @@ def test_unknown_schedule_is_labelled_not_shown_as_zero(page: Recorder) -> None:
 
 def test_every_verdict_field_reaches_the_page(page: Recorder) -> None:
     _app().render_verdict(MOCK_TRADE_VERDICT)
-    for field in ("verdict_detail", "impact", "schedule_note", "shutdown_risk", "strategy"):
+    for field in ("verdict_detail", "impact", "schedule", "risk", "strategy"):
         assert getattr(MOCK_TRADE_VERDICT, field) in page.text
 
 
@@ -129,23 +128,23 @@ def test_empty_category_lists_render_a_dash(page: Recorder) -> None:
     v = TradeVerdict(
         verdict="REJECT",
         verdict_detail="d",
-        categories_gained=[],
-        categories_lost=[],
+        gains=[],
+        losses=[],
         impact="i",
-        schedule_note="s",
-        shutdown_risk="r",
+        schedule="s",
+        risk="r",
         strategy="st",
     )
     _app().render_verdict(v)
     assert "—" in page.text
-    assert "Categories gained:0" in page.text
+    assert "Gains:0" in page.text
 
 
 def test_verdict_colour_map_covers_every_allowed_verdict() -> None:
     """A new verdict literal without a colour would render gray silently."""
     import typing
 
-    from the_front_office.trade.types import TradeVerdict as TV
+    from the_front_office.report.types import TradeVerdict as TV
 
     allowed = set(typing.get_args(TV.model_fields["verdict"].annotation))
     assert allowed == set(_app().VERDICT_COLOURS)

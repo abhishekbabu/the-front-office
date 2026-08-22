@@ -57,6 +57,37 @@ class ScoutReport(BaseModel):
     strategy: str = Field(description="One-sentence summary of the plan.")
 
 
+class TradeVerdict(BaseModel):
+    """Evaluation of a proposed trade, in any sport.
+
+    The NBA-specific spellings are gone: `categories_gained` became `gains`
+    (categories in a 9-cat league, "RB depth" in football, "attacking returns"
+    in FPL), and `shutdown_risk` — a basketball concept about tanking teams
+    resting stars — became `risk`, which also covers an injury designation or a
+    rotation-prone FPL asset.
+    """
+
+    verdict: Literal["ACCEPT", "REJECT", "COUNTER"] = Field(description="The recommendation.")
+    verdict_detail: str = Field(description="One or two sentences justifying the verdict.")
+    gains: list[str] = Field(
+        description=(
+            "What this trade improves. Short labels in the league's own currency — "
+            "['REB', 'BLK'] for categories, ['RB depth'] for points leagues."
+        )
+    )
+    losses: list[str] = Field(description="What this trade weakens, in the same terms.")
+    impact: str = Field(description="Net change in the league's scoring terms, referencing recent form.")
+    schedule: str = Field(
+        description="How the fixtures or remaining games compare, especially through the playoff weeks."
+    )
+    risk: str = Field(
+        description=(
+            "Availability risk on the incoming side: shutdown on a tanking team, injury designation, or rotation risk."
+        )
+    )
+    strategy: str = Field(description="What to do next, including any counter-offer worth making.")
+
+
 @dataclass
 class SportContext:
     """A rendered prompt plus the parts it was assembled from.

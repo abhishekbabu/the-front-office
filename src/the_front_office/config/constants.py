@@ -72,11 +72,12 @@ compare the two sides based on:
 4. **Roster Awareness**: DO NOT recommend acquiring players that are already on my Current Roster.
 5. **Verdict**: Should I accept, reject, or counter?
 
-Response Format:
-- **Verdict**: [Details]
-- **Impact**: [Details]
-- **Shutdown Risk**: [Details]
-- **Strategy**: [Details]
+Return the evaluation in the required structured form. Field guidance:
+- gains / losses: short labels in this league's own currency (categories here, e.g. ['REB', 'BLK']).
+- impact: the net change, referencing recent form.
+- schedule: how the remaining games compare, especially through the fantasy playoff weeks.
+- risk: availability risk on the incoming side — shutdowns on tanking teams, injury designations.
+- strategy: what to do next, including any counter worth offering.
 """
 
 

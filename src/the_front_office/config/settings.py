@@ -56,6 +56,25 @@ class AppSettings(BaseSettings):
     # ── Logging ─────────────────────────────────────────────────────────
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
+    @field_validator(
+        "gemini_api_key",
+        "yahoo_client_id",
+        "yahoo_client_secret",
+        "sleeper_username",
+        "sleeper_league_id",
+        mode="before",
+    )
+    @classmethod
+    def _blank_is_unset(cls, v: object) -> object:
+        """Treat `KEY=` in .env as absent rather than as an empty string.
+
+        A commented-out or blank line is how people express "I do not use this",
+        and `""` is not None — so a plain `is not None` check would report a
+        credential as present and the failure would surface later, at the API
+        call, instead of at startup.
+        """
+        return None if isinstance(v, str) and not v.strip() else v
+
     @field_validator("log_level", mode="before")
     @classmethod
     def _upper(cls, v: object) -> object:

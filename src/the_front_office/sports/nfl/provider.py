@@ -144,11 +144,15 @@ class NFLProvider:
         trending_str = self._trending(projections, players)
 
         situation = self._situation(league, roster, league_id, week)
-        on_bench = round(lineup_points(best) - lineup_points(lineup), 1)
+        # Derive the gap from the same rounded figures that are printed, or the
+        # prompt contradicts itself: 124.1 - 121.4 shown alongside a 2.8 delta.
+        current_points = round(lineup_points(lineup), 1)
+        best_points = round(lineup_points(best), 1)
+        on_bench = round(best_points - current_points, 1)
         constraints = (
             f"LINEUP SLOTS: {', '.join(slots)}\n"
-            f"- Current lineup projects {lineup_points(lineup):.1f} points.\n"
-            f"- The best legal lineup projects {lineup_points(best):.1f}"
+            f"- Current lineup projects {current_points:.1f} points.\n"
+            f"- The best legal lineup projects {best_points:.1f}"
             + (f", so {on_bench:.1f} points are sitting on the bench.\n" if on_bench > 0 else ".\n")
             + "- Bench players score nothing. A start/sit change costs nothing; an add costs a roster spot."
         )
