@@ -13,6 +13,7 @@ from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.config.constants import TRADE_PROMPT_TEMPLATE
 from the_front_office.exceptions import AIResponseError, PlayerNotFoundError, TradeParseError
 from the_front_office.services.context_builder import PlayerContextBuilder
+from the_front_office.trade.types import MOCK_TRADE_VERDICT, TradeVerdict
 
 if TYPE_CHECKING:
     from google.genai.chats import Chat
@@ -68,7 +69,7 @@ class TradeEvaluator:
             raise PlayerNotFoundError(unresolved)
         return resolved
 
-    def evaluate(self, trade_text: str) -> tuple[str, Union["Chat", "MockChatSession"] | None]:
+    def evaluate(self, trade_text: str) -> tuple[TradeVerdict, Union["Chat", "MockChatSession"]]:
         """
         Full trade evaluation flow.
         """
@@ -108,7 +109,10 @@ class TradeEvaluator:
             giving_str=giving_str, receiving_str=receiving_str, matchup_context=matchup_context, roster_str=roster_str
         )
 
-        # 6. AI Analysis — Google Search enabled for live injury/standings data
+        # 6. AI Analysis. Google Search stays enabled here — live injury and
+        # standings news is most of the value in a trade call — and the Gemini
+        # API will not accept a response schema alongside a tool. So the
+        # search-grounded prose is structured in a cheap second pass.
         chat = self.ai.start_chat(enable_search=True)
         try:
             response = chat.send_message(prompt)
@@ -118,4 +122,11 @@ class TradeEvaluator:
 
         if not response.text:
             raise AIResponseError("Gemini returned an empty trade evaluation.")
-        return response.text, chat
+
+        verdict = self.ai.structure_text(
+            response.text,
+            TradeVerdict,
+            instruction="Extract this NBA fantasy trade evaluation into the given structure.",
+            mock=MOCK_TRADE_VERDICT,
+        )
+        return verdict, chat

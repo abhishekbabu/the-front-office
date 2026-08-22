@@ -15,6 +15,7 @@ from yahoofantasy import League, Team  # type: ignore[import-untyped]
 from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.config.logging import setup_logging
 from the_front_office.exceptions import FrontOfficeError
+from the_front_office.render import render_scout_report, render_trade_verdict
 from the_front_office.scout import Scout
 from the_front_office.trade.engine import TradeEvaluator
 
@@ -138,7 +139,7 @@ def _cmd_scout(leagues: list[League], mock: bool = False) -> None:
         except FrontOfficeError as e:
             print(f"  ❌ {e}")
             continue
-        print("\n" + report)
+        print("\n" + render_scout_report(report))
 
         _interactive_followup(chat, "report")
 
@@ -159,11 +160,11 @@ def _cmd_trade(leagues: list[League], args: list[str], mock: bool = False) -> No
 
         print("  ⏳ Analyzing trade... (parsing & enriching data)")
         try:
-            report, chat = evaluator.evaluate(trade_text)
+            verdict, chat = evaluator.evaluate(trade_text)
         except FrontOfficeError as e:
             print(f"  ❌ {e}")
             continue
-        print("\n" + report)
+        print("\n" + render_trade_verdict(verdict))
 
         _interactive_followup(chat, "trade")
 

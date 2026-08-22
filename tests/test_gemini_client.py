@@ -4,12 +4,10 @@ import pytest
 
 from the_front_office.clients.gemini.client import GeminiClient
 from the_front_office.clients.gemini.constants import MODEL_FLASH, MODEL_PRO
-from the_front_office.clients.gemini.types import (
-    MOCK_SCOUT_REPORT,
-    MOCK_TRADE_REPORT,
-    MockChatSession,
-)
-from the_front_office.exceptions import AIUnavailableError
+from the_front_office.clients.gemini.types import MockChatSession
+from the_front_office.exceptions import AIResponseError, AIUnavailableError
+from the_front_office.scout.types import MOCK_SCOUT_REPORT, ScoutReport
+from the_front_office.trade.types import MOCK_TRADE_VERDICT, TradeVerdict
 
 
 def test_mock_mode_never_constructs_a_real_client() -> None:
@@ -31,34 +29,32 @@ def test_mock_start_chat_returns_a_mock_session() -> None:
     assert chat.send_message("why this player?").text is not None
 
 
-def test_first_mock_message_returns_a_report_shaped_reply() -> None:
-    """Regression: --scout --mock used to answer the analysis prompt with a
-    generic follow-up line, so it exercised none of the report path."""
+def test_mock_structured_generation_returns_the_canned_report() -> None:
+    """--mock must exercise the real report path: a validated ScoutReport."""
+    report = GeminiClient(mock_mode=True).generate_structured("any prompt", ScoutReport, mock=MOCK_SCOUT_REPORT)
+    assert isinstance(report, ScoutReport)
+    assert len(report.targets) == 3
+    assert report.close_categories
+
+
+def test_mock_structuring_returns_the_canned_verdict() -> None:
+    verdict = GeminiClient(mock_mode=True).structure_text(
+        "prose", TradeVerdict, instruction="extract", mock=MOCK_TRADE_VERDICT
+    )
+    assert isinstance(verdict, TradeVerdict)
+    assert verdict.verdict == "ACCEPT"
+
+
+def test_mock_without_a_canned_value_raises_rather_than_inventing_one() -> None:
+    with pytest.raises(AIResponseError, match="ScoutReport"):
+        GeminiClient(mock_mode=True).generate_structured("p", ScoutReport)
+
+
+def test_mock_chat_only_answers_follow_ups() -> None:
+    """Reports come from generate_structured now; the chat is follow-ups only."""
     chat = MockChatSession()
-    report = chat.send_message("You are an elite NBA Fantasy GM ... REPORT FORMAT:").text
-    assert report == MOCK_SCOUT_REPORT
-    assert "Scout Report" in (report or "")
-
-
-def test_trade_prompt_gets_the_trade_shaped_reply() -> None:
-    chat = MockChatSession()
-    report = chat.send_message("# Trade Evaluation Request\n**Giving Away:** X").text
-    assert report == MOCK_TRADE_REPORT
-    assert "Verdict" in (report or "")
-
-
-def test_followups_after_the_report_are_short_canned_replies() -> None:
-    chat = MockChatSession()
-    chat.send_message("initial analysis prompt")
-    followup = chat.send_message("why that player?").text or ""
-    assert followup.startswith("[MOCK]")
-    assert followup != MOCK_SCOUT_REPORT
-
-
-def test_mock_trade_parse_yields_a_valid_proposal() -> None:
-    proposal = GeminiClient(mock_mode=True).parse_trade_string("anything at all")
-    assert proposal.is_valid
-    assert proposal.giving and proposal.receiving
+    assert (chat.send_message("why that player?").text or "").startswith("[MOCK]")
+    assert (chat.send_message("and the next one?").text or "").startswith("[MOCK]")
 
 
 def test_parsing_uses_flash_and_strategy_uses_pro() -> None:

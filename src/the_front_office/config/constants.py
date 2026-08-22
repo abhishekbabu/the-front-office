@@ -38,19 +38,15 @@ YOUR TASK:
     - **Drop Target**: Suggest a specific player from the current roster to drop, with a clear justification (e.g., redundant stats, poor recent form, fewer games remaining, or non-active status).
 5. Use a professional, tactical tone. Avoid flowery prose.
 
-REPORT FORMAT:
-### **Scout Report**
-
-**Matchup Insight**: [Specific category analysis focusing on 5-4 win priority]
-
-**Top Targets**:
-- **ADD [Player Name] ([X]G left)**: [Reasoning based on stats/trends/schedule] -> **DROP [Roster Player]**: [Justification]
-- **ADD [Player Name] ([X]G left)**: [Reasoning based on stats/trends/schedule] -> **DROP [Roster Player]**: [Justification]
-- **ADD [Player Name] ([X]G left)**: [Reasoning based on stats/trends/schedule] -> **DROP [Roster Player]**: [Justification]
-
-**Final Strategy**: [One-sentence tactical summary]
+Return your analysis in the required structured form. Guidance for the fields:
+- matchup_insight: name specific categories and margins (e.g. "trailing in BLK by 5"), and say
+  which are worth contesting. Ignore categories lost by a landslide.
+- close_categories: only the ones genuinely in play.
+- targets: exactly three, most valuable first. Set games_remaining from the schedule data above,
+  and 0 if it is not listed. Use action ADD when adds remain, MONITOR when they do not — a
+  MONITOR entry leaves drop_player empty.
+- Keep every field tactical and specific. No filler, no restating the inputs.
 """
-
 TRADE_PROMPT_TEMPLATE = """
 # 🎭 Trade Evaluation Request
 

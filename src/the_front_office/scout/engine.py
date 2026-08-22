@@ -12,6 +12,7 @@ from the_front_office.clients.nba.client import NBAClient
 from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
 from the_front_office.config.settings import settings
+from the_front_office.scout.types import MOCK_SCOUT_REPORT, ScoutReport
 from the_front_office.services import PlayerContextBuilder
 
 if TYPE_CHECKING:
@@ -130,23 +131,33 @@ class Scout:
 
         return prompt
 
-    def start_analysis(self) -> tuple[str, Union["Chat", "MockChatSession"] | None]:
-        """
-        Start an interactive analysis session.
-        Returns the initial report text and the chat session object.
+    def start_analysis(self) -> tuple[ScoutReport, Union["Chat", "MockChatSession"]]:
+        """Build the context, generate a validated report, and open a chat on it.
+
+        Returns:
+            The validated report and a chat session seeded with the exchange
+            that produced it.
+
+        Raises:
+            TeamNotFoundError: the login owns no team in this league.
+            YahooAPIError: a Yahoo request failed.
+            AIUnavailableError: no Gemini credentials.
+            AIResponseError: Gemini failed, or returned an invalid report.
         """
         prompt = self._build_context()
-        try:
-            # Start chat with empty history, then send the prompt as the first message
-            chat = self.ai.start_chat()
-            response = chat.send_message(prompt)
-            text = response.text or "❌ No response from AI"
-            return text, chat
-        except Exception as e:
-            logger.error(f"Error starting analysis: {e}")
-            return f"❌ Error: {e}", None
+        report = self.ai.generate_structured(prompt, ScoutReport, mock=MOCK_SCOUT_REPORT)
 
-    def get_report(self) -> str:
+        # Seed a chat with the exchange that produced the report, so follow-ups
+        # reason about it without re-sending the whole context.
+        chat = self.ai.start_chat(
+            initial_history=[
+                {"role": "user", "parts": [prompt]},
+                {"role": "model", "parts": [report.model_dump_json()]},
+            ]
+        )
+        return report, chat
+
+    def get_report(self) -> ScoutReport:
         """Generate a scout report (non-interactive wrapper)."""
         report, _ = self.start_analysis()
         return report
