@@ -20,8 +20,8 @@ stats and the fixtures ahead.
 
 **External clients** (`src/the_front_office/clients/`)
 - **Yahoo Fantasy** via `yahoofantasy` — OAuth2, rosters, matchups, and hand-built player queries that sort free agents by an individual stat category
-- **NBA.com** via `nba_api` — one full-season `LeagueGameLog` call bucketed by player, cached in `.nba_cache.json`, with `tenacity` retries classified by error type
-- **Sleeper** — public and auth-free: leagues, rosters, matchups, the 12k-player catalogue, weekly projections and league-wide trending, cached in `.sleeper_cache.json`
+- **NBA.com** via `nba_api` — one full-season `LeagueGameLog` call bucketed by player for recent form (L5/L10/L15), cached in `.nba_cache.json`, with `tenacity` retries classified by error type
+- **Sleeper** — public and auth-free, and used by both sports: football leagues, rosters, matchups and weekly projections; NBA per-game projections summed into category totals for the matchup period. Cached in `.sleeper_cache.json`
 - **Gemini** via `google-genai` — `gemini-2.5-pro` for analysis, `gemini-2.5-flash` for parsing
 
 **Tooling** — `ruff`, `pyrefly`, `pytest`, `pre-commit`, `just`. Every recipe and

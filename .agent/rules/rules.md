@@ -45,6 +45,12 @@ an explicit short `persist_ttl`; the default is an hour.
 **Chat history is resent every turn.** Seed follow-up chats with a briefing, not
 the generation prompt, and say explicitly what was left out.
 
+**Player identity across platforms.** Yahoo and Sleeper share no identifier, so
+the NBA projection join is by normalised name (`sports/nba/projections.py`).
+Never guess: an ambiguous surname must resolve to nothing rather than to
+whichever player was indexed first, and an unmatched player carries no
+projection rather than borrowing someone else's.
+
 **AI calls.** `gemini-2.5-pro` for analysis, `gemini-2.5-flash` for parsing and
 structuring. Never a `-preview` model. Reports come back as Pydantic models via
 a response schema, never as prose to be regex'd. A response schema cannot be

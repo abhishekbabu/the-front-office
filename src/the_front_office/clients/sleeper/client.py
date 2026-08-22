@@ -26,6 +26,7 @@ from tenacity import (
 
 from the_front_office.cache import JsonDiskCache
 from the_front_office.clients.sleeper.types import (
+    GameProjection,
     NFLState,
     PlayerMeta,
     Projection,
@@ -41,7 +42,12 @@ from the_front_office.exceptions import SleeperAPIError
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.sleeper.app/v1"
-PROJECTIONS_URL = "https://api.sleeper.app/projections/nfl"
+PROJECTIONS_URL = "https://api.sleeper.app/projections"
+
+# Sleeper serves several sports off the same shape. The football path uses "nfl";
+# the basketball projections the NBA scout reads use "nba".
+NFL = "nfl"
+NBA = "nba"
 
 REQUEST_TIMEOUT_SECONDS = 30
 CATALOGUE_TIMEOUT_SECONDS = 90  # the player catalogue is ~14MB
@@ -125,15 +131,19 @@ class SleeperClient:
 
     # ── league state ────────────────────────────────────────────────
 
-    def get_nfl_state(self) -> NFLState:
-        """Current week and season type."""
-        data = self._cached("state", f"{BASE_URL}/state/nfl", STATE_TTL)
+    def get_state(self, sport: str = NFL) -> NFLState:
+        """Current week and season type for a sport."""
+        data = self._cached(f"state_{sport}", f"{BASE_URL}/state/{sport}", STATE_TTL)
         return NFLState(
             week=int(data.get("week", 0)),
             season=str(data.get("season", "")),
             season_type=str(data.get("season_type", "")),
             display_week=int(data.get("display_week") or data.get("week") or 0),
         )
+
+    def get_nfl_state(self) -> NFLState:
+        """Current NFL week and season type."""
+        return self.get_state(NFL)
 
     def get_user(self, username: str) -> SleeperUser:
         """Resolve a username to a user. Usernames change; user_ids do not."""
@@ -220,18 +230,18 @@ class SleeperClient:
 
     # ── player data ─────────────────────────────────────────────────
 
-    def get_players(self) -> dict[str, PlayerMeta]:
+    def get_players(self, sport: str = NFL) -> dict[str, PlayerMeta]:
         """The player catalogue, trimmed to the fields we use.
 
         The raw response is ~14MB across 12k players. Only a handful of fields
         matter here, so the cache stores the trimmed form — the full payload
         would dominate the cache file for no benefit.
         """
-        cached = self._cache.get("players", PLAYERS_TTL)
+        cached = self._cache.get(f"players_{sport}", PLAYERS_TTL)
         if cached is not None:
             return cached
 
-        raw = self._get(f"{BASE_URL}/players/nfl", timeout=CATALOGUE_TIMEOUT_SECONDS)
+        raw = self._get(f"{BASE_URL}/players/{sport}", timeout=CATALOGUE_TIMEOUT_SECONDS)
         trimmed: dict[str, PlayerMeta] = {}
         for player_id, p in (raw or {}).items():
             if not isinstance(p, dict):
@@ -247,8 +257,8 @@ class SleeperClient:
                 depth_chart_order=int(p.get("depth_chart_order") or 0),
                 years_exp=int(p.get("years_exp") or 0),
             )
-        self._cache.set("players", trimmed)
-        logger.debug(f"Cached {len(trimmed)} players from Sleeper")
+        self._cache.set(f"players_{sport}", trimmed)
+        logger.debug(f"Cached {len(trimmed)} {sport} players from Sleeper")
         return trimmed
 
     def get_projections(self, season: str, week: int, scoring: ScoringFormat) -> dict[str, Projection]:
@@ -286,6 +296,41 @@ class SleeperClient:
         """Actual per-player stats for a completed week."""
         data = self._cached(f"stats_{season}_{week}", f"{BASE_URL}/stats/nfl/regular/{season}/{week}", STATS_TTL)
         return {str(k): v for k, v in (data or {}).items() if isinstance(v, dict)}
+
+    def get_nba_projections(self, season: str, week: int) -> list[GameProjection]:
+        """Per-game NBA projections for a Sleeper week.
+
+        One row per player per game, each carrying a date, an opponent and the
+        full nine-category line. Summing a player's rows across a matchup period
+        gives projected category totals — which is what a category league
+        actually needs, and what the NBA scout had no source for.
+
+        Returns an empty list out of season: Sleeper publishes nothing before
+        opening night, and the scout falls back to recent form alone.
+        """
+        url = f"{PROJECTIONS_URL}/{NBA}/{season}/{week}?season_type=regular&order_by=pts" + "".join(
+            f"&position[]={p}" for p in ("PG", "SG", "SF", "PF", "C")
+        )
+        data = self._cached(f"proj_{NBA}_{season}_{week}", url, PROJECTIONS_TTL)
+
+        projections: list[GameProjection] = []
+        for row in data or []:
+            stats = row.get("stats") or {}
+            if stats.get("pts") is None:
+                continue
+            player = row.get("player") or {}
+            name = " ".join(filter(None, [player.get("first_name"), player.get("last_name")]))
+            projections.append(
+                GameProjection(
+                    player_id=str(row.get("player_id") or ""),
+                    name=name,
+                    team=str(player.get("team") or row.get("team") or ""),
+                    opponent=str(row.get("opponent") or ""),
+                    date=str(row.get("date") or "")[:10],
+                    stats={k: float(v) for k, v in stats.items() if isinstance(v, int | float)},
+                )
+            )
+        return projections
 
     def get_trending(self, kind: str = "add", lookback_hours: int = 24, limit: int = 25) -> list[TrendingPlayer]:
         """Most-added or most-dropped players across all of Sleeper.

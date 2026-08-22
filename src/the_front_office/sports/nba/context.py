@@ -4,6 +4,7 @@ from yahoofantasy import Player  # type: ignore[import-untyped]
 
 from the_front_office.clients.nba.client import NBAClient
 from the_front_office.clients.nba.types import NineCatStats, PlayerStats
+from the_front_office.sports.nba.projections import ProjectionIndex
 
 
 class PlayerContextBuilder:
@@ -16,7 +17,11 @@ class PlayerContextBuilder:
         self.nba = nba_client
 
     def _format_stats(self, stats_dict: PlayerStats) -> str:
-        """Format recent trend stats into a readable string."""
+        """Format recent trend stats into a readable string.
+
+        Three-pointers are suffixed `tpm` rather than `3pm`: the latter renders
+        "5" and "3pm" as "53pm", which the model reads as badly as a person does.
+        """
         if not stats_dict:
             return "No stats available"
 
@@ -25,7 +30,7 @@ class PlayerContextBuilder:
             if key in stats_dict:
                 s: NineCatStats = stats_dict[key]  # type: ignore[literal-required]
                 parts.append(
-                    f"{label}: {s['PTS']}p {s['REB']}r {s['AST']}a {s['STL']}s {s['BLK']}b {s['TOV']}to {s['FG3M']}3pm FG{s['FG_PCT']:.1%} FT{s['FT_PCT']:.1%}"
+                    f"{label}: {s['PTS']}p {s['REB']}r {s['AST']}a {s['STL']}s {s['BLK']}b {s['TOV']}to {s['FG3M']}tpm FG{s['FG_PCT']:.1%} FT{s['FT_PCT']:.1%}"
                 )
 
         return " | ".join(parts) if parts else "No recent stats"
@@ -43,6 +48,7 @@ class PlayerContextBuilder:
         matchup_end: date | None = None,
         annotations: dict[str, str] | None = None,
         remaining_games: dict[str, int] | None = None,
+        projections: "ProjectionIndex | None" = None,
     ) -> str:
         """
         Build a context string for a list of players.
@@ -64,6 +70,7 @@ class PlayerContextBuilder:
         matchup_end: date | None = None,
         annotations: dict[str, str] | None = None,
         remaining_games: dict[str, int] | None = None,
+        projections: "ProjectionIndex | None" = None,
     ) -> dict[str, str]:
         """Same as build_context_for_players, keyed by player name.
 
@@ -109,6 +116,11 @@ class PlayerContextBuilder:
             line = f"- {p.name.full} ({p.display_position}){il_str}{status_str}{games_str}{note}"
             if stats_dict:
                 line += f": {self._format_stats(stats_dict)}"
+            # Forward-looking totals, when a projection source is available.
+            # Recent form says what a player has been; this says what the
+            # matchup period is actually expected to yield.
+            if projections is not None and (projected := projections.lookup(p.name.full)):
+                line += f" | PROJ {projected.summary()}"
             lines[p.name.full] = line + "\n"
 
         return lines

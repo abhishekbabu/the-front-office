@@ -227,3 +227,132 @@ def test_squad_rows_flatten_the_roster() -> None:
     provider = YahooNBAProvider(SimpleNamespace(id="1", name="One"), nba=FakeNBA(), yahoo=yahoo)  # type: ignore[arg-type]
     rows = provider.squad_rows()
     assert rows == [{"Player": "A B", "Pos": "PF,C", "Team": "LAL", "Slot": "IL", "Status": "O"}]
+
+
+# ── projections ─────────────────────────────────────────────────────────
+
+
+class FakeSleeperProjections:
+    """Stands in for SleeperClient's NBA projection endpoints."""
+
+    def __init__(self, rows: Any = None, error: Exception | None = None, season: str = "2026", week: int = 12):
+        self.rows = rows if rows is not None else []
+        self.error = error
+        self.season, self.week = season, week
+        self.weeks_requested: list[int] = []
+
+    def get_state(self, sport: str = "nfl") -> Any:
+        from the_front_office.clients.sleeper.types import NFLState
+
+        return NFLState(week=self.week, season=self.season, season_type="regular", display_week=self.week)
+
+    def get_nba_projections(self, season: str, week: int) -> Any:
+        self.weeks_requested.append(week)
+        if self.error:
+            raise self.error
+        return self.rows if week == self.week else []
+
+
+def _game(name: str, day: str, **stats: float) -> Any:
+    from the_front_office.clients.sleeper.types import GameProjection
+
+    base = {
+        "pts": 25.0,
+        "reb": 10.0,
+        "ast": 5.0,
+        "stl": 1.0,
+        "blk": 1.0,
+        "to": 2.0,
+        "tpm": 2.0,
+        "fgm": 9.0,
+        "fga": 18.0,
+        "ftm": 5.0,
+        "fta": 6.0,
+    }
+    base.update(stats)
+    return GameProjection(player_id=name, name=name, team="LAL", opponent="BOS", date=day, stats=base)
+
+
+def _provider_with(sleeper: Any, yahoo: FakeYahoo | None = None) -> Any:
+    from types import SimpleNamespace
+
+    return YahooNBAProvider(
+        SimpleNamespace(id="1", name="One"),  # type: ignore[arg-type]
+        nba=FakeNBA(),  # type: ignore[arg-type]
+        yahoo=yahoo or _rich_yahoo(),  # type: ignore[arg-type]
+        sleeper=sleeper,
+    )
+
+
+def test_projected_totals_are_attached_to_players() -> None:
+    """The forward-looking number the NBA scout previously had no source for."""
+    sleeper = FakeSleeperProjections([_game("Roster Player 0", "2026-02-10")])
+    ctx = _provider_with(sleeper).build_context()
+    assert "PROJ 1G" in ctx.squad_lines["Roster Player 0"]
+    assert "25p" in ctx.squad_lines["Roster Player 0"]
+
+
+def test_only_games_inside_the_matchup_period_are_counted() -> None:
+    """FakeYahoo's window is 2026-02-09..15."""
+    sleeper = FakeSleeperProjections(
+        [
+            _game("Roster Player 0", "2026-02-10"),
+            _game("Roster Player 0", "2026-02-28"),  # outside
+        ]
+    )
+    ctx = _provider_with(sleeper).build_context()
+    assert "PROJ 1G" in ctx.squad_lines["Roster Player 0"]
+
+
+def test_the_prompt_tells_the_model_projections_are_present() -> None:
+    sleeper = FakeSleeperProjections([_game("Roster Player 0", "2026-02-10")])
+    prompt = _provider_with(sleeper).build_context().prompt
+    assert "lines marked PROJ" in prompt
+    assert "Prefer them to recent form" in prompt
+
+
+def test_out_of_season_falls_back_to_recent_form() -> None:
+    """Sleeper publishes no NBA projections before opening night."""
+    prompt = _provider_with(FakeSleeperProjections([])).build_context().prompt
+    assert "PROJECTIONS: unavailable" in prompt
+    assert "PROJ " not in prompt
+
+
+def test_a_projection_failure_does_not_lose_the_report() -> None:
+    from the_front_office.exceptions import SleeperAPIError
+
+    sleeper = FakeSleeperProjections(error=SleeperAPIError("429"))
+    ctx = _provider_with(sleeper).build_context()
+    assert "PROJECTIONS: unavailable" in ctx.prompt
+    assert ctx.squad_lines  # everything else still built
+
+
+def test_the_next_week_is_tried_when_the_current_one_is_empty() -> None:
+    """A matchup period can straddle two Sleeper weeks."""
+    sleeper_state_week = 12
+
+    class Straddling(FakeSleeperProjections):
+        def get_state(self, sport: str = "nfl") -> Any:
+            from the_front_office.clients.sleeper.types import NFLState
+
+            return NFLState(week=sleeper_state_week, season="2026", season_type="regular", display_week=12)
+
+    straddling = Straddling([_game("Roster Player 0", "2026-02-10")], week=13)
+    ctx = _provider_with(straddling).build_context()
+    assert straddling.weeks_requested == [12, 13]
+    assert "PROJ 1G" in ctx.squad_lines["Roster Player 0"]
+
+
+def test_unmatched_players_simply_carry_no_projection() -> None:
+    sleeper = FakeSleeperProjections([_game("Someone Entirely Else", "2026-02-10")])
+    ctx = _provider_with(sleeper).build_context()
+    assert "PROJ" not in ctx.squad_lines["Roster Player 0"]
+
+
+def test_the_prompt_explains_team_games_versus_player_games() -> None:
+    """[3G left] beside PROJ 1G is a warning about missed games, not a
+    contradiction — and the model has to be told which is which."""
+    sleeper = FakeSleeperProjections([_game("Roster Player 0", "2026-02-10")])
+    prompt = _provider_with(sleeper).build_context().prompt
+    assert "how many games the player's TEAM has left" in prompt
+    assert "expected to miss games" in prompt

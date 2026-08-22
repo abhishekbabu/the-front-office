@@ -336,3 +336,70 @@ def test_live_matchups_expire_far_sooner_than_the_catalogue() -> None:
 
     assert timedelta(minutes=5) > MATCHUPS_TTL
     assert timedelta(days=1) <= PLAYERS_TTL
+
+
+# ── NBA ─────────────────────────────────────────────────────────────────
+
+
+NBA_PROJECTION_PAYLOAD = [
+    {
+        "player_id": "1",
+        "opponent": "BOS",
+        "date": "2026-01-05T00:00:00Z",
+        "player": {"first_name": "Star", "last_name": "Center", "team": "DEN", "position": "C"},
+        "stats": {"pts": 25.1, "reb": 12.3, "ast": 8.0, "blk": 0.9, "gp": 1.0},
+    },
+    {"player_id": "2", "player": {"first_name": "No", "last_name": "Proj"}, "stats": {}},
+]
+
+
+def test_nba_projections_are_per_game_with_a_date(tmp_path: Path) -> None:
+    """A category league sums the games inside its matchup period."""
+    client, _ = _client({"projections/nba": NBA_PROJECTION_PAYLOAD}, tmp_path)
+    rows = client.get_nba_projections("2026", 12)
+    assert len(rows) == 1
+    assert rows[0].name == "Star Center"
+    assert rows[0].date == "2026-01-05"  # truncated from the ISO timestamp
+    assert rows[0].opponent == "BOS"
+    assert rows[0].stats["reb"] == 12.3
+
+
+def test_nba_projection_requests_cover_every_position(tmp_path: Path) -> None:
+    client, session = _client({"projections/nba": []}, tmp_path)
+    client.get_nba_projections("2026", 12)
+    url = session.requests[0]
+    for position in ("PG", "SG", "SF", "PF", "C"):
+        assert f"position[]={position}" in url
+
+
+def test_players_without_a_points_projection_are_omitted(tmp_path: Path) -> None:
+    client, _ = _client({"projections/nba": NBA_PROJECTION_PAYLOAD}, tmp_path)
+    assert all(r.player_id != "2" for r in client.get_nba_projections("2026", 12))
+
+
+def test_out_of_season_yields_no_projections(tmp_path: Path) -> None:
+    """Sleeper publishes nothing before opening night."""
+    client, _ = _client({"projections/nba": []}, tmp_path)
+    assert client.get_nba_projections("2026", 1) == []
+
+
+def test_state_is_fetched_per_sport(tmp_path: Path) -> None:
+    """NBA and NFL are at different points in their seasons."""
+    client, session = _client({"state/nba": {**STATE, "season_type": "off"}, "state/nfl": STATE}, tmp_path)
+    assert client.get_state("nba").season_type == "off"
+    assert client.get_nfl_state().season_type == "regular"
+    assert any("state/nba" in r for r in session.requests)
+    assert any("state/nfl" in r for r in session.requests)
+
+
+def test_each_sports_catalogue_is_cached_separately(tmp_path: Path) -> None:
+    client, session = _client(
+        {
+            "players/nba": {"1": {"full_name": "Star Center", "position": "C"}},
+            "players/nfl": {"2": {"full_name": "Star QB", "position": "QB"}},
+        },
+        tmp_path,
+    )
+    assert "1" in client.get_players("nba")
+    assert "2" in client.get_players("nfl")
+    assert len([r for r in session.requests if "players/" in r]) == 2

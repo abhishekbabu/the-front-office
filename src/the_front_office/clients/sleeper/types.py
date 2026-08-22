@@ -115,3 +115,22 @@ class Projection:
 class TrendingPlayer:
     player_id: str
     count: int
+
+
+@dataclass(frozen=True)
+class GameProjection:
+    """A projection for one player in one game.
+
+    Basketball projections are per game rather than per week, so a category
+    league sums a player's games inside the matchup period to get the totals it
+    scores on. The schedule falls out of the same data: four rows means four
+    games.
+    """
+
+    player_id: str
+    name: str
+    team: str
+    opponent: str
+    date: str
+    """ISO date of the game, used to select the games inside a matchup period."""
+    stats: dict[str, float]

@@ -12,16 +12,19 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from datetime import datetime
 
+    from the_front_office.clients.sleeper.client import SleeperClient
+
 from yahoofantasy import League, Player  # type: ignore[import-untyped]
 
 from the_front_office.clients.nba.client import NBAClient
 from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
 from the_front_office.config.settings import settings
-from the_front_office.exceptions import LeagueNotFoundError
+from the_front_office.exceptions import FrontOfficeError, LeagueNotFoundError
 from the_front_office.report.types import SportContext
 from the_front_office.sports.base import LeagueRef
 from the_front_office.sports.nba.context import PlayerContextBuilder
+from the_front_office.sports.nba.projections import ProjectionIndex
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +50,7 @@ class YahooNBAProvider:
         all_leagues: list[League] | None = None,
         nba: NBAClient | None = None,
         yahoo: YahooFantasyClient | None = None,
+        sleeper: "SleeperClient | None" = None,
     ):
         """Collaborators default to real clients; pass them in to test or reuse."""
         self.league = league
@@ -54,6 +58,10 @@ class YahooNBAProvider:
         self.nba = nba or NBAClient()
         self.yahoo = yahoo or YahooFantasyClient(league)
         self.context_builder = PlayerContextBuilder(self.nba)
+        # Sleeper is the projection source. It is separate from the Yahoo league
+        # and the nba_api box scores: Yahoo says who is on the roster, nba_api
+        # says what they have done, Sleeper says what they are expected to do.
+        self._sleeper = sleeper
 
     def list_leagues(self) -> list[LeagueRef]:
         """Every Yahoo NBA league this login is in."""
@@ -99,6 +107,42 @@ class YahooNBAProvider:
                 }
             )
         return rows
+
+    @property
+    def sleeper(self) -> "SleeperClient":
+        """Lazily constructed — no credentials needed, but no reason to build it
+        until a report is actually run."""
+        if self._sleeper is None:
+            from the_front_office.clients.sleeper.client import SleeperClient
+
+            self._sleeper = SleeperClient()
+        return self._sleeper
+
+    def _projection_index(self, start: date | None, end: date | None) -> ProjectionIndex | None:
+        """Projected category totals for the matchup period, or None.
+
+        Returns None rather than raising when projections are unavailable —
+        Sleeper publishes none before opening night, and a scout report built
+        from recent form alone is the behaviour this had all along.
+        """
+        if start is None or end is None:
+            return None
+        try:
+            state = self.sleeper.get_state("nba")
+            rows = self.sleeper.get_nba_projections(state.season, state.week)
+            if not rows and state.week:
+                # A matchup can straddle two Sleeper weeks near a boundary.
+                rows = self.sleeper.get_nba_projections(state.season, state.week + 1)
+            index = ProjectionIndex(rows, start, end)
+        except FrontOfficeError as e:
+            logger.warning(f"No NBA projections available, using recent form only: {e}")
+            return None
+
+        if index.is_empty:
+            logger.info("Sleeper has no NBA projections for this period (out of season?)")
+            return None
+        logger.debug(f"Matched projections for {len(index)} players")
+        return index
 
     def _build_context(self) -> SportContext:
         """Gather all data and build the initial AI prompt.
@@ -146,11 +190,21 @@ class YahooNBAProvider:
             teams = [p.editorial_team_abbr for p in (*players_list, *fa_players)]
             remaining_games = self.nba.get_remaining_games_bulk(teams, matchup_start, matchup_end)
 
+        projections = self._projection_index(matchup_start, matchup_end)
         roster_lines = self.context_builder.build_player_lines(
-            players_list, matchup_start, matchup_end, remaining_games=remaining_games
+            players_list,
+            matchup_start,
+            matchup_end,
+            remaining_games=remaining_games,
+            projections=projections,
         )
         fa_lines = self.context_builder.build_player_lines(
-            fa_players, matchup_start, matchup_end, fa_annotations, remaining_games
+            fa_players,
+            matchup_start,
+            matchup_end,
+            fa_annotations,
+            remaining_games,
+            projections=projections,
         )
 
         # 4. Schedule summary, from the counts already in hand.
@@ -163,6 +217,20 @@ class YahooNBAProvider:
             schedule_context = (
                 f"MATCHUP PERIOD: {matchup.week_start} to {matchup.week_end}\nREMAINING GAMES BY TEAM:\n{rows}"
             )
+
+        projection_note = (
+            "PROJECTIONS: lines marked PROJ carry projected totals for this matchup period — "
+            "games, then the nine categories. Prefer them to recent form when the two disagree, "
+            "since they already account for the schedule and expected minutes.\n"
+            "- The bracketed [NG left] is how many games the player's TEAM has left. The PROJ "
+            "game count is how many that PLAYER is expected to play. A player whose PROJ count "
+            "is lower than his team's is expected to miss games — treat the gap as a warning, "
+            "not a contradiction.\n"
+            if projections is not None
+            else "PROJECTIONS: unavailable for this period. Reason from recent form and games "
+            "remaining, and say so rather than implying a forecast.\n"
+        )
+        schedule_context = projection_note + schedule_context
 
         prompt = SCOUT_PROMPT_TEMPLATE.format(
             roster_str="".join(roster_lines.values()),
