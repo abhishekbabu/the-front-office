@@ -11,19 +11,40 @@ prompt — no entry point, renderer or UI should learn its name.
 ## The five pieces
 
 1. **Provider** — `adapters/outbound/sports/<sport>/<platform>.py`, implementing
-   `SportProvider` from `domain/ports.py`:
+   `SportProvider` from `domain/ports.py`. The filename is the platform that
+   owns the **league**, not every platform the sport reads from: NBA leagues
+   live on Yahoo, so the provider is `nba/yahoo.py` even though it also reads
+   nba_stats and Sleeper. Naming it this way leaves room for the same sport on
+   a second platform — `nba/sleeper.py` beside `nba/yahoo.py`.
    - `sport` / `label` class attributes
    - `list_leagues() -> list[LeagueRef]`
    - `build_context(league_id) -> SportContext`
    - `roster_rows(league_id) -> list[dict[str, str]]` — cheap; no projections or
      candidate pool
 2. **Prompt template** in `config/constants.py`, rendered by `build_context`.
+   Name it `<SPORT>_<REPORT>_PROMPT`.
 3. **Canned mock report** in `domain/mocks.py`, registered in `MOCK_REPORTS`.
    A basketball mock returned for a football `--mock` run exercises the
    rendering path and tells you nothing about the prompt.
 4. **Registration** — one `SportEntry` in `bootstrap.py`.
 5. **Tests** — a fake platform client, and assertions on the *prompt content*:
    this is where the league rules actually live.
+
+## Where other platforms go
+
+A sport usually reads from more than one platform. Only the league platform
+names a file; everything else is a role-named helper beside the provider:
+
+```text
+sports/nba/yahoo.py        provider — Yahoo owns the league
+sports/nba/projections.py  projected totals, read from Sleeper
+sports/nba/context.py      prompt lines, read from nba_stats
+sports/nfl/sleeper.py      provider — Sleeper owns the league
+sports/nfl/lineup.py       optimal lineup, computed from projections
+```
+
+Name helpers for what they produce, not where the data came from. A file called
+`sleeper.py` under two different sports would mean two different things.
 
 ## Rules
 

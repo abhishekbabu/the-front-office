@@ -41,6 +41,11 @@ Sport-specific constants lead with the sport: `NBA_SCOUT_PROMPT`,
 `MOCK_NFL_REPORT`. The word for a set of players a manager owns is **roster**,
 everywhere. Test modules mirror the module they cover.
 
+Under `adapters/outbound/sports/<sport>/`, the provider file is named for the
+platform that owns the **league** — `nba/yahoo.py`, `nfl/sleeper.py`. Other
+platforms a sport reads from are role-named helpers (`projections.py`,
+`lineup.py`), never a second file named after a platform.
+
 **Types.** Avoid `Any`; prefer builtin generics and PEP 604 unions, which ruff's
 `UP` rules enforce. `missing-attribute` is disabled for modules touching the
 yahoofantasy SDK because it sets attributes via `setattr` at runtime — do not
