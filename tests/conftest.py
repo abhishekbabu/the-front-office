@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from the_front_office.domain.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
+from the_front_office.domain.mocks import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
 
 
 def make_player(
@@ -36,7 +36,7 @@ def make_player(
 
 
 class FakeYahoo:
-    """Stands in for YahooFantasyClient."""
+    """Stands in for YahooClient."""
 
     def __init__(
         self,
@@ -88,7 +88,7 @@ class FakeYahoo:
 
 
 class FakeNBA:
-    """Stands in for NBAClient."""
+    """Stands in for NBAStatsClient."""
 
     def __init__(self, stats: dict[str, Any] | None = None, games: dict[str, int] | None = None) -> None:
         self.stats = stats or {}
@@ -120,8 +120,8 @@ class FakeAI:
 
     def __init__(
         self,
-        report: Any = MOCK_SCOUT_REPORT,
-        verdict: Any = MOCK_TRADE_VERDICT,
+        report: Any = MOCK_NBA_REPORT,
+        verdict: Any = MOCK_NBA_VERDICT,
         proposal: Any = None,
         prose: str = "[FAKE] trade prose",
     ) -> None:

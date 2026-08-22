@@ -46,8 +46,6 @@ class AppSettings(BaseSettings):
     sleeper_cache_file: str = ".sleeper_cache.json"
 
     # ── Scouting ────────────────────────────────────────────────────────
-    default_free_agent_count: int = Field(default=20, gt=0)
-    report_free_agent_limit: int = Field(default=15, gt=0)
     nba_api_delay: float = Field(default=4.0, ge=0.0)
     """Seconds between nba_api calls — the project spec requires a delay to avoid IP blocks."""
     nba_cache_file: str = ".nba_cache.json"

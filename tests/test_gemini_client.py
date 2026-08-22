@@ -6,7 +6,7 @@ from the_front_office.adapters.outbound.llm.gemini.client import GeminiClient
 from the_front_office.adapters.outbound.llm.gemini.constants import MODEL_FLASH, MODEL_PRO
 from the_front_office.adapters.outbound.llm.gemini.types import MockChatSession
 from the_front_office.domain.errors import AIResponseError, AIUnavailableError
-from the_front_office.domain.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
+from the_front_office.domain.mocks import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
 from the_front_office.domain.models import ScoutReport, TradeVerdict
 
 
@@ -31,7 +31,7 @@ def test_mock_start_chat_returns_a_mock_session() -> None:
 
 def test_mock_structured_generation_returns_the_canned_report() -> None:
     """--mock must exercise the real report path: a validated ScoutReport."""
-    report = GeminiClient(mock_mode=True).generate_structured("any prompt", ScoutReport, mock=MOCK_SCOUT_REPORT)
+    report = GeminiClient(mock_mode=True).generate_structured("any prompt", ScoutReport, mock=MOCK_NBA_REPORT)
     assert isinstance(report, ScoutReport)
     assert len(report.moves) == 3
     assert report.focus
@@ -39,7 +39,7 @@ def test_mock_structured_generation_returns_the_canned_report() -> None:
 
 def test_mock_structuring_returns_the_canned_verdict() -> None:
     verdict = GeminiClient(mock_mode=True).structure_text(
-        "prose", TradeVerdict, instruction="extract", mock=MOCK_TRADE_VERDICT
+        "prose", TradeVerdict, instruction="extract", mock=MOCK_NBA_VERDICT
     )
     assert isinstance(verdict, TradeVerdict)
     assert verdict.verdict == "ACCEPT"

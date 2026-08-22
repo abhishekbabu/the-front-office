@@ -13,7 +13,6 @@ from yahoofantasy.api.parse import as_list, from_response_object, parse_response
 from the_front_office.adapters.outbound.platforms.yahoo.constants import SCOUT_CATEGORIES, STAT_CATEGORIES
 from the_front_office.adapters.outbound.platforms.yahoo.types import (
     MatchupInfo,
-    PlayerPosition,
     PlayerStat,
     PlayerStatus,
     Timeframe,
@@ -33,7 +32,7 @@ SCOREBOARD_TTL_SECONDS = 120
 MAX_PARALLEL_YAHOO_REQUESTS = 8
 
 
-class YahooFantasyClient:
+class YahooClient:
     @staticmethod
     def _token_exists() -> bool:
         """Check whether a cached OAuth2 token file already exists."""
@@ -89,40 +88,12 @@ class YahooFantasyClient:
     def __init__(self, league: League):
         self.league = league
 
-    def fetch_players(
-        self,
-        count: int = 25,
-        status: PlayerStatus = PlayerStatus.ALL_AVAILABLE,
-        sort: PlayerStat | None = None,
-        sort_type: Timeframe | None = None,
-        position: PlayerPosition | None = None,
-        **extra_params: str,
-    ) -> list[Player]:
-        """Fetch players, building the Yahoo query string directly.
-
-        The SDK's `league.players()` cannot sort by an individual stat over a
-        time window, which is what free-agent discovery needs.
-
-        Raises:
-            YahooAPIError: the request failed. An empty list means no matches.
-        """
-        query, cache_key = self._player_query(count, status, sort, sort_type, position, **extra_params)
-        logger.debug(f"Fetching players with query: {query}")
-
-        try:
-            data = self.league.ctx._load_or_fetch(cache_key, query, league=self.league.id)
-            return self._parse_players(data, count)
-        except Exception as e:
-            logger.error(f"Error fetching players (query={query}): {e}")
-            raise YahooAPIError(f"Yahoo player query failed ({query}): {e}") from e
-
     def _player_query(
         self,
         count: int,
         status: PlayerStatus,
         sort: PlayerStat | None,
         sort_type: Timeframe | None,
-        position: PlayerPosition | None,
         **extra_params: str,
     ) -> tuple[str, str]:
         """Build the Yahoo query string and its persistence key."""
@@ -131,8 +102,6 @@ class YahooFantasyClient:
             params["sort"] = sort.value
         if sort_type is not None:
             params["sort_type"] = sort_type.value
-        if position is not None:
-            params["position"] = position.value
         params.update(extra_params)
 
         params_str = ";".join(f"{k}={v}" for k, v in params.items())
@@ -162,7 +131,7 @@ class YahooFantasyClient:
         One request per category in SCOUT_CATEGORIES, run concurrently.
         """
         specs = {
-            stat_name: self._player_query(per_stat, PlayerStatus.ALL_AVAILABLE, stat, sort_type, None)
+            stat_name: self._player_query(per_stat, PlayerStatus.ALL_AVAILABLE, stat, sort_type)
             for stat, stat_name in SCOUT_CATEGORIES.items()
         }
 
@@ -319,15 +288,6 @@ class YahooFantasyClient:
             f"{breakdown}"
             f"\nOPPONENT KEY PLAYERS: {opp_roster_str}"
         )
-
-    def get_matchup_dates(self, my_team: Team) -> tuple[str, str]:
-        """Start and end dates of the current matchup period, or ("", "")."""
-        info = self.get_matchup(my_team)
-        return (info.week_start, info.week_end)
-
-    def get_matchup_context(self, my_team: Team) -> str:
-        """Current matchup, scores and opponent roster as prompt context."""
-        return self.get_matchup(my_team).context
 
     def search_players(self, query: str) -> list[Player]:
         """

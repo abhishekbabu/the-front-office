@@ -90,7 +90,7 @@ def _cmd_roster(session: Session, entries: list[SportEntry], args: list[str]) ->
             provider = session.provider(entry)
             for ref in provider.list_leagues():
                 _print_header(f"{entry.label} — {ref.name}")
-                _print_rows(provider.squad_rows(ref.league_id))
+                _print_rows(provider.roster_rows(ref.league_id))
         except FrontOfficeError as e:
             print(f"  ❌ {entry.label}: {e}")
 

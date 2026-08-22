@@ -27,14 +27,14 @@ from tenacity import (
 from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
     GameProjection,
-    NFLState,
     PlayerMeta,
-    Projection,
     ScoringFormat,
+    SeasonState,
     SleeperLeague,
     SleeperRoster,
     SleeperUser,
     TrendingPlayer,
+    WeeklyProjection,
 )
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import SleeperAPIError
@@ -55,7 +55,6 @@ CATALOGUE_TIMEOUT_SECONDS = 90  # the player catalogue is ~14MB
 # TTLs, chosen from how quickly each endpoint's data actually changes.
 PLAYERS_TTL = timedelta(days=1)  # the docs ask for at most one fetch per day
 PROJECTIONS_TTL = timedelta(hours=6)
-STATS_TTL = timedelta(hours=6)
 TRENDING_TTL = timedelta(hours=1)
 LEAGUE_TTL = timedelta(hours=6)
 ROSTERS_TTL = timedelta(minutes=10)  # changes on every waiver claim
@@ -131,17 +130,16 @@ class SleeperClient:
 
     # ── league state ────────────────────────────────────────────────
 
-    def get_state(self, sport: str = NFL) -> NFLState:
+    def get_state(self, sport: str = NFL) -> SeasonState:
         """Current week and season type for a sport."""
         data = self._cached(f"state_{sport}", f"{BASE_URL}/state/{sport}", STATE_TTL)
-        return NFLState(
+        return SeasonState(
             week=int(data.get("week", 0)),
             season=str(data.get("season", "")),
             season_type=str(data.get("season_type", "")),
-            display_week=int(data.get("display_week") or data.get("week") or 0),
         )
 
-    def get_nfl_state(self) -> NFLState:
+    def get_nfl_state(self) -> SeasonState:
         """Current NFL week and season type."""
         return self.get_state(NFL)
 
@@ -261,7 +259,7 @@ class SleeperClient:
         logger.debug(f"Cached {len(trimmed)} {sport} players from Sleeper")
         return trimmed
 
-    def get_projections(self, season: str, week: int, scoring: ScoringFormat) -> dict[str, Projection]:
+    def get_projections(self, season: str, week: int, scoring: ScoringFormat) -> dict[str, WeeklyProjection]:
         """Weekly projections keyed by player_id.
 
         This is the forward-looking number the whole football report rests on:
@@ -272,7 +270,7 @@ class SleeperClient:
         )
         data = self._cached(f"proj_{season}_{week}_{scoring}", url, PROJECTIONS_TTL)
 
-        projections: dict[str, Projection] = {}
+        projections: dict[str, WeeklyProjection] = {}
         for row in data or []:
             player = row.get("player") or {}
             stats = row.get("stats") or {}
@@ -281,7 +279,7 @@ class SleeperClient:
                 continue
             player_id = str(row.get("player_id") or "")
             name = " ".join(filter(None, [player.get("first_name"), player.get("last_name")]))
-            projections[player_id] = Projection(
+            projections[player_id] = WeeklyProjection(
                 player_id=player_id,
                 name=name or player_id,
                 position=str(player.get("position") or ""),
@@ -291,11 +289,6 @@ class SleeperClient:
                 injury_status=str(player.get("injury_status") or ""),
             )
         return projections
-
-    def get_stats(self, season: str, week: int) -> dict[str, dict[str, float]]:
-        """Actual per-player stats for a completed week."""
-        data = self._cached(f"stats_{season}_{week}", f"{BASE_URL}/stats/nfl/regular/{season}/{week}", STATS_TTL)
-        return {str(k): v for k, v in (data or {}).items() if isinstance(v, dict)}
 
     def get_nba_projections(self, season: str, week: int) -> list[GameProjection]:
         """Per-game NBA projections for a Sleeper week.

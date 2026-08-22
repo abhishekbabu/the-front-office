@@ -1,4 +1,4 @@
-"""Tests for YahooFantasyClient's query building and response parsing.
+"""Tests for YahooClient's query building and response parsing.
 
 The client bypasses yahoofantasy's league.players() and builds Yahoo API query
 strings by hand, so the query shape and the response walk are both ours to get
@@ -10,9 +10,8 @@ from typing import Any
 
 import pytest
 
-from the_front_office.adapters.outbound.platforms.yahoo.client import YahooFantasyClient
+from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
 from the_front_office.adapters.outbound.platforms.yahoo.constants import SCOUT_CATEGORIES
-from the_front_office.adapters.outbound.platforms.yahoo.types import PlayerPosition, PlayerStat, PlayerStatus, Timeframe
 from the_front_office.domain.errors import TeamNotFoundError, YahooAPIError
 
 
@@ -83,78 +82,13 @@ class FakeContext:
         self.persisted[persist_path] = value
 
 
-def _client(response: Any = None, error: Exception | None = None) -> tuple[YahooFantasyClient, FakeContext]:
+def _client(response: Any = None, error: Exception | None = None) -> tuple[YahooClient, FakeContext]:
     ctx = FakeContext(response, error)
     league = SimpleNamespace(id="123", league_key="nba.l.123", name="My League", ctx=ctx, teams=lambda: [])
-    return YahooFantasyClient(league), ctx  # type: ignore[arg-type]
+    return YahooClient(league), ctx  # type: ignore[arg-type]
 
 
 # ── fetch_players ───────────────────────────────────────────────────────
-
-
-def test_query_encodes_every_supplied_filter() -> None:
-    client, ctx = _client(_response(""))
-    client.fetch_players(
-        count=5,
-        status=PlayerStatus.FREE_AGENT,
-        sort=PlayerStat.BLOCKS,
-        sort_type=Timeframe.LAST_WEEK,
-        position=PlayerPosition.CENTER,
-    )
-    query = ctx.queries[0]
-    assert query.startswith("players;")
-    for fragment in ("count=5", "status=FA", "sort=18", "sort_type=lastweek", "position=C"):
-        assert fragment in query
-
-
-def test_optional_filters_are_omitted_when_not_given() -> None:
-    client, ctx = _client(_response(""))
-    client.fetch_players(count=3)
-    query = ctx.queries[0]
-    assert "sort=" not in query
-    assert "position=" not in query
-    assert "status=A" in query  # the default
-
-
-def test_players_are_parsed_from_the_response() -> None:
-    client, _ = _client(_response({"player": [_player_payload("A B"), _player_payload("C D")]}))
-    players = client.fetch_players()
-    assert [p.name.full for p in players] == ["A B", "C D"]
-
-
-def test_a_single_player_is_not_treated_as_a_character_sequence() -> None:
-    """Yahoo returns a bare object rather than a list when there is one result."""
-    client, _ = _client(_response({"player": _player_payload("Solo Player")}))
-    assert [p.name.full for p in client.fetch_players()] == ["Solo Player"]
-
-
-def test_results_are_truncated_to_count() -> None:
-    payload = [_player_payload(f"P{i}") for i in range(10)]
-    client, _ = _client(_response({"player": payload}))
-    assert len(client.fetch_players(count=3)) == 3
-
-
-def test_yahoos_empty_string_container_means_no_players() -> None:
-    """Yahoo returns "" rather than an empty object when nothing matches."""
-    client, _ = _client(_response(""))
-    assert client.fetch_players() == []
-
-
-def test_missing_player_key_means_no_players() -> None:
-    client, _ = _client(_response({}))
-    assert client.fetch_players() == []
-
-
-def test_request_failure_raises_rather_than_looking_like_an_empty_wire() -> None:
-    client, _ = _client(error=RuntimeError("connection reset"))
-    with pytest.raises(YahooAPIError, match="Yahoo player query failed"):
-        client.fetch_players()
-
-
-def test_malformed_response_raises() -> None:
-    client, _ = _client({"unexpected": "shape"})
-    with pytest.raises(YahooAPIError):
-        client.fetch_players()
 
 
 # ── fetch_top_by_stat ───────────────────────────────────────────────────
@@ -338,35 +272,35 @@ def test_search_on_an_unexpected_shape_raises() -> None:
 def test_existing_token_skips_the_login_flow(monkeypatch: pytest.MonkeyPatch) -> None:
     import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
-    monkeypatch.setattr(YahooFantasyClient, "_token_exists", classmethod(lambda cls: True))
+    monkeypatch.setattr(YahooClient, "_token_exists", classmethod(lambda cls: True))
     ran: list[Any] = []
     monkeypatch.setattr(mod.subprocess, "run", lambda *a, **k: ran.append(a))
-    YahooFantasyClient.login()
+    YahooClient.login()
     assert ran == []
 
 
 def test_force_relogins_even_with_a_token(monkeypatch: pytest.MonkeyPatch) -> None:
     import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
-    monkeypatch.setattr(YahooFantasyClient, "_token_exists", classmethod(lambda cls: True))
+    monkeypatch.setattr(YahooClient, "_token_exists", classmethod(lambda cls: True))
     monkeypatch.setattr(mod.settings, "yahoo_client_id", "id")
     monkeypatch.setattr(mod.settings, "yahoo_client_secret", "secret")
     calls: list[list[str]] = []
     monkeypatch.setattr(mod.subprocess, "run", lambda cmd, **k: calls.append(cmd))
-    YahooFantasyClient.login(force=True)
+    YahooClient.login(force=True)
     assert calls and calls[0][1] == "login"
 
 
 def test_login_passes_credentials_and_redirect_uri(monkeypatch: pytest.MonkeyPatch) -> None:
     import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
-    monkeypatch.setattr(YahooFantasyClient, "_token_exists", classmethod(lambda cls: False))
+    monkeypatch.setattr(YahooClient, "_token_exists", classmethod(lambda cls: False))
     monkeypatch.setattr(mod.settings, "yahoo_client_id", "the-id")
     monkeypatch.setattr(mod.settings, "yahoo_client_secret", "the-secret")
     calls: list[list[str]] = []
     monkeypatch.setattr(mod.subprocess, "run", lambda cmd, **k: calls.append(cmd))
 
-    YahooFantasyClient.login()
+    YahooClient.login()
     cmd = calls[0]
     assert "the-id" in cmd
     assert "the-secret" in cmd
@@ -377,11 +311,11 @@ def test_login_passes_credentials_and_redirect_uri(monkeypatch: pytest.MonkeyPat
 def test_missing_credentials_exit_with_a_message(monkeypatch: pytest.MonkeyPatch) -> None:
     import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
-    monkeypatch.setattr(YahooFantasyClient, "_token_exists", classmethod(lambda cls: False))
+    monkeypatch.setattr(YahooClient, "_token_exists", classmethod(lambda cls: False))
     monkeypatch.setattr(mod.settings, "yahoo_client_id", None)
     monkeypatch.setattr(mod.settings, "yahoo_client_secret", None)
     with pytest.raises(SystemExit):
-        YahooFantasyClient.login()
+        YahooClient.login()
 
 
 def test_failed_login_subprocess_exits(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -389,7 +323,7 @@ def test_failed_login_subprocess_exits(monkeypatch: pytest.MonkeyPatch) -> None:
 
     import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
-    monkeypatch.setattr(YahooFantasyClient, "_token_exists", classmethod(lambda cls: False))
+    monkeypatch.setattr(YahooClient, "_token_exists", classmethod(lambda cls: False))
     monkeypatch.setattr(mod.settings, "yahoo_client_id", "id")
     monkeypatch.setattr(mod.settings, "yahoo_client_secret", "secret")
 
@@ -398,7 +332,7 @@ def test_failed_login_subprocess_exits(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(mod.subprocess, "run", _fail)
     with pytest.raises(SystemExit):
-        YahooFantasyClient.login()
+        YahooClient.login()
 
 
 # ── matchup context ─────────────────────────────────────────────────────
@@ -460,47 +394,3 @@ def _matchup_client(monkeypatch: pytest.MonkeyPatch, matchups: list[Any], curren
     client, _ = _client()
     client.league.current_week = current_week  # type: ignore[attr-defined]
     return client
-
-
-def test_matchup_dates_come_from_the_users_matchup(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = _matchup_client(monkeypatch, [_matchup()])
-    assert client.get_matchup_dates(_fake_team("t1")) == ("2026-02-09", "2026-02-15")
-
-
-def test_no_current_week_yields_no_dates(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = _matchup_client(monkeypatch, [_matchup()], current_week=None)
-    assert client.get_matchup_dates(_fake_team("t1")) == ("", "")
-
-
-def test_a_team_not_in_any_matchup_yields_no_dates(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = _matchup_client(monkeypatch, [_matchup()])
-    assert client.get_matchup_dates(_fake_team("nope")) == ("", "")
-
-
-def test_matchup_context_reports_opponent_score_and_categories(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = _matchup_client(monkeypatch, [_matchup()])
-    context = client.get_matchup_context(_fake_team("t1"))
-    assert "Theirs" in context
-    assert "You 50 - 60 Opponent" in context
-    assert "BLK: 12 vs 17" in context
-    assert "Star Player" in context
-
-
-def test_matchup_context_is_empty_when_there_is_no_matchup(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = _matchup_client(monkeypatch, [])
-    assert client.get_matchup_context(_fake_team("t1")) == ""
-
-
-def test_matchup_failures_degrade_to_empty_context(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Matchup context is enrichment — losing it must not lose the report."""
-    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
-
-    class Exploding(FakeWeek):
-        def sync(self) -> None:
-            raise RuntimeError("yahoo hiccup")
-
-    monkeypatch.setattr(mod, "Week", Exploding)
-    client, _ = _client()
-    client.league.current_week = 5  # type: ignore[attr-defined]
-    assert client.get_matchup_context(_fake_team("t1")) == ""
-    assert client.get_matchup_dates(_fake_team("t1")) == ("", "")

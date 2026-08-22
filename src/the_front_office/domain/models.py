@@ -111,13 +111,13 @@ class SportContext:
     situation: str = ""
     constraints: str = ""
     extra: str = ""
-    squad_lines: dict[str, str] = field(default_factory=dict)
+    roster_lines: dict[str, str] = field(default_factory=dict)
     candidate_lines: dict[str, str] = field(default_factory=dict)
 
     def briefing(self, report: ScoutReport) -> str:
         """A compact context for follow-up questions about `report`.
 
-        Carries the situation, constraints and full squad — what a "why that
+        Carries the situation, constraints and full roster — what a "why that
         drop?" needs — plus only the candidates actually named. Says so, so the
         model declines rather than inventing numbers for a player it cannot see.
         """
@@ -129,7 +129,7 @@ class SportContext:
             self.situation.strip(),
             self.constraints.strip(),
             self.extra.strip(),
-            "CURRENT SQUAD:\n" + "".join(self.squad_lines.values()).strip(),
+            "CURRENT ROSTER:\n" + "".join(self.roster_lines.values()).strip(),
             "PLAYERS NAMED IN THE REPORT:\n" + ("".join(kept).strip() or "(none)"),
             (
                 "NOTE: the full candidate pool is not included here. If asked about a player "

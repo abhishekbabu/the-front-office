@@ -1,4 +1,4 @@
-"""Tests for NBAClient's cache lifecycle and fetch orchestration.
+"""Tests for NBAStatsClient's cache lifecycle and fetch orchestration.
 
 The network calls are stubbed; what is exercised is the load/save round trip,
 the staleness gates that decide whether to fetch at all, and the transform from
@@ -12,11 +12,11 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from the_front_office.adapters.outbound.platforms.nba_stats.client import NBAClient, _utc_now
+from the_front_office.adapters.outbound.platforms.nba_stats.client import NBAStatsClient, _utc_now
 
 
-def _client(tmp_path: Path) -> NBAClient:
-    c = NBAClient.__new__(NBAClient)
+def _client(tmp_path: Path) -> NBAStatsClient:
+    c = NBAStatsClient.__new__(NBAStatsClient)
     c._last_call_time = 0.0
     c._cache_file = tmp_path / ".nba_cache.json"
     c._cache_data = {
@@ -148,7 +148,7 @@ def test_multiple_games_accumulate_under_one_player(tmp_path: Path) -> None:
 # ── get_player_stats ────────────────────────────────────────────────────
 
 
-def _seed_games(c: NBAClient, count: int) -> None:
+def _seed_games(c: NBAStatsClient, count: int) -> None:
     c._cache_data["league_gamelog"] = {
         "games": {"A B": [{**GAMELOG_ROW, "GAME_DATE": f"2026-01-{i + 1:02d}"} for i in range(count)]},  # type: ignore[dict-item]
         "updated_at": _utc_now().isoformat(),

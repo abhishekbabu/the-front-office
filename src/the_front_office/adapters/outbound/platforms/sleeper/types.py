@@ -13,7 +13,6 @@ ScoringFormat = Literal["pts_ppr", "pts_half_ppr", "pts_std"]
 # Sleeper's lineup slots. FLEX and SUPER_FLEX accept several positions; BN and
 # IR do not count toward a weekly score.
 STARTING_SLOTS = ("QB", "RB", "WR", "TE", "FLEX", "SUPER_FLEX", "K", "DEF", "WRRB_FLEX", "REC_FLEX")
-BENCH_SLOTS = ("BN", "IR", "TAXI")
 
 FLEX_ELIGIBILITY: dict[str, tuple[str, ...]] = {
     "FLEX": ("RB", "WR", "TE"),
@@ -37,13 +36,12 @@ class PlayerMeta(TypedDict, total=False):
 
 
 @dataclass(frozen=True)
-class NFLState:
-    """Where the NFL season currently is."""
+class SeasonState:
+    """Where a sport's season currently is."""
 
     week: int
     season: str
     season_type: str
-    display_week: int
 
     @property
     def is_regular_season(self) -> bool:
@@ -84,18 +82,13 @@ class SleeperRoster:
     points_for: float = 0.0
 
     @property
-    def bench_ids(self) -> list[str]:
-        starters = set(self.starter_ids)
-        return [p for p in self.player_ids if p not in starters]
-
-    @property
     def record(self) -> str:
         base = f"{self.wins}-{self.losses}"
         return f"{base}-{self.ties}" if self.ties else base
 
 
 @dataclass(frozen=True)
-class Projection:
+class WeeklyProjection:
     """A weekly projection for one player."""
 
     player_id: str

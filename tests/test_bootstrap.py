@@ -58,7 +58,7 @@ def test_building_a_provider_is_deferred(monkeypatch: pytest.MonkeyPatch) -> Non
     def _must_not_run(*a: object, **k: object) -> None:
         raise AssertionError("Yahoo was contacted while listing sports")
 
-    monkeypatch.setattr(yahoo_mod.YahooFantasyClient, "login", classmethod(_must_not_run))
+    monkeypatch.setattr(yahoo_mod.YahooClient, "login", classmethod(_must_not_run))
     registry.all_sports()
     registry.configured_sports()
     registry.find("nba")
@@ -72,14 +72,14 @@ def test_the_nfl_entry_builds_a_provider(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_every_provider_satisfies_the_protocol() -> None:
-    """A sport that forgets list_leagues, build_context or squad_rows would fail
+    """A sport that forgets list_leagues, build_context or roster_rows would fail
     only at the point of use."""
     from the_front_office.adapters.outbound.sports.nba.yahoo import YahooNBAProvider
     from the_front_office.adapters.outbound.sports.nfl.sleeper import SleeperNFLProvider
 
     for provider in (YahooNBAProvider, SleeperNFLProvider):
         assert provider.sport and provider.label
-        for method in ("list_leagues", "build_context", "squad_rows"):
+        for method in ("list_leagues", "build_context", "roster_rows"):
             assert callable(getattr(provider, method, None)), f"{provider.__name__}.{method}"
 
 
@@ -91,9 +91,9 @@ def test_the_nba_entry_discovers_leagues_and_wraps_them(monkeypatch: pytest.Monk
     import the_front_office.adapters.outbound.platforms.yahoo.client as yahoo_mod
 
     leagues = [SimpleNamespace(id="1", name="One", league_type="head"), SimpleNamespace(id="2", name="Two")]
-    monkeypatch.setattr(yahoo_mod.YahooFantasyClient, "login", classmethod(lambda cls, force=False: None))
+    monkeypatch.setattr(yahoo_mod.YahooClient, "login", classmethod(lambda cls, force=False: None))
     monkeypatch.setattr(
-        yahoo_mod.YahooFantasyClient,
+        yahoo_mod.YahooClient,
         "get_context",
         classmethod(lambda cls: SimpleNamespace(get_leagues=lambda sport, season: leagues)),
     )
@@ -110,9 +110,9 @@ def test_no_nba_leagues_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -> Non
     import the_front_office.adapters.outbound.platforms.yahoo.client as yahoo_mod
     from the_front_office.domain.errors import LeagueNotFoundError
 
-    monkeypatch.setattr(yahoo_mod.YahooFantasyClient, "login", classmethod(lambda cls, force=False: None))
+    monkeypatch.setattr(yahoo_mod.YahooClient, "login", classmethod(lambda cls, force=False: None))
     monkeypatch.setattr(
-        yahoo_mod.YahooFantasyClient,
+        yahoo_mod.YahooClient,
         "get_context",
         classmethod(lambda cls: SimpleNamespace(get_leagues=lambda sport, season: [])),
     )

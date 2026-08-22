@@ -8,7 +8,7 @@ import pytest
 from the_front_office.adapters.outbound.llm.gemini.client import GeminiClient
 from the_front_office.adapters.outbound.llm.gemini.constants import MODEL_FLASH, MODEL_PRO
 from the_front_office.domain.errors import AIResponseError, AIUnavailableError
-from the_front_office.domain.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
+from the_front_office.domain.mocks import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
 from the_front_office.domain.models import ScoutReport, TradeVerdict
 
 
@@ -36,12 +36,12 @@ def _client(response: Any = None, error: Exception | None = None) -> tuple[Gemin
 
 
 def test_parsed_model_is_returned_directly() -> None:
-    c, _ = _client(SimpleNamespace(parsed=MOCK_SCOUT_REPORT, text="{}"))
-    assert c.generate_structured("p", ScoutReport) == MOCK_SCOUT_REPORT
+    c, _ = _client(SimpleNamespace(parsed=MOCK_NBA_REPORT, text="{}"))
+    assert c.generate_structured("p", ScoutReport) == MOCK_NBA_REPORT
 
 
 def test_reports_use_pro_and_request_a_json_schema() -> None:
-    c, models = _client(SimpleNamespace(parsed=MOCK_SCOUT_REPORT, text="{}"))
+    c, models = _client(SimpleNamespace(parsed=MOCK_NBA_REPORT, text="{}"))
     c.generate_structured("p", ScoutReport)
     call = models.calls[0]
     assert call["model"] == MODEL_PRO
@@ -51,8 +51,8 @@ def test_reports_use_pro_and_request_a_json_schema() -> None:
 
 def test_raw_json_is_used_when_the_sdk_does_not_populate_parsed() -> None:
     """Guards against a client-library change degrading into a crash."""
-    c, _ = _client(SimpleNamespace(parsed=None, text=MOCK_SCOUT_REPORT.model_dump_json()))
-    assert c.generate_structured("p", ScoutReport) == MOCK_SCOUT_REPORT
+    c, _ = _client(SimpleNamespace(parsed=None, text=MOCK_NBA_REPORT.model_dump_json()))
+    assert c.generate_structured("p", ScoutReport) == MOCK_NBA_REPORT
 
 
 def test_json_that_does_not_match_the_schema_raises() -> None:
@@ -84,13 +84,13 @@ def test_missing_credentials_raise_before_any_call() -> None:
 
 def test_structuring_uses_flash_not_pro() -> None:
     """Converting prose is a parsing job — the cheap model, per project policy."""
-    c, models = _client(SimpleNamespace(parsed=MOCK_TRADE_VERDICT, text="{}"))
+    c, models = _client(SimpleNamespace(parsed=MOCK_NBA_VERDICT, text="{}"))
     c.structure_text("some prose", TradeVerdict, instruction="Extract it.")
     assert models.calls[0]["model"] == MODEL_FLASH
 
 
 def test_structuring_passes_the_prose_and_instruction_through() -> None:
-    c, models = _client(SimpleNamespace(parsed=MOCK_TRADE_VERDICT, text="{}"))
+    c, models = _client(SimpleNamespace(parsed=MOCK_NBA_VERDICT, text="{}"))
     c.structure_text("VERDICT: accept", TradeVerdict, instruction="Extract it.")
     contents = models.calls[0]["contents"]
     assert "VERDICT: accept" in contents
@@ -154,7 +154,7 @@ class Usage:
 def test_token_usage_is_logged(caplog: pytest.LogCaptureFixture) -> None:
     """Gemini Pro on a large prompt is the only real expense; nothing else
     measures it."""
-    c, _ = _client(SimpleNamespace(parsed=MOCK_SCOUT_REPORT, text="{}", usage_metadata=Usage()))
+    c, _ = _client(SimpleNamespace(parsed=MOCK_NBA_REPORT, text="{}", usage_metadata=Usage()))
     with caplog.at_level("INFO"):
         c.generate_structured("p", ScoutReport)
     assert "3400 in" in caplog.text
@@ -163,7 +163,7 @@ def test_token_usage_is_logged(caplog: pytest.LogCaptureFixture) -> None:
 
 
 def test_structuring_logs_against_flash(caplog: pytest.LogCaptureFixture) -> None:
-    c, _ = _client(SimpleNamespace(parsed=MOCK_TRADE_VERDICT, text="{}", usage_metadata=Usage()))
+    c, _ = _client(SimpleNamespace(parsed=MOCK_NBA_VERDICT, text="{}", usage_metadata=Usage()))
     with caplog.at_level("INFO"):
         c.structure_text("prose", TradeVerdict, instruction="x")
     assert MODEL_FLASH in caplog.text
@@ -171,7 +171,7 @@ def test_structuring_logs_against_flash(caplog: pytest.LogCaptureFixture) -> Non
 
 def test_missing_usage_metadata_still_logs_latency(caplog: pytest.LogCaptureFixture) -> None:
     """An SDK change that drops usage_metadata must not break the call."""
-    c, _ = _client(SimpleNamespace(parsed=MOCK_SCOUT_REPORT, text="{}"))
+    c, _ = _client(SimpleNamespace(parsed=MOCK_NBA_REPORT, text="{}"))
     with caplog.at_level("INFO"):
         c.generate_structured("p", ScoutReport)
     assert "no usage metadata" in caplog.text
@@ -181,7 +181,7 @@ def test_cached_tokens_are_reported_when_present(caplog: pytest.LogCaptureFixtur
     class Cached(Usage):
         cached_content_token_count = 1200
 
-    c, _ = _client(SimpleNamespace(parsed=MOCK_SCOUT_REPORT, text="{}", usage_metadata=Cached()))
+    c, _ = _client(SimpleNamespace(parsed=MOCK_NBA_REPORT, text="{}", usage_metadata=Cached()))
     with caplog.at_level("INFO"):
         c.generate_structured("p", ScoutReport)
     assert "1200 cached" in caplog.text

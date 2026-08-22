@@ -16,11 +16,11 @@ if TYPE_CHECKING:
 
 from yahoofantasy import League, Player  # type: ignore[import-untyped]
 
-from the_front_office.adapters.outbound.platforms.nba_stats.client import NBAClient
-from the_front_office.adapters.outbound.platforms.yahoo.client import YahooFantasyClient
+from the_front_office.adapters.outbound.platforms.nba_stats.client import NBAStatsClient
+from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
 from the_front_office.adapters.outbound.sports.nba.context import PlayerContextBuilder
 from the_front_office.adapters.outbound.sports.nba.projections import ProjectionIndex
-from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE, TRADE_PROMPT_TEMPLATE
+from the_front_office.config.constants import NBA_SCOUT_PROMPT, NBA_TRADE_PROMPT
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import FrontOfficeError, LeagueNotFoundError, PlayerNotFoundError
 from the_front_office.domain.models import SportContext, TradeProposal
@@ -48,15 +48,15 @@ class YahooNBAProvider:
         league: League,
         *,
         all_leagues: list[League] | None = None,
-        nba: NBAClient | None = None,
-        yahoo: YahooFantasyClient | None = None,
+        nba: NBAStatsClient | None = None,
+        yahoo: YahooClient | None = None,
         sleeper: "SleeperClient | None" = None,
     ):
         """Collaborators default to real clients; pass them in to test or reuse."""
         self.league = league
         self._all_leagues = all_leagues or [league]
-        self.nba = nba or NBAClient()
-        self.yahoo = yahoo or YahooFantasyClient(league)
+        self.nba = nba or NBAStatsClient()
+        self.yahoo = yahoo or YahooClient(league)
         self.context_builder = PlayerContextBuilder(self.nba)
         # Sleeper is the projection source. It is separate from the Yahoo league
         # and the nba_api box scores: Yahoo says who is on the roster, nba_api
@@ -89,7 +89,7 @@ class YahooNBAProvider:
         league = self._select(league_id)
         if league is not self.league:
             self.league = league
-            self.yahoo = YahooFantasyClient(league)
+            self.yahoo = YahooClient(league)
 
     def build_context(self, league_id: str = "") -> SportContext:
         """Gather league state and render the scouting prompt."""
@@ -120,7 +120,7 @@ class YahooNBAProvider:
             logger.warning(f"Failed to build roster context for trade: {e}")
             roster_str = "(Roster data unavailable)"
 
-        prompt = TRADE_PROMPT_TEMPLATE.format(
+        prompt = NBA_TRADE_PROMPT.format(
             giving_str=giving_str,
             receiving_str=receiving_str,
             matchup_context=matchup.context,
@@ -159,7 +159,7 @@ class YahooNBAProvider:
             raise PlayerNotFoundError(unresolved)
         return resolved
 
-    def squad_rows(self, league_id: str = "") -> list[dict[str, str]]:
+    def roster_rows(self, league_id: str = "") -> list[dict[str, str]]:
         """The user's roster as table rows, for a team view."""
         team = self.yahoo.get_user_team()
         rows = []
@@ -297,7 +297,7 @@ class YahooNBAProvider:
         )
         schedule_context = projection_note + schedule_context
 
-        prompt = SCOUT_PROMPT_TEMPLATE.format(
+        prompt = NBA_SCOUT_PROMPT.format(
             roster_str="".join(roster_lines.values()),
             matchup_context=matchup.context,
             fas_str="".join(fa_lines.values()),
@@ -311,7 +311,7 @@ class YahooNBAProvider:
             situation=matchup.context,
             constraints=trans_context,
             extra=schedule_context,
-            squad_lines=roster_lines,
+            roster_lines=roster_lines,
             candidate_lines=fa_lines,
         )
 

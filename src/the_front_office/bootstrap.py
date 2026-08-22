@@ -52,11 +52,11 @@ def _build_nba() -> SportProvider:
     The handshake is deferred to here so that constructing the registry — which
     every entry point does at startup — never triggers a browser OAuth flow.
     """
-    from the_front_office.adapters.outbound.platforms.yahoo.client import YahooFantasyClient
+    from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
     from the_front_office.adapters.outbound.sports.nba.yahoo import YahooNBAProvider
 
-    YahooFantasyClient.login()
-    ctx = YahooFantasyClient.get_context()
+    YahooClient.login()
+    ctx = YahooClient.get_context()
     leagues = list(ctx.get_leagues("nba", YahooNBAProvider.season_year()))
     if not leagues:
         from the_front_office.domain.errors import LeagueNotFoundError

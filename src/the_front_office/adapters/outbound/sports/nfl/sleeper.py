@@ -13,9 +13,9 @@ import logging
 from the_front_office.adapters.outbound.platforms.sleeper.client import SleeperClient
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
     PlayerMeta,
-    Projection,
     SleeperLeague,
     SleeperRoster,
+    WeeklyProjection,
 )
 from the_front_office.adapters.outbound.sports.nfl.lineup import (
     current_lineup,
@@ -23,7 +23,7 @@ from the_front_office.adapters.outbound.sports.nfl.lineup import (
     lineup_points,
     optimal_lineup,
 )
-from the_front_office.config.constants import FOOTBALL_PROMPT_TEMPLATE
+from the_front_office.config.constants import NFL_SCOUT_PROMPT
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import LeagueNotFoundError, SleeperAPIError
 from the_front_office.domain.models import SportContext
@@ -89,7 +89,7 @@ class SleeperNFLProvider:
                 return roster
         raise LeagueNotFoundError(f"you do not own a roster in league {league_id}")
 
-    def squad_rows(self, league_id: str) -> list[dict[str, str]]:
+    def roster_rows(self, league_id: str) -> list[dict[str, str]]:
         """The user's roster as table rows, without pulling the waiver pool."""
         roster = self._my_roster(league_id)
         players = self.client.get_players()
@@ -124,19 +124,19 @@ class SleeperNFLProvider:
         projections = self.client.get_projections(season, week, league.scoring_format)
         players = self.client.get_players()
 
-        squad = [self._projection_for(pid, projections, players) for pid in roster.player_ids]
-        squad = [p for p in squad if p is not None]  # type: ignore[misc]
+        projected = [self._projection_for(pid, projections, players) for pid in roster.player_ids]
+        projected = [p for p in projected if p is not None]  # type: ignore[misc]
 
         slots = league.starting_slots
         # What is set now, versus the best legal lineup. The prompt shows the
         # current one; the difference between them is the recommendation.
-        lineup = current_lineup(slots, roster.starter_ids, squad)  # type: ignore[arg-type]
-        best = optimal_lineup(slots, squad)  # type: ignore[arg-type]
-        changes = lineup_changes(slots, roster.starter_ids, squad)  # type: ignore[arg-type]
+        lineup = current_lineup(slots, roster.starter_ids, projected)  # type: ignore[arg-type]
+        best = optimal_lineup(slots, projected)  # type: ignore[arg-type]
+        changes = lineup_changes(slots, roster.starter_ids, projected)  # type: ignore[arg-type]
 
-        squad_lines = {
+        roster_lines = {
             p.name: self._player_line(p)
-            for p in sorted(squad, key=lambda x: -x.points)  # type: ignore[union-attr]
+            for p in sorted(projected, key=lambda x: -x.points)  # type: ignore[union-attr]
         }
         starter_ids = {s.player.player_id for s in lineup if s.player}
         lineup_str = "".join(
@@ -147,7 +147,7 @@ class SleeperNFLProvider:
             for slot in lineup
         )
         bench_str = (
-            "".join(self._player_line(p) for p in squad if p.player_id not in starter_ids)  # type: ignore[union-attr]
+            "".join(self._player_line(p) for p in projected if p.player_id not in starter_ids)  # type: ignore[union-attr]
             or "- (none)\n"
         )
         changes_str = (
@@ -177,7 +177,7 @@ class SleeperNFLProvider:
             + "- Bench players score nothing. A start/sit change costs nothing; an add costs a roster spot."
         )
 
-        prompt = FOOTBALL_PROMPT_TEMPLATE.format(
+        prompt = NFL_SCOUT_PROMPT.format(
             scoring_label=SCORING_LABELS.get(league.scoring_format, league.scoring_format),
             situation=situation,
             constraints=constraints,
@@ -193,7 +193,7 @@ class SleeperNFLProvider:
             situation=situation,
             constraints=constraints,
             extra=f"LINEUP CHANGES IMPLIED BY PROJECTIONS:\n{changes_str}",
-            squad_lines=squad_lines,
+            roster_lines=roster_lines,
             candidate_lines=available_lines,
         )
 
@@ -201,20 +201,20 @@ class SleeperNFLProvider:
 
     @staticmethod
     def _projection_for(
-        player_id: str, projections: dict[str, Projection], players: dict[str, PlayerMeta]
-    ) -> Projection | None:
+        player_id: str, projections: dict[str, WeeklyProjection], players: dict[str, PlayerMeta]
+    ) -> WeeklyProjection | None:
         """A player's projection, falling back to a zero-point entry.
 
         A rostered player with no projection is usually on a bye or inactive —
         which is exactly the case the report must see, so they are kept at zero
-        rather than dropped from the squad.
+        rather than dropped from the projected.
         """
         if player_id in projections:
             return projections[player_id]
         meta = players.get(player_id)
         if meta is None:
             return None
-        return Projection(
+        return WeeklyProjection(
             player_id=player_id,
             name=str(meta.get("name") or player_id),
             position=str(meta.get("position") or ""),
@@ -225,14 +225,14 @@ class SleeperNFLProvider:
         )
 
     @staticmethod
-    def _player_line(p: Projection) -> str:
+    def _player_line(p: WeeklyProjection) -> str:
         injury = f" [{p.injury_status}]" if p.is_questionable else ""
         opponent = f" vs {p.opponent}" if p.opponent else " (no game)"
         return f"- {p.name} ({p.position}, {p.team}){injury}{opponent}: {p.points:.1f} proj pts\n"
 
     def _available_players(
-        self, league_id: str, projections: dict[str, Projection], players: dict[str, PlayerMeta]
-    ) -> list[Projection]:
+        self, league_id: str, projections: dict[str, WeeklyProjection], players: dict[str, PlayerMeta]
+    ) -> list[WeeklyProjection]:
         """Highest-projecting players not rostered anywhere in the league."""
         rostered: set[str] = set()
         for roster in self.client.get_rosters(league_id):
@@ -241,7 +241,7 @@ class SleeperNFLProvider:
         free = [p for pid, p in projections.items() if pid not in rostered and p.points > 0]
         return sorted(free, key=lambda p: p.points, reverse=True)[:AVAILABLE_PLAYER_LIMIT]
 
-    def _trending(self, projections: dict[str, Projection], players: dict[str, PlayerMeta]) -> str:
+    def _trending(self, projections: dict[str, WeeklyProjection], players: dict[str, PlayerMeta]) -> str:
         try:
             trending = self.client.get_trending("add", limit=TRENDING_LIMIT)
         except SleeperAPIError as e:

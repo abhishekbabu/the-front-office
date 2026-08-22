@@ -12,7 +12,7 @@ from conftest import FakeAI
 
 from the_front_office.application.trading import TradeEngine
 from the_front_office.domain.errors import AIResponseError, PlayerNotFoundError, TradeParseError
-from the_front_office.domain.mocks import MOCK_TRADE_VERDICT
+from the_front_office.domain.mocks import MOCK_NBA_VERDICT
 from the_front_office.domain.models import SportContext, TradeProposal, TradeVerdict
 
 
@@ -39,7 +39,7 @@ def test_a_verdict_and_an_open_chat_are_returned() -> None:
     ai = FakeAI()
     verdict, chat = _engine(ai=ai).evaluate("L1", "Give LeBron, Get Tatum")
     assert isinstance(verdict, TradeVerdict)
-    assert verdict == MOCK_TRADE_VERDICT
+    assert verdict == MOCK_NBA_VERDICT
     assert chat is ai.chat
 
 

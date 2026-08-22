@@ -7,8 +7,8 @@ the whole prompt.
 
 import logging
 
-from the_front_office.domain.models import ScoutReport, SportContext
-from the_front_office.domain.ports import AnalysisModel, ChatSession, LeagueRef, SportProvider
+from the_front_office.domain.models import ScoutReport
+from the_front_office.domain.ports import AnalysisModel, ChatSession, SportProvider
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +25,6 @@ class ScoutEngine:
         """
         self.provider = provider
         self.ai = ai
-
-    def list_leagues(self) -> list[LeagueRef]:
-        return self.provider.list_leagues()
-
-    def build_context(self, league_id: str) -> SportContext:
-        return self.provider.build_context(league_id)
 
     def start_analysis(self, league_id: str) -> tuple[ScoutReport, ChatSession]:
         """Produce a validated report and open a chat seeded with it.
@@ -56,7 +50,6 @@ class ScoutEngine:
         )
         return report, chat
 
-    def get_report(self, league_id: str) -> ScoutReport:
         """Non-interactive wrapper."""
         report, _ = self.start_analysis(league_id)
         return report

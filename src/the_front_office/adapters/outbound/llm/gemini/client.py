@@ -4,7 +4,6 @@ import logging
 import time
 
 from google import genai
-from google.genai.chats import Chat
 
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import AIResponseError, AIUnavailableError
@@ -29,7 +28,6 @@ class GeminiClient(AnalysisModel):
 
     def __init__(self, api_key: str | None = settings.gemini_api_key, mock_mode: bool = False):
         self.mock_mode = mock_mode
-        self.chat: Chat | MockChatSession | None = None
 
         if self.mock_mode:
             logger.debug("🎭 Mock AI mode enabled - using canned responses")

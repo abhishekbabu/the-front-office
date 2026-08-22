@@ -4,7 +4,7 @@ Sleeper asks callers to stay under 1000 requests a minute and to fetch its ~14MB
 player catalogue at most once a day, so caching here is politeness rather than
 optimisation.
 
-NBAClient uses its own cache instead: its invalidation is tied to when games
+NBAStatsClient uses its own cache instead: its invalidation is tied to when games
 start and end, which a plain TTL cannot express.
 """
 

@@ -97,7 +97,7 @@ class SportProvider(Protocol):
         """
         ...
 
-    def squad_rows(self, league_id: str) -> list[dict[str, str]]:
+    def roster_rows(self, league_id: str) -> list[dict[str, str]]:
         """The user's roster as table rows, for a team view.
 
         Cheaper than build_context — a roster listing should not pull

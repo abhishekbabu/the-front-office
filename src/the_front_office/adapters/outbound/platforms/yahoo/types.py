@@ -44,19 +44,6 @@ class Timeframe(str, Enum):
     LAST_MONTH = "lastmonth"
 
 
-class PlayerPosition(str, Enum):
-    """NBA player position values."""
-
-    POINT_GUARD = "PG"
-    SHOOTING_GUARD = "SG"
-    SMALL_FORWARD = "SF"
-    POWER_FORWARD = "PF"
-    CENTER = "C"
-    GUARD = "G"
-    FORWARD = "F"
-    UTILITY = "Util"
-
-
 @dataclass
 class MatchupInfo:
     """The current matchup, fetched once and used for both context and dates."""

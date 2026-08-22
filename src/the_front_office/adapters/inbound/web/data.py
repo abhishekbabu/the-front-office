@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from the_front_office.adapters.outbound.platforms.nba_stats.client import NBAClient
+from the_front_office.adapters.outbound.platforms.nba_stats.client import NBAStatsClient
 from the_front_office.bootstrap import SportEntry, configured_sports, find
 from the_front_office.domain.errors import LeagueNotFoundError
 
@@ -54,6 +54,6 @@ def situation_rows(situation: str) -> list[dict[str, str]]:
     return rows
 
 
-def nba_client() -> NBAClient:
-    """One NBAClient per session — it reads the cache file on construction."""
-    return NBAClient()
+def nba_client() -> NBAStatsClient:
+    """One NBAStatsClient per session — it reads the cache file on construction."""
+    return NBAStatsClient()

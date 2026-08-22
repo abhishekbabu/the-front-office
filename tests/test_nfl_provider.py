@@ -5,13 +5,13 @@ from typing import Any
 import pytest
 
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
-    NFLState,
     PlayerMeta,
-    Projection,
+    SeasonState,
     SleeperLeague,
     SleeperRoster,
     SleeperUser,
     TrendingPlayer,
+    WeeklyProjection,
 )
 from the_front_office.adapters.outbound.sports.nfl.sleeper import SleeperNFLProvider
 from the_front_office.domain.errors import LeagueNotFoundError, SleeperAPIError
@@ -19,8 +19,8 @@ from the_front_office.domain.errors import LeagueNotFoundError, SleeperAPIError
 MY_ID = "user-1"
 
 
-def _proj(pid: str, name: str, pos: str, pts: float, team: str = "BUF", opp: str = "MIA") -> Projection:
-    return Projection(player_id=pid, name=name, position=pos, team=team, opponent=opp, points=pts)
+def _proj(pid: str, name: str, pos: str, pts: float, team: str = "BUF", opp: str = "MIA") -> WeeklyProjection:
+    return WeeklyProjection(player_id=pid, name=name, position=pos, team=team, opponent=opp, points=pts)
 
 
 class FakeSleeper:
@@ -29,7 +29,7 @@ class FakeSleeper:
     def __init__(
         self,
         rosters: list[SleeperRoster] | None = None,
-        projections: dict[str, Projection] | None = None,
+        projections: dict[str, WeeklyProjection] | None = None,
         league: SleeperLeague | None = None,
         matchups: list[dict[str, Any]] | None = None,
         trending: list[TrendingPlayer] | None = None,
@@ -63,8 +63,8 @@ class FakeSleeper:
         self.trending = trending or []
         self.trending_error = trending_error
 
-    def get_nfl_state(self) -> NFLState:
-        return NFLState(week=3, season="2026", season_type="regular", display_week=3)
+    def get_nfl_state(self) -> SeasonState:
+        return SeasonState(week=3, season="2026", season_type="regular")
 
     def get_user(self, username: str) -> SleeperUser:
         return SleeperUser(user_id=MY_ID, username=username, display_name=username)
@@ -90,7 +90,7 @@ class FakeSleeper:
             "bye1": PlayerMeta(player_id="bye1", name="Bye Guy", position="TE", team="LAR"),
         }
 
-    def get_projections(self, season: str, week: int, scoring: str) -> dict[str, Projection]:
+    def get_projections(self, season: str, week: int, scoring: str) -> dict[str, WeeklyProjection]:
         return self.projections
 
     def get_trending(self, kind: str = "add", lookback_hours: int = 24, limit: int = 25) -> list[TrendingPlayer]:
@@ -153,11 +153,11 @@ def test_prompt_names_the_scoring_format() -> None:
     assert "Full PPR" in _context().prompt
 
 
-def test_squad_and_available_players_are_separated() -> None:
+def test_roster_and_available_players_are_separated() -> None:
     ctx = _context()
-    assert "Star QB" in ctx.squad_lines
+    assert "Star QB" in ctx.roster_lines
     assert "Waiver WR" in ctx.candidate_lines
-    assert "Waiver WR" not in ctx.squad_lines
+    assert "Waiver WR" not in ctx.roster_lines
 
 
 def test_rostered_players_are_never_offered_as_waiver_adds() -> None:
@@ -208,15 +208,15 @@ def test_an_unfilled_slot_is_shown_as_empty() -> None:
 
 def test_a_player_with_no_projection_is_kept_at_zero() -> None:
     """A bye or an inactive is a zero, and the report must see it — not silently
-    drop the player from the squad."""
+    drop the player from the roster."""
     client = FakeSleeper(
         projections=dict(DEFAULT_PROJECTIONS),
         rosters=[SleeperRoster(roster_id=1, owner_id=MY_ID, player_ids=["qb1", "bye1"], starter_ids=["qb1"])],
     )
     ctx = _provider(client).build_context("L1")
-    assert "Bye Guy" in ctx.squad_lines
-    assert "0.0 proj pts" in ctx.squad_lines["Bye Guy"]
-    assert "(no game)" in ctx.squad_lines["Bye Guy"]
+    assert "Bye Guy" in ctx.roster_lines
+    assert "0.0 proj pts" in ctx.roster_lines["Bye Guy"]
+    assert "(no game)" in ctx.roster_lines["Bye Guy"]
 
 
 def test_matchup_opponent_and_live_score_are_surfaced() -> None:
@@ -249,7 +249,7 @@ def test_trending_failure_degrades_without_losing_the_report() -> None:
     """An independent signal, not load-bearing."""
     ctx = _context(trending_error=SleeperAPIError("429"))
     assert "(unavailable)" in ctx.prompt
-    assert ctx.squad_lines  # the rest still built
+    assert ctx.roster_lines  # the rest still built
 
 
 def test_constraints_compare_current_and_best_lineups() -> None:
@@ -319,15 +319,15 @@ def test_the_bench_gap_matches_the_printed_figures() -> None:
     assert float(gap_match.group(1)) == round(best - current, 1)
 
 
-def test_squad_rows_mark_starters_and_bench() -> None:
+def test_roster_rows_mark_starters_and_bench() -> None:
     client = FakeSleeper(
         projections=dict(DEFAULT_PROJECTIONS),
         rosters=[SleeperRoster(roster_id=1, owner_id=MY_ID, player_ids=["qb1", "rb1"], starter_ids=["qb1"])],
     )
-    rows = _provider(client).squad_rows("L1")
+    rows = _provider(client).roster_rows("L1")
     assert {r["Player"]: r["Slot"] for r in rows} == {"Star QB": "START", "Good RB": "BN"}
 
 
-def test_squad_rows_skip_players_missing_from_the_catalogue() -> None:
+def test_roster_rows_skip_players_missing_from_the_catalogue() -> None:
     client = FakeSleeper(rosters=[SleeperRoster(roster_id=1, owner_id=MY_ID, player_ids=["ghost"], starter_ids=[])])
-    assert _provider(client).squad_rows("L1") == []
+    assert _provider(client).roster_rows("L1") == []

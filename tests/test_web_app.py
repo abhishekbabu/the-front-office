@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from the_front_office.domain.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
+from the_front_office.domain.mocks import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
 from the_front_office.domain.models import ScoutReport, TradeVerdict
 
 
@@ -72,16 +72,16 @@ def _app() -> Any:
 
 
 def test_every_report_field_reaches_the_page(page: Recorder) -> None:
-    _app().render_report(MOCK_SCOUT_REPORT)
-    assert MOCK_SCOUT_REPORT.situation in page.text
-    assert MOCK_SCOUT_REPORT.strategy in page.text
-    for cat in MOCK_SCOUT_REPORT.focus:
+    _app().render_report(MOCK_NBA_REPORT)
+    assert MOCK_NBA_REPORT.situation in page.text
+    assert MOCK_NBA_REPORT.strategy in page.text
+    for cat in MOCK_NBA_REPORT.focus:
         assert cat in page.text
 
 
 def test_every_recommendation_is_rendered(page: Recorder) -> None:
-    _app().render_report(MOCK_SCOUT_REPORT)
-    for rec in MOCK_SCOUT_REPORT.moves:
+    _app().render_report(MOCK_NBA_REPORT)
+    for rec in MOCK_NBA_REPORT.moves:
         assert rec.player in page.text
         assert rec.rationale in page.text
         assert rec.replaces in page.text
@@ -95,14 +95,14 @@ def test_empty_target_list_says_so_rather_than_rendering_nothing(page: Recorder)
 
 
 def test_monitor_entries_omit_the_drop_section(page: Recorder) -> None:
-    rec = MOCK_SCOUT_REPORT.moves[0].model_copy(update={"action": "MONITOR", "replaces": "", "replaces_rationale": ""})
+    rec = MOCK_NBA_REPORT.moves[0].model_copy(update={"action": "MONITOR", "replaces": "", "replaces_rationale": ""})
     _app().render_move(rec)
     assert "MONITOR" in page.text
     assert "Drop " not in page.text
 
 
 def test_unknown_schedule_is_labelled_not_shown_as_zero(page: Recorder) -> None:
-    rec = MOCK_SCOUT_REPORT.moves[0].model_copy(update={"metric": ""})
+    rec = MOCK_NBA_REPORT.moves[0].model_copy(update={"metric": ""})
     _app().render_move(rec)
     assert "no metric" in page.text
     assert "0G left" not in page.text
@@ -112,14 +112,14 @@ def test_unknown_schedule_is_labelled_not_shown_as_zero(page: Recorder) -> None:
 
 
 def test_every_verdict_field_reaches_the_page(page: Recorder) -> None:
-    _app().render_verdict(MOCK_TRADE_VERDICT)
+    _app().render_verdict(MOCK_NBA_VERDICT)
     for field in ("verdict_detail", "impact", "schedule", "risk", "strategy"):
-        assert getattr(MOCK_TRADE_VERDICT, field) in page.text
+        assert getattr(MOCK_NBA_VERDICT, field) in page.text
 
 
 @pytest.mark.parametrize(("verdict", "colour"), [("ACCEPT", "green"), ("REJECT", "red"), ("COUNTER", "orange")])
 def test_each_verdict_gets_its_own_colour(page: Recorder, verdict: str, colour: str) -> None:
-    v = MOCK_TRADE_VERDICT.model_copy(update={"verdict": verdict})
+    v = MOCK_NBA_VERDICT.model_copy(update={"verdict": verdict})
     _app().render_verdict(v)
     assert f":{colour}[{verdict}]" in page.text
 
@@ -320,7 +320,7 @@ def test_scout_page_warns_when_there_are_no_leagues(monkeypatch: pytest.MonkeyPa
     assert "No NFL (Sleeper) leagues" in rec.text
 
 
-def test_team_page_renders_the_squad_rows(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_team_page_renders_the_roster_rows(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _app()
     rec = _page_recorder(monkeypatch)
 
@@ -328,7 +328,7 @@ def test_team_page_renders_the_squad_rows(monkeypatch: pytest.MonkeyPatch) -> No
         def list_leagues(self) -> Any:
             return [FakeRef()]
 
-        def squad_rows(self, league_id: str) -> Any:
+        def roster_rows(self, league_id: str) -> Any:
             return [{"Player": "Star QB", "Pos": "QB"}]
 
     app.team_page(FakeEntry(), Provider())

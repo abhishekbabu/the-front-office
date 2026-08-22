@@ -1,6 +1,6 @@
 """Prompt templates, one per report type."""
 
-SCOUT_PROMPT_TEMPLATE = """
+NBA_SCOUT_PROMPT = """
 You are an elite NBA Fantasy General Manager and data analyst.
 Your goal is to provide a concise, high-impact "Scout Report" for a fantasy basketball league.
 
@@ -43,7 +43,7 @@ Return your analysis in the required structured form. Guidance for the fields:
   MONITOR entry leaves drop_player empty.
 - Keep every field tactical and specific. No filler, no restating the inputs.
 """
-TRADE_PROMPT_TEMPLATE = """
+NBA_TRADE_PROMPT = """
 # 🎭 Trade Evaluation Request
 
 ## 1. The Trade
@@ -77,7 +77,7 @@ Return the evaluation in the required structured form. Field guidance:
 """
 
 
-FOOTBALL_PROMPT_TEMPLATE = """
+NFL_SCOUT_PROMPT = """
 You are an elite NFL fantasy football manager.
 Produce a concise, high-impact weekly report.
 

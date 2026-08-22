@@ -1,4 +1,4 @@
-"""Tests for the pure logic in NBAClient — no network, no cache file on disk."""
+"""Tests for the pure logic in NBAStatsClient — no network, no cache file on disk."""
 
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
@@ -7,7 +7,7 @@ import pytest
 
 from the_front_office.adapters.outbound.platforms.nba_stats.client import (
     PACIFIC,
-    NBAClient,
+    NBAStatsClient,
     _parse_timestamp,
     _utc_now,
 )
@@ -15,9 +15,9 @@ from the_front_office.adapters.outbound.platforms.nba_stats.stats import extract
 from the_front_office.adapters.outbound.platforms.nba_stats.types import GameLogRecord
 
 
-def _client() -> NBAClient:
-    """An NBAClient with the cache pre-seeded, bypassing __init__'s disk read."""
-    c = NBAClient.__new__(NBAClient)
+def _client() -> NBAStatsClient:
+    """An NBAStatsClient with the cache pre-seeded, bypassing __init__'s disk read."""
+    c = NBAStatsClient.__new__(NBAStatsClient)
     c._last_call_time = 0.0
     c._cache_data = {
         "league_gamelog": {"games": {}, "updated_at": ""},
@@ -85,7 +85,7 @@ def _pt(y: int, m: int, d: int, hour: int, minute: int = 0) -> datetime:
     return datetime(y, m, d, hour, minute, tzinfo=PACIFIC)
 
 
-def _with_updated_at(ts: datetime | str) -> NBAClient:
+def _with_updated_at(ts: datetime | str) -> NBAStatsClient:
     c = _client()
     c._cache_data["league_gamelog"]["updated_at"] = ts if isinstance(ts, str) else ts.isoformat()
     return c
@@ -167,7 +167,7 @@ def _sched_game(day: str, tipoff_utc: str, status: int = 1) -> dict[str, object]
     return {"date": day, "tipoff_utc": tipoff_utc, "status": status, "home": "LAL", "away": "BOS"}
 
 
-def _schedule_client(games: list[dict[str, object]]) -> NBAClient:
+def _schedule_client(games: list[dict[str, object]]) -> NBAStatsClient:
     c = _client()
     c._cache_data["schedule"] = {
         "teams": {"LAL": games},  # type: ignore[typeddict-item]

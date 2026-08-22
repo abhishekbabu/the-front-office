@@ -4,7 +4,7 @@ import pytest
 import requests
 
 from the_front_office.adapters.outbound.platforms.nba_stats.client import (
-    NBA_RETRY_MAX_ATTEMPTS,
+    RETRY_MAX_ATTEMPTS,
     _is_nba_retryable_error,
     _nba_retry,
 )
@@ -90,4 +90,4 @@ def test_retries_are_bounded_and_reraise() -> None:
     retry = _nba_retry().copy(wait=lambda _: 0)
     with pytest.raises(requests.exceptions.Timeout):
         retry(always_timeout)
-    assert len(calls) == NBA_RETRY_MAX_ATTEMPTS
+    assert len(calls) == RETRY_MAX_ATTEMPTS

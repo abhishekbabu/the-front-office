@@ -9,7 +9,7 @@ bad, is the injury real — not arithmetic.
 
 from dataclasses import dataclass
 
-from the_front_office.adapters.outbound.platforms.sleeper.types import FLEX_ELIGIBILITY, Projection
+from the_front_office.adapters.outbound.platforms.sleeper.types import FLEX_ELIGIBILITY, WeeklyProjection
 
 
 @dataclass(frozen=True)
@@ -17,7 +17,7 @@ class LineupSlot:
     """One filled starting slot."""
 
     slot: str
-    player: Projection | None
+    player: WeeklyProjection | None
 
     @property
     def points(self) -> float:
@@ -29,7 +29,7 @@ def eligible_positions(slot: str) -> tuple[str, ...]:
     return FLEX_ELIGIBILITY.get(slot, (slot,))
 
 
-def optimal_lineup(slots: list[str], squad: list[Projection]) -> list[LineupSlot]:
+def optimal_lineup(slots: list[str], players: list[WeeklyProjection]) -> list[LineupSlot]:
     """Assign the highest-projecting legal lineup.
 
     Slots are filled in order of how restrictive they are — a QB slot before a
@@ -37,7 +37,7 @@ def optimal_lineup(slots: list[str], squad: list[Projection]) -> list[LineupSlot
     SUPER_FLEX take the only quarterback and leave the QB slot empty, which is
     the classic way a naive greedy assignment goes wrong.
     """
-    available = sorted(squad, key=lambda p: p.points, reverse=True)
+    available = sorted(players, key=lambda p: p.points, reverse=True)
     order = sorted(range(len(slots)), key=lambda i: (len(eligible_positions(slots[i])), i))
 
     taken: set[str] = set()
@@ -65,27 +65,29 @@ class LineupChange:
     """A player who should come into the lineup, and who they displace."""
 
     slot: str
-    start: Projection
-    bench: Projection | None
+    start: WeeklyProjection
+    bench: WeeklyProjection | None
 
     @property
     def gain(self) -> float:
         return round(self.start.points - (self.bench.points if self.bench else 0.0), 2)
 
 
-def lineup_changes(slots: list[str], current_starter_ids: list[str], squad: list[Projection]) -> list[LineupChange]:
+def lineup_changes(
+    slots: list[str], current_starter_ids: list[str], players: list[WeeklyProjection]
+) -> list[LineupChange]:
     """What to change to reach the optimal lineup, best gain first.
 
     Compares by player rather than by slot: shuffling the same players between a
     RB and a FLEX slot is not a start/sit decision and should not be reported as
     one.
     """
-    best = optimal_lineup(slots, squad)
+    best = optimal_lineup(slots, players)
     best_ids = {s.player.player_id for s in best if s.player}
     current_ids = set(current_starter_ids)
 
     coming_in = [s for s in best if s.player and s.player.player_id not in current_ids]
-    by_id = {p.player_id: p for p in squad}
+    by_id = {p.player_id: p for p in players}
     going_out = sorted(
         (by_id[pid] for pid in current_ids - best_ids if pid in by_id),
         key=lambda p: p.points,
@@ -107,13 +109,13 @@ def lineup_changes(slots: list[str], current_starter_ids: list[str], squad: list
     return sorted((c for c in changes if c.gain > 0), key=lambda c: c.gain, reverse=True)
 
 
-def current_lineup(slots: list[str], starter_ids: list[str], squad: list[Projection]) -> list[LineupSlot]:
+def current_lineup(slots: list[str], starter_ids: list[str], players: list[WeeklyProjection]) -> list[LineupSlot]:
     """The lineup as it stands.
 
     Sleeper's `starters` array is positional: entry i is whoever occupies slot i
     of `roster_positions`. An empty slot is the literal id "0".
     """
-    by_id = {p.player_id: p for p in squad}
+    by_id = {p.player_id: p for p in players}
     filled = []
     for i, slot in enumerate(slots):
         player = by_id.get(starter_ids[i]) if i < len(starter_ids) else None

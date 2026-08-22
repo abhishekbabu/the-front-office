@@ -40,10 +40,10 @@ logger = logging.getLogger(__name__)
 SCHEDULE_TTL_HOURS = 24
 SCHEDULE_TIMEOUT_SECONDS = 30
 
-NBA_RETRY_MAX_ATTEMPTS = 3
-NBA_RETRY_MULTIPLIER = 5.0
-NBA_RETRY_MIN_WAIT = 5.0
-NBA_RETRY_MAX_WAIT = 40.0
+RETRY_MAX_ATTEMPTS = 3
+RETRY_MULTIPLIER = 5.0
+RETRY_MIN_WAIT = 5.0
+RETRY_MAX_WAIT = 40.0
 
 # nba_api wraps requests; these are the transient failures worth a second try.
 # stats.nba.com rate-limits by stalling the connection, so timeouts dominate.
@@ -77,11 +77,11 @@ def _is_nba_retryable_error(exc: BaseException) -> bool:
 def _nba_retry() -> Retrying:
     """Build a tenacity Retrying instance for nba_api calls."""
     return Retrying(
-        stop=stop_after_attempt(NBA_RETRY_MAX_ATTEMPTS),
+        stop=stop_after_attempt(RETRY_MAX_ATTEMPTS),
         wait=wait_exponential(
-            multiplier=NBA_RETRY_MULTIPLIER,
-            min=NBA_RETRY_MIN_WAIT,
-            max=NBA_RETRY_MAX_WAIT,
+            multiplier=RETRY_MULTIPLIER,
+            min=RETRY_MIN_WAIT,
+            max=RETRY_MAX_WAIT,
         ),
         retry=retry_if_exception(_is_nba_retryable_error),
         before_sleep=before_sleep_log(logger, logging.WARNING),
@@ -122,7 +122,7 @@ def _parse_timestamp(value: str) -> datetime | None:
     return parsed
 
 
-class NBAClient:
+class NBAStatsClient:
     """Fetches NBA stats and schedule, backed by `.nba_cache.json`.
 
     The cache holds two independently-dated sections: `league_gamelog`, keyed by

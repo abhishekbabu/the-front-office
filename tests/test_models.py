@@ -4,8 +4,8 @@ import pytest
 from google.genai import types as genai_types
 from pydantic import ValidationError
 
-from the_front_office.domain.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
-from the_front_office.domain.models import Move, ScoutReport, TradeVerdict
+from the_front_office.domain.mocks import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
+from the_front_office.domain.models import Move, ScoutReport, TradeProposal, TradeVerdict
 
 # Validated from dicts rather than constructors: the runtime rejection is the
 # point, and a deliberately-invalid literal in a constructor call is a static
@@ -66,8 +66,8 @@ def test_action_must_be_a_known_string() -> None:
 
 def test_reports_round_trip_through_json() -> None:
     """start_analysis seeds the follow-up chat with model_dump_json()."""
-    assert ScoutReport.model_validate_json(MOCK_SCOUT_REPORT.model_dump_json()) == MOCK_SCOUT_REPORT
-    assert TradeVerdict.model_validate_json(MOCK_TRADE_VERDICT.model_dump_json()) == MOCK_TRADE_VERDICT
+    assert ScoutReport.model_validate_json(MOCK_NBA_REPORT.model_dump_json()) == MOCK_NBA_REPORT
+    assert TradeVerdict.model_validate_json(MOCK_NBA_VERDICT.model_dump_json()) == MOCK_NBA_VERDICT
 
 
 def test_every_field_carries_a_description_for_the_model() -> None:
@@ -80,6 +80,29 @@ def test_every_field_carries_a_description_for_the_model() -> None:
 
 def test_mock_values_satisfy_their_own_schemas() -> None:
     """--mock must produce something the real code path would accept."""
-    assert ScoutReport.model_validate(MOCK_SCOUT_REPORT.model_dump()) == MOCK_SCOUT_REPORT
-    assert len(MOCK_SCOUT_REPORT.moves) == 3
-    assert TradeVerdict.model_validate(MOCK_TRADE_VERDICT.model_dump()) == MOCK_TRADE_VERDICT
+    assert ScoutReport.model_validate(MOCK_NBA_REPORT.model_dump()) == MOCK_NBA_REPORT
+    assert len(MOCK_NBA_REPORT.moves) == 3
+    assert TradeVerdict.model_validate(MOCK_NBA_VERDICT.model_dump()) == MOCK_NBA_VERDICT
+
+
+# ── TradeProposal ───────────────────────────────────────────────────────
+
+
+def test_both_sides_populated_is_valid() -> None:
+    assert TradeProposal(giving=["LeBron James"], receiving=["Jayson Tatum"]).is_valid
+
+
+def test_one_sided_proposals_are_invalid() -> None:
+    assert not TradeProposal(giving=["LeBron James"], receiving=[]).is_valid
+    assert not TradeProposal(giving=[], receiving=["Jayson Tatum"]).is_valid
+
+
+def test_empty_proposal_is_invalid() -> None:
+    """This is what the AI parser returns when it fails, so it must be falsy."""
+    assert not TradeProposal().is_valid
+
+
+def test_defaults_are_not_shared_between_instances() -> None:
+    a, b = TradeProposal(), TradeProposal()
+    a.giving.append("LeBron James")
+    assert b.giving == []

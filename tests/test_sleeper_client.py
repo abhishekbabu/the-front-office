@@ -197,7 +197,6 @@ def test_rosters_carry_record_and_bench(tmp_path: Path) -> None:
     client, _ = _client({"rosters": payload}, tmp_path)
     roster = client.get_rosters("L1")[0]
     assert roster.record == "3-1"
-    assert roster.bench_ids == ["b", "c"]
     assert roster.points_for == pytest.approx(412.5)
 
 
@@ -311,13 +310,6 @@ def test_trending_players_are_parsed(tmp_path: Path) -> None:
 def test_trending_entries_without_an_id_are_skipped(tmp_path: Path) -> None:
     client, _ = _client({"trending/add": [{"count": 5}]}, tmp_path)
     assert client.get_trending() == []
-
-
-def test_stats_are_keyed_by_player(tmp_path: Path) -> None:
-    client, _ = _client({"stats/nfl": {"1": {"pts_ppr": 20.0}, "bad": "x"}}, tmp_path)
-    stats = client.get_stats("2026", 1)
-    assert stats["1"]["pts_ppr"] == 20.0
-    assert "bad" not in stats
 
 
 def test_matchups_pass_through_as_raw_entries(tmp_path: Path) -> None:

@@ -12,7 +12,7 @@ from conftest import FakeAI, FakeNBA, FakeYahoo, make_player
 from the_front_office.adapters.outbound.sports.nba.yahoo import YahooNBAProvider
 from the_front_office.application.scouting import ScoutEngine
 from the_front_office.domain.errors import TeamNotFoundError
-from the_front_office.domain.mocks import MOCK_SCOUT_REPORT
+from the_front_office.domain.mocks import MOCK_NBA_REPORT
 from the_front_office.domain.models import ScoutReport
 
 
@@ -25,7 +25,7 @@ def test_returns_a_validated_report_and_an_open_chat() -> None:
     ai = FakeAI()
     report, chat = _scout(FakeYahoo(), ai=ai).start_analysis("")
     assert isinstance(report, ScoutReport)
-    assert report == MOCK_SCOUT_REPORT
+    assert report == MOCK_NBA_REPORT
     assert chat is ai.chat
 
 
@@ -36,7 +36,7 @@ def test_follow_up_chat_is_seeded_with_the_report() -> None:
     roles = [item["role"] for item in ai.history]
     assert roles == ["user", "model"]
     # The model turn is the report itself, as JSON the follow-up can reason over.
-    assert ScoutReport.model_validate_json(ai.history[1]["parts"][0]) == MOCK_SCOUT_REPORT
+    assert ScoutReport.model_validate_json(ai.history[1]["parts"][0]) == MOCK_NBA_REPORT
 
 
 def test_follow_up_is_seeded_with_a_briefing_not_the_whole_prompt() -> None:
@@ -58,14 +58,14 @@ def test_briefing_keeps_what_a_follow_up_needs() -> None:
 
     assert "CURRENT MATCHUP" in briefing  # why a category is close
     assert "TRANSACTION CONTEXT" in briefing  # why only three adds
-    assert "CURRENT SQUAD" in briefing  # why that drop
+    assert "CURRENT ROSTER" in briefing  # why that drop
     assert "Roster Player 0" in briefing
 
 
 def test_briefing_carries_only_the_recommended_free_agents() -> None:
     """_rich_yahoo offers nine free agents; the canned report names one."""
     ai = FakeAI()
-    recommended = MOCK_SCOUT_REPORT.moves[0].player
+    recommended = MOCK_NBA_REPORT.moves[0].player
     _scout(_rich_yahoo(recommended=recommended), ai=ai).start_analysis("")
     briefing = ai.history[0]["parts"][0]
 
@@ -220,12 +220,12 @@ def test_selecting_an_unknown_league_raises() -> None:
         provider._select("999")
 
 
-def test_squad_rows_flatten_the_roster() -> None:
+def test_roster_rows_flatten_the_roster() -> None:
     from types import SimpleNamespace
 
     yahoo = FakeYahoo(roster=[make_player("A B", position="PF,C", team="LAL", selected_position="IL", status="O")])
     provider = YahooNBAProvider(SimpleNamespace(id="1", name="One"), nba=FakeNBA(), yahoo=yahoo)  # type: ignore[arg-type]
-    rows = provider.squad_rows()
+    rows = provider.roster_rows()
     assert rows == [{"Player": "A B", "Pos": "PF,C", "Team": "LAL", "Slot": "IL", "Status": "O"}]
 
 
@@ -242,9 +242,9 @@ class FakeSleeperProjections:
         self.weeks_requested: list[int] = []
 
     def get_state(self, sport: str = "nfl") -> Any:
-        from the_front_office.adapters.outbound.platforms.sleeper.types import NFLState
+        from the_front_office.adapters.outbound.platforms.sleeper.types import SeasonState
 
-        return NFLState(week=self.week, season=self.season, season_type="regular", display_week=self.week)
+        return SeasonState(week=self.week, season=self.season, season_type="regular")
 
     def get_nba_projections(self, season: str, week: int) -> Any:
         self.weeks_requested.append(week)
@@ -288,8 +288,8 @@ def test_projected_totals_are_attached_to_players() -> None:
     """Projected totals for the matchup period, beside recent form."""
     sleeper = FakeSleeperProjections([_game("Roster Player 0", "2026-02-10")])
     ctx = _provider_with(sleeper).build_context()
-    assert "PROJ 1G" in ctx.squad_lines["Roster Player 0"]
-    assert "25p" in ctx.squad_lines["Roster Player 0"]
+    assert "PROJ 1G" in ctx.roster_lines["Roster Player 0"]
+    assert "25p" in ctx.roster_lines["Roster Player 0"]
 
 
 def test_only_games_inside_the_matchup_period_are_counted() -> None:
@@ -301,7 +301,7 @@ def test_only_games_inside_the_matchup_period_are_counted() -> None:
         ]
     )
     ctx = _provider_with(sleeper).build_context()
-    assert "PROJ 1G" in ctx.squad_lines["Roster Player 0"]
+    assert "PROJ 1G" in ctx.roster_lines["Roster Player 0"]
 
 
 def test_the_prompt_tells_the_model_projections_are_present() -> None:
@@ -324,7 +324,7 @@ def test_a_projection_failure_does_not_lose_the_report() -> None:
     sleeper = FakeSleeperProjections(error=SleeperAPIError("429"))
     ctx = _provider_with(sleeper).build_context()
     assert "PROJECTIONS: unavailable" in ctx.prompt
-    assert ctx.squad_lines  # everything else still built
+    assert ctx.roster_lines  # everything else still built
 
 
 def test_the_next_week_is_tried_when_the_current_one_is_empty() -> None:
@@ -333,20 +333,20 @@ def test_the_next_week_is_tried_when_the_current_one_is_empty() -> None:
 
     class Straddling(FakeSleeperProjections):
         def get_state(self, sport: str = "nfl") -> Any:
-            from the_front_office.adapters.outbound.platforms.sleeper.types import NFLState
+            from the_front_office.adapters.outbound.platforms.sleeper.types import SeasonState
 
-            return NFLState(week=sleeper_state_week, season="2026", season_type="regular", display_week=12)
+            return SeasonState(week=sleeper_state_week, season="2026", season_type="regular")
 
     straddling = Straddling([_game("Roster Player 0", "2026-02-10")], week=13)
     ctx = _provider_with(straddling).build_context()
     assert straddling.weeks_requested == [12, 13]
-    assert "PROJ 1G" in ctx.squad_lines["Roster Player 0"]
+    assert "PROJ 1G" in ctx.roster_lines["Roster Player 0"]
 
 
 def test_unmatched_players_simply_carry_no_projection() -> None:
     sleeper = FakeSleeperProjections([_game("Someone Entirely Else", "2026-02-10")])
     ctx = _provider_with(sleeper).build_context()
-    assert "PROJ" not in ctx.squad_lines["Roster Player 0"]
+    assert "PROJ" not in ctx.roster_lines["Roster Player 0"]
 
 
 def test_the_prompt_explains_team_games_versus_player_games() -> None:

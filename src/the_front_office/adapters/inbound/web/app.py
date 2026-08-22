@@ -168,7 +168,7 @@ def team_page(entry: Any, provider: Any) -> None:
         st.caption(ref.detail)
 
     try:
-        rows = provider.squad_rows(ref.league_id)
+        rows = provider.roster_rows(ref.league_id)
     except FrontOfficeError as e:
         st.error(str(e))
         return

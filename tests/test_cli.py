@@ -61,7 +61,7 @@ class FakeProvider:
 
         return [LeagueRef("L1", "My League", "nfl", "12-team")]
 
-    def squad_rows(self, league_id: str) -> Any:
+    def roster_rows(self, league_id: str) -> Any:
         return [{"Player": "Star QB", "Pos": "QB"}]
 
 

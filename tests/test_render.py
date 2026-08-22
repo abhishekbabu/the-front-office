@@ -1,7 +1,7 @@
 """Tests for terminal rendering of structured reports."""
 
 from the_front_office.adapters.inbound.cli.render import render_scout_report, render_trade_verdict
-from the_front_office.domain.mocks import MOCK_SCOUT_REPORT, MOCK_TRADE_VERDICT
+from the_front_office.domain.mocks import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
 from the_front_office.domain.models import Move, ScoutReport
 
 
@@ -21,17 +21,17 @@ def _rec(**overrides: object) -> Move:
 
 
 def test_scout_report_surfaces_every_field() -> None:
-    out = render_scout_report(MOCK_SCOUT_REPORT)
+    out = render_scout_report(MOCK_NBA_REPORT)
     assert "SITUATION" in out
     assert "MOVES" in out
     assert "STRATEGY" in out
-    for rec in MOCK_SCOUT_REPORT.moves:
+    for rec in MOCK_NBA_REPORT.moves:
         assert rec.player in out
         assert rec.replaces in out
 
 
 def test_recommendations_are_numbered_in_order() -> None:
-    out = render_scout_report(MOCK_SCOUT_REPORT)
+    out = render_scout_report(MOCK_NBA_REPORT)
     assert out.index("1. ADD") < out.index("2. ADD") < out.index("3. ADD")
 
 
@@ -69,11 +69,11 @@ def test_long_prose_is_wrapped_not_truncated() -> None:
 
 
 def test_trade_verdict_surfaces_every_field() -> None:
-    out = render_trade_verdict(MOCK_TRADE_VERDICT)
+    out = render_trade_verdict(MOCK_NBA_VERDICT)
     for heading in ("VERDICT:", "IMPACT", "SCHEDULE", "RISK", "STRATEGY"):
         assert heading in out
-    assert MOCK_TRADE_VERDICT.verdict in out
-    for cat in MOCK_TRADE_VERDICT.gains:
+    assert MOCK_NBA_VERDICT.verdict in out
+    for cat in MOCK_NBA_VERDICT.gains:
         assert cat in out
 
 

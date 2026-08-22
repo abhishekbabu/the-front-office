@@ -101,12 +101,12 @@ def test_nba_client_is_constructed(monkeypatch: pytest.MonkeyPatch) -> None:
     import the_front_office.adapters.inbound.web.data as mod
 
     built: list[bool] = []
-    monkeypatch.setattr(mod, "NBAClient", lambda: built.append(True))
+    monkeypatch.setattr(mod, "NBAStatsClient", lambda: built.append(True))
     data.nba_client()
     assert built == [True]
 
 
-def test_squad_rows_shape_is_shared_across_sports() -> None:
+def test_roster_rows_shape_is_shared_across_sports() -> None:
     """The team view renders whatever the provider returns, so the columns must
     agree between sports."""
     import inspect
@@ -114,6 +114,6 @@ def test_squad_rows_shape_is_shared_across_sports() -> None:
     from the_front_office.adapters.outbound.sports.nfl.sleeper import SleeperNFLProvider
 
     for provider in (YahooNBAProvider, SleeperNFLProvider):
-        assert "squad_rows" in dir(provider)
-        sig: Any = inspect.signature(provider.squad_rows)
+        assert "roster_rows" in dir(provider)
+        sig: Any = inspect.signature(provider.roster_rows)
         assert "league_id" in sig.parameters

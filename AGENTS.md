@@ -35,6 +35,12 @@ Python 3.10 and every NBA timestamp has one, so parse via `_parse_timestamp`.
 Keep `GameRecord["date"]` (a game-date label, for window tests) distinct from
 `GameRecord["tipoff_utc"]` (a real instant, for has-it-started tests).
 
+**Naming.** `<Platform>Client` for API clients, `<Platform><Sport>Provider` for
+providers, `<Verb>Engine` for use cases, `<What>Error` for domain errors.
+Sport-specific constants lead with the sport: `NBA_SCOUT_PROMPT`,
+`MOCK_NFL_REPORT`. The word for a set of players a manager owns is **roster**,
+everywhere. Test modules mirror the module they cover.
+
 **Types.** Avoid `Any`; prefer builtin generics and PEP 604 unions, which ruff's
 `UP` rules enforce. `missing-attribute` is disabled for modules touching the
 yahoofantasy SDK because it sets attributes via `setattr` at runtime — do not

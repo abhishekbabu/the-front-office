@@ -15,7 +15,7 @@ prompt — no entry point, renderer or UI should learn its name.
    - `sport` / `label` class attributes
    - `list_leagues() -> list[LeagueRef]`
    - `build_context(league_id) -> SportContext`
-   - `squad_rows(league_id) -> list[dict[str, str]]` — cheap; no projections or
+   - `roster_rows(league_id) -> list[dict[str, str]]` — cheap; no projections or
      candidate pool
 2. **Prompt template** in `config/constants.py`, rendered by `build_context`.
 3. **Canned mock report** in `domain/mocks.py`, registered in `MOCK_REPORTS`.

@@ -6,7 +6,7 @@ the rendering path while saying nothing about the football prompt.
 
 from the_front_office.domain.models import Move, ScoutReport, TradeVerdict
 
-MOCK_SCOUT_REPORT = ScoutReport(
+MOCK_NBA_REPORT = ScoutReport(
     situation=(
         "[MOCK] Positioned for a 6-3 win. BLK is within 4 and FG% is a slim lead worth "
         "protecting; PTS is lost by a landslide and not worth chasing."
@@ -48,7 +48,7 @@ MOCK_SCOUT_REPORT = ScoutReport(
 )
 
 
-MOCK_TRADE_VERDICT = TradeVerdict(
+MOCK_NBA_VERDICT = TradeVerdict(
     verdict="ACCEPT",
     verdict_detail="[MOCK] The incoming side is the better rest-of-season value.",
     gains=["REB", "BLK"],
@@ -60,7 +60,7 @@ MOCK_TRADE_VERDICT = TradeVerdict(
 )
 
 
-MOCK_FOOTBALL_REPORT = ScoutReport(
+MOCK_NFL_REPORT = ScoutReport(
     situation=(
         "[MOCK] Projected to win by 6. The margin rests on the flex slot, where the "
         "bench currently holds the higher projection."
@@ -92,11 +92,11 @@ MOCK_FOOTBALL_REPORT = ScoutReport(
 )
 
 MOCK_REPORTS: dict[str, ScoutReport] = {
-    "nba": MOCK_SCOUT_REPORT,
-    "nfl": MOCK_FOOTBALL_REPORT,
+    "nba": MOCK_NBA_REPORT,
+    "nfl": MOCK_NFL_REPORT,
 }
 
 
 def mock_report_for(sport: str) -> ScoutReport:
     """The canned report for a sport, falling back to the basketball one."""
-    return MOCK_REPORTS.get(sport, MOCK_SCOUT_REPORT)
+    return MOCK_REPORTS.get(sport, MOCK_NBA_REPORT)
