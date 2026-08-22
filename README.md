@@ -33,6 +33,7 @@ the-front-office/
 │       ├── config/         # Configuration layer (constants, settings)
 │       ├── main.py         # Entry point & Interactive CLI
 │       └── scout/          # Scout orchestrator (AI waiver analysis)
+├── tests/                  # Hermetic unit tests (pytest)
 ├── .agent/rules/rules.md    # Project rules & Assistant guidelines
 ├── .env                    # Local secrets (Client IDs/Secrets)
 ├── pyrefly.toml            # Type checking configuration
@@ -107,4 +108,6 @@ Once inside the shell, use the following commands:
 ## 🔒 Security & Quality
 - Never commit `.env` or `.yahoofantasy` (token) files.
 - **Type Safety:** Always run `pyrefly check` before committing changes (also enforced by pre-commit).
+- **Tests:** `pytest` runs the hermetic suite (no network, no credentials). Tests that hit a live API are
+  marked `@pytest.mark.integration` and deselected by default; run them with `pytest -m integration`.
 - **Lint & Format:** `ruff check src/ --fix` and `ruff format src/`. Both run automatically via pre-commit.

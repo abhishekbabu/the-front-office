@@ -85,6 +85,24 @@ def _interactive_followup(
             break
 
 
+def parse_command(raw: str) -> tuple[str, list[str], bool]:
+    """Split a REPL line into (command, positional args, mock flag).
+
+    The command token is case-insensitive, but positional arguments are not:
+    `/trade Give LeBron, Get Tatum` must reach the AI with its casing intact,
+    since player-name lookups against Yahoo depend on it.
+    """
+    parts = raw.split()
+    if not parts:
+        return ("", [], False)
+
+    cmd = parts[0].lower()
+    rest = parts[1:]
+    mock = "--mock" in rest
+    args = [a for a in rest if not a.startswith("--")]
+    return (cmd, args, mock)
+
+
 def _print_help() -> None:
     """Print available commands."""
     print()
@@ -219,20 +237,12 @@ def main() -> None:
         if not raw:
             continue
 
-        parts = raw.split()
-        # Only the command token is case-insensitive — arguments (e.g. player
-        # names passed to /trade) must keep their original casing.
-        cmd = parts[0].lower()
-        flags = parts[1:]
+        cmd, args, mock = parse_command(raw)
 
         if cmd == "/scout":
-            mock = "--mock" in flags
             _cmd_scout(leagues, mock=mock)
         elif cmd == "/trade":
-            mock = "--mock" in flags
-            # Filter out flags from args text
-            clean_args = [a for a in flags if not a.startswith("--")]
-            _cmd_trade(leagues, clean_args, mock=mock)
+            _cmd_trade(leagues, args, mock=mock)
         elif cmd == "/rosters":
             _cmd_rosters(leagues)
         elif cmd in ("/my-roster", "/roster"):

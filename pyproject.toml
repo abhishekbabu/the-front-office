@@ -23,6 +23,7 @@ front-office = "the_front_office.main:main"
 [project.optional-dependencies]
 dev = [
     "pyrefly>=1.1.1,<2",
+    "pytest>=8.0.0,<10",
     "ruff>=0.15.0,<1",
     "pre-commit>=4.0.0,<5",
     "pandas-stubs>=2.2.0,<3",
@@ -72,3 +73,13 @@ known-first-party = ["the_front_office"]
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+markers = [
+    "integration: hits a live external API (Yahoo, NBA.com or Gemini). Deselected by default; opt in with `-m integration`.",
+]
+# Default run is hermetic and fast — no network, no credentials required.
+addopts = "-m 'not integration'"

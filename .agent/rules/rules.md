@@ -68,10 +68,12 @@ the-front-office/
 - **Pull Requests**: Required for all changes to `main`
 - **Branch cleanup**: Delete feature branches after merging
 
-### Testing (Future)
-- Place tests in `tests/` directory
-- Mirror source structure: `tests/test_scout.py` for `src/the_front_office/scout.py`
-- Run tests before pushing: `pytest`
+### Testing
+- Place tests in `tests/`, mirroring source structure (`tests/test_scout.py` for `scout/engine.py`).
+- The default suite must stay **hermetic**: no network, no credentials, no `.nba_cache.json` on disk.
+  Seed state directly (`NBAClient.__new__` + a hand-built `_cache_data`) rather than letting `__init__` read disk.
+- Anything touching a live API gets `@pytest.mark.integration`; it is deselected by default via `addopts`.
+- Run `pytest` before pushing — also enforced by pre-commit.
 
 ## API Integration
 
@@ -94,6 +96,7 @@ the-front-office/
 Before committing:
 - [ ] `ruff check src/` and `ruff format --check src/` pass
 - [ ] `pyrefly check` passes
+- [ ] `pytest` passes
 - [ ] (all three run automatically if `pre-commit install` has been run)
 - [ ] No debug print statements (use `logger` instead)
 - [ ] No hardcoded credentials

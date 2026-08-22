@@ -34,3 +34,12 @@ repos:
             pass_filenames: false
             files: ^src/.*\.py$
             types: [python]
+
+          - id: pytest
+            name: pytest (hermetic suite)
+            language: system
+            entry: .venv/bin/pytest
+            args: ["-q"]
+            pass_filenames: false
+            files: ^(src|tests)/.*\.py$
+            types: [python]
