@@ -18,6 +18,7 @@ from the_front_office.trade.types import MOCK_TRADE_VERDICT, TradeVerdict
 if TYPE_CHECKING:
     from google.genai.chats import Chat
 
+    from the_front_office.clients.gemini.client import GeminiClient
     from the_front_office.clients.gemini.types import MockChatSession
 
 logger = logging.getLogger(__name__)
@@ -28,12 +29,24 @@ class TradeEvaluator:
     Orchestrates trade parsing, data enrichment, and AI evaluation.
     """
 
-    def __init__(self, league: League, mock_ai: bool = False):
+    def __init__(
+        self,
+        league: League,
+        mock_ai: bool = False,
+        *,
+        ai: "GeminiClient | None" = None,
+        nba: NBAClient | None = None,
+        yahoo: YahooFantasyClient | None = None,
+    ):
+        """Collaborators default to real clients; pass them in to test or reuse.
+
+        Injection is keyword-only so the ordinary `TradeEvaluator(league)` call is unchanged.
+        """
         from the_front_office.clients.gemini.client import GeminiClient
 
-        self.ai = GeminiClient(mock_mode=mock_ai)
-        self.nba = NBAClient()
-        self.yahoo = YahooFantasyClient(league)
+        self.ai = ai or GeminiClient(mock_mode=mock_ai)
+        self.nba = nba or NBAClient()
+        self.yahoo = yahoo or YahooFantasyClient(league)
         self.context_builder = PlayerContextBuilder(self.nba)
 
     def _resolve_players(self, player_names: list[str]) -> list[Player]:

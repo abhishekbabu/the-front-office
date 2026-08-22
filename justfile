@@ -30,8 +30,8 @@ verify-lock:
 # Quality
 # ============================================================================
 
-# Run every check the pre-commit hooks run (lint, format, types, tests)
-check: lint typecheck test
+# Run every check: lint, format, types, tests, coverage floor
+check: lint typecheck coverage-gate
     @echo "All checks passed."
 
 # Lint and auto-fix, then format
@@ -51,6 +51,14 @@ typecheck:
 # Run the hermetic test suite
 test *args:
     uv run pytest {{args}}
+
+# Test suite with a coverage report
+coverage:
+    uv run pytest --cov --cov-report=term-missing
+
+# Fail if coverage drops below the agreed floor
+coverage-gate:
+    uv run pytest --cov --cov-report=term-missing --cov-fail-under=95
 
 # Run the tests that hit live APIs (needs credentials)
 test-integration:

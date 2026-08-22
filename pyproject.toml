@@ -35,6 +35,7 @@ front-office = "the_front_office.main:main"
 dev = [
     "pyrefly>=1.1.1,<2",
     "pytest>=8.0.0,<10",
+    "pytest-cov>=6.0.0,<8",
     "ruff>=0.15.0,<1",
     "pre-commit>=4.0.0,<5",
     "pandas-stubs>=2.2.0,<3",
@@ -88,6 +89,26 @@ indent-style = "space"
 # checkout cannot produce a diff that only changes line endings.
 line-ending = "lf"
 
+
+[tool.coverage.run]
+source = ["the_front_office"]
+omit = [
+    # Presentation shells: exercised by hand, not worth mocking a terminal or
+    # a Streamlit runtime for. The logic they call is covered directly.
+    "*/main.py",
+    "*/ui/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+skip_empty = true
+show_missing = true
+precision = 1
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
