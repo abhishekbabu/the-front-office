@@ -72,6 +72,13 @@ credentials, no cache file on disk. Engines take their collaborators by keyword
 
 New code needs tests in the same commit. Coverage is gated at 95%.
 
+## CI
+
+`.github/workflows/ci.yml` runs `just lint`, `just typecheck` and
+`just coverage-gate` on Linux, macOS and Windows, plus the non-duplicated
+pre-commit hooks. It calls the same recipes you run locally — add a gate to the
+`justfile` and CI picks it up, rather than duplicating the command in YAML.
+
 ## Git
 
 Feature branches (`feat/`, `fix/`, `chore/`, `test/`), conventional commit

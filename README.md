@@ -1,5 +1,7 @@
 # The Front Office
 
+[![CI](https://github.com/abhishekbabu/the-front-office/actions/workflows/ci.yml/badge.svg)](https://github.com/abhishekbabu/the-front-office/actions/workflows/ci.yml)
+
 AI-powered NBA fantasy general manager for Yahoo category leagues.
 
 Scouts the waiver wire, evaluates trades, and answers follow-up questions about
@@ -102,6 +104,10 @@ just clean              # caches and build artefacts
 
 `just --list` for the full catalog. Agent-facing rules are in
 [`.agent/rules/rules.md`](.agent/rules/rules.md).
+
+CI runs the same `just` recipes on Linux, macOS and Windows for every push and
+PR, plus `uv sync --locked` so a dependency change that skipped `just lock`
+cannot land. If `just check` passes locally it passes in CI.
 
 Tests are hermetic — no network, no credentials, no cache file on disk. Engines
 take their collaborators by keyword, so `tests/conftest.py` fakes stand in for

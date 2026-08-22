@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  # Keep uv from picking a different interpreter than pyproject asks for.
+  UV_PYTHON_PREFERENCE: only-managed
+
+jobs:
+  check:
+    name: check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is not incidental here: the tooling calls everything through
+        # `uv run` and the app handles cp1252 consoles and the yahoofantasy.exe
+        # probe specifically so it works there. This job is what proves it.
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install dependencies
+        # --locked fails if uv.lock is stale relative to pyproject.toml, so a
+        # dependency change that skipped `just lock` cannot land.
+        run: uv sync --locked
+
+      - name: Lint and format check
+        run: uvx --from rust-just just lint
+
+      - name: Type check
+        run: uvx --from rust-just just typecheck
+
+      - name: Tests and coverage floor
+        run: uvx --from rust-just just coverage-gate
+
+  hygiene:
+    name: hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - run: uv sync --locked
+
+      - name: Pre-commit hooks
+        # The lint/type/test hooks already run in `check` across three
+        # platforms; this covers the rest — whitespace, EOF, merge markers,
+        # large files, and the private-key scan.
+        env:
+          # no-commit-to-branch is a local guardrail against committing straight
+          # to main; by the time CI runs, the commit exists and the check would
+          # fail every push to main.
+          SKIP: no-commit-to-branch,ruff,ruff-format,pyrefly,pytest
+        run: uv run pre-commit run --all-files --show-diff-on-failure
