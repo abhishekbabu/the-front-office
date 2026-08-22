@@ -106,8 +106,9 @@ just clean              # caches and build artefacts
 [`.agent/rules/rules.md`](.agent/rules/rules.md).
 
 CI runs the same `just` recipes on Linux, macOS and Windows for every push and
-PR, plus `uv sync --locked` so a dependency change that skipped `just lock`
-cannot land. If `just check` passes locally it passes in CI.
+PR, on the Python version `.python-version` pins plus one newer leg, with
+`uv sync --locked` so a dependency change that skipped `just lock` cannot land.
+If `just check` passes locally it passes in CI.
 
 Tests are hermetic — no network, no credentials, no cache file on disk. Engines
 take their collaborators by keyword, so `tests/conftest.py` fakes stand in for

@@ -76,7 +76,9 @@ New code needs tests in the same commit. Coverage is gated at 95%.
 
 `.github/workflows/ci.yml` runs `just lint`, `just typecheck` and
 `just coverage-gate` on Linux, macOS and Windows, plus the non-duplicated
-pre-commit hooks. It calls the same recipes you run locally — add a gate to the
+pre-commit hooks. `.python-version` pins 3.10 — the floor in `requires-python`,
+and what pyrefly and ruff target — so CI reproduces local rather than silently
+testing a newer interpreter; one extra leg runs 3.13 for forward compatibility. It calls the same recipes you run locally — add a gate to the
 `justfile` and CI picks it up, rather than duplicating the command in YAML.
 
 ## Git
