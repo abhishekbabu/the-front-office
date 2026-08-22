@@ -30,8 +30,8 @@ verify-lock:
 # Quality
 # ============================================================================
 
-# Run every check: lint, format, types, tests, coverage floor
-check: lint typecheck coverage-gate
+# Run every check: lint, format, types, tests, coverage floor, agent docs
+check: lint typecheck check-agents coverage-gate
     @echo "All checks passed."
 
 # Lint and auto-fix, then format
@@ -43,6 +43,10 @@ fmt:
 lint:
     uv run ruff check src/ tests/ scripts/
     uv run ruff format --check src/ tests/ scripts/
+
+# Verify AGENTS.md symlinks, length limits and skill frontmatter
+check-agents:
+    uv run python scripts/check_agent_docs.py
 
 # Type check
 typecheck:

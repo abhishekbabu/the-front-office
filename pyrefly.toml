@@ -1,8 +1,9 @@
 # Type checking config — replaces mypy.ini.
 python-version = "3.10"
 project-includes = ["src", "scripts", "tests"]
-# tests/ is on the path so `from conftest import ...` resolves the shared fakes.
-search-path = ["src", "tests"]
+# tests/ is on the path so `from conftest import ...` resolves the shared fakes;
+# scripts/ so the agent-docs checker resolves the same way pytest sees it.
+search-path = ["src", "tests", "scripts"]
 project-excludes = [
     "**/__pycache__/**",
     "**/.venv/**",

@@ -116,8 +116,13 @@ just lock               # re-resolve uv.lock after editing pyproject.toml
 just clean              # caches and build artefacts
 ```
 
-`just --list` for the full catalog. Agent-facing rules are in
-[`.agent/rules/rules.md`](.agent/rules/rules.md).
+`just --list` for the full catalog.
+
+Agent-facing rules are in [`AGENTS.md`](AGENTS.md), with shared skills under
+[`.agents/skills/`](.agents/skills/). `CLAUDE.md` beside any `AGENTS.md` is a
+symlink to it, and `.claude/skills` and `.agent/rules/rules.md` are symlinks
+too — one source of truth, discovered by each tool at the path it expects.
+`just check-agents` enforces that.
 
 CI runs the same `just` recipes on Linux, macOS and Windows for every push and
 PR, on the Python version `.python-version` pins plus one newer leg, with

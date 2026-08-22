@@ -35,6 +35,13 @@ repos:
             files: ^(src|scripts)/.*\.py$
             types: [python]
 
+          - id: agent-docs
+            name: agent documentation conventions
+            language: system
+            entry: uv run python scripts/check_agent_docs.py
+            pass_filenames: false
+            files: (AGENTS\.md|CLAUDE\.md|\.agents/|scripts/check_agent_docs\.py)$
+
           - id: pytest
             name: pytest (hermetic suite)
             language: system
