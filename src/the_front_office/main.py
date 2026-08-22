@@ -7,12 +7,16 @@ to run scouting reports, view rosters, etc.
 
 import sys
 from datetime import datetime
-from typing import List
+from typing import List, Optional, TYPE_CHECKING, Union
 from the_front_office.config.logging import setup_logging
 from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.scout import Scout
 from the_front_office.trade.engine import TradeEvaluator
 from yahoofantasy import League, Team  # type: ignore[import-untyped]
+
+if TYPE_CHECKING:
+    from google.genai.chats import Chat
+    from the_front_office.clients.gemini.types import MockChatSession
 
 try:
     import readline  # noqa: F401 — enables up/down arrow history in input()
@@ -48,6 +52,35 @@ def _print_roster(team: Team) -> None:
         print(f"  {name:<30} {position:<10} {nba_team:<6}")
 
 
+def _interactive_followup(
+    chat: Optional[Union["Chat", "MockChatSession"]],
+    noun: str,
+) -> None:
+    """Run a follow-up Q&A loop against an open AI chat session."""
+    if not chat:
+        return
+
+    print("\n  " + "─" * 60)
+    print(f"  💬 Interactive Mode: Ask follow-up questions about this {noun}.")
+    print("     Type your question or press Enter to continue to next league.")
+    print("  " + "─" * 60)
+
+    while True:
+        try:
+            user_input = input("\n  Query > ").strip()
+            if not user_input or user_input.lower() in ("/quit", "/exit", "q"):
+                break
+
+            print("  ⏳ Thinking...")
+            response = chat.send_message(user_input)
+            print(f"\n  🤖 {response.text}")
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            print(f"  ❌ Error: {e}")
+            break
+
+
 def _print_help() -> None:
     """Print available commands."""
     print()
@@ -79,29 +112,7 @@ def _cmd_scout(leagues: List[League], mock: bool = False) -> None:
         report, chat = scout.start_analysis()
         print("\n" + report)
 
-        if not chat:
-            continue
-
-        # Interactive Mode
-        print("\n  " + "─" * 60)
-        print("  💬 Interactive Mode: Ask follow-up questions about this report.")
-        print("     Type your question or press Enter to continue to next league.")
-        print("  " + "─" * 60)
-        
-        while True:
-            try:
-                user_input = input("\n  Query > ").strip()
-                if not user_input or user_input.lower() in ("/quit", "/exit", "q"):
-                    break
-                
-                print("  ⏳ Thinking...")
-                response = chat.send_message(user_input)
-                print(f"\n  🤖 {response.text}")
-            except KeyboardInterrupt:
-                break
-            except Exception as e:
-                print(f"  ❌ Error: {e}")
-                break
+        _interactive_followup(chat, "report")
 
 
 def _cmd_trade(leagues: List[League], args: List[str], mock: bool = False) -> None:
@@ -122,29 +133,7 @@ def _cmd_trade(leagues: List[League], args: List[str], mock: bool = False) -> No
         report, chat = evaluator.evaluate(trade_text)
         print("\n" + report)
 
-        if not chat:
-            continue
-
-        # Interactive Mode
-        print("\n  " + "─" * 60)
-        print("  💬 Interactive Mode: Ask follow-up questions about this trade.")
-        print("     Type your question or press Enter to continue to next league.")
-        print("  " + "─" * 60)
-        
-        while True:
-            try:
-                user_input = input("\n  Query > ").strip()
-                if not user_input or user_input.lower() in ("/quit", "/exit", "q"):
-                    break
-                
-                print("  ⏳ Thinking...")
-                response = chat.send_message(user_input)
-                print(f"\n  🤖 {response.text}")
-            except KeyboardInterrupt:
-                break
-            except Exception as e:
-                print(f"  ❌ Error: {e}")
-                break
+        _interactive_followup(chat, "trade")
 
 
 def _cmd_rosters(leagues: List[League]) -> None:
@@ -215,7 +204,7 @@ def main() -> None:
     # --- REPL ---
     while True:
         try:
-            raw = input("  ⚡ ").strip().lower()
+            raw = input("  ⚡ ").strip()
         except (KeyboardInterrupt, EOFError):
             print("\n")
             _print_header("Goodbye 👋")
@@ -225,7 +214,9 @@ def main() -> None:
             continue
 
         parts = raw.split()
-        cmd = parts[0]
+        # Only the command token is case-insensitive — arguments (e.g. player
+        # names passed to /trade) must keep their original casing.
+        cmd = parts[0].lower()
         flags = parts[1:]
 
         if cmd == "/scout":

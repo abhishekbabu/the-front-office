@@ -121,7 +121,7 @@ class GeminiClient:
         
         try:
             response = self.client.models.generate_content(
-                model=MODEL_PRO,
+                model=MODEL_FLASH,
                 contents=prompt,
                 config={
                     'response_mime_type': 'application/json'
