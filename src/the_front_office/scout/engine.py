@@ -11,7 +11,7 @@ from yahoofantasy import League, Player  # type: ignore[import-untyped]
 from the_front_office.clients.nba.client import NBAClient
 from the_front_office.clients.yahoo.client import YahooFantasyClient
 from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
-from the_front_office.config.settings import YAHOO_MAX_WEEKLY_ADDS
+from the_front_office.config.settings import settings
 from the_front_office.services import PlayerContextBuilder
 
 if TYPE_CHECKING:
@@ -56,8 +56,8 @@ class Scout:
 
         # 1c. Transaction Context
         used_adds = my_team.roster_adds.value
-        remaining_adds = max(0, YAHOO_MAX_WEEKLY_ADDS - used_adds)
-        trans_context = f"TRANSACTION CONTEXT:\n- Adds Used: {used_adds}/{YAHOO_MAX_WEEKLY_ADDS}\n- Remaining Adds: {remaining_adds}\n- NOTE: Prioritize aggressive streaming if adds are high, or conservative quality pickups if adds are low."
+        remaining_adds = max(0, settings.yahoo_max_weekly_adds - used_adds)
+        trans_context = f"TRANSACTION CONTEXT:\n- Adds Used: {used_adds}/{settings.yahoo_max_weekly_adds}\n- Remaining Adds: {remaining_adds}\n- NOTE: Prioritize aggressive streaming if adds are high, or conservative quality pickups if adds are low."
 
         # Decide on recommendation task based on remaining adds
         if remaining_adds > 0:

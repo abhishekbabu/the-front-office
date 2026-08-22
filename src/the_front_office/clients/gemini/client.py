@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from google import genai
 from google.genai.chats import Chat
 
-from the_front_office.config.settings import GEMINI_API_KEY
+from the_front_office.config.settings import settings
 
 from .constants import MODEL_FLASH, MODEL_PRO
 from .types import HistoryItem, MockChatSession
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class GeminiClient:
-    def __init__(self, api_key: str | None = GEMINI_API_KEY, mock_mode: bool = False):
+    def __init__(self, api_key: str | None = settings.gemini_api_key, mock_mode: bool = False):
         self.mock_mode = mock_mode
         self.chat: Chat | MockChatSession | None = None
 

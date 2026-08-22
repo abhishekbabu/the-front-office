@@ -1,13 +1,13 @@
 import logging
 import sys
 
-from the_front_office.config.settings import LOG_LEVEL
+from the_front_office.config.settings import settings
 
 
 def setup_logging():
     """Configure logging for the application."""
     root_logger = logging.getLogger()
-    root_logger.setLevel(LOG_LEVEL)
+    root_logger.setLevel(settings.log_level)
 
     # Ensure checking if handlers already exist to avoid dupes
     if not root_logger.handlers:

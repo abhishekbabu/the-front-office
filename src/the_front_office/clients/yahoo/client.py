@@ -12,7 +12,7 @@ from yahoofantasy.api.parse import as_list, from_response_object
 
 from the_front_office.clients.yahoo.constants import SCOUT_CATEGORIES, STAT_CATEGORIES
 from the_front_office.clients.yahoo.types import PlayerPosition, PlayerStat, PlayerStatus, Timeframe
-from the_front_office.config.settings import YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET, YAHOO_REDIRECT_URI, YAHOO_TOKEN_FILE
+from the_front_office.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class YahooFantasyClient:
     @staticmethod
     def _token_exists() -> bool:
         """Check whether a cached OAuth2 token file already exists."""
-        return Path(YAHOO_TOKEN_FILE).exists()
+        return Path(settings.yahoo_token_file).exists()
 
     @classmethod
     def login(cls, force: bool = False) -> None:
@@ -30,11 +30,12 @@ class YahooFantasyClient:
             return
 
         print("🔐 Starting Yahoo Fantasy OAuth2 login …")
-        print(f"   Redirect URI → {YAHOO_REDIRECT_URI}")
+        print(f"   Redirect URI → {settings.yahoo_redirect_uri}")
         print("   A browser window will open — please authorize the app.\n")
 
-        # These should always be set due to .env loading in settings.py
-        if not YAHOO_CLIENT_ID or not YAHOO_CLIENT_SECRET:
+        # Bound locally so the type checker can see them narrowed to str.
+        client_id, client_secret = settings.yahoo_client_id, settings.yahoo_client_secret
+        if not client_id or not client_secret:
             print("⚠️  YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET must be set in .env")
             sys.exit(1)
 
@@ -47,11 +48,11 @@ class YahooFantasyClient:
             yahoofantasy_bin,
             "login",
             "--redirect-uri",
-            YAHOO_REDIRECT_URI,
+            settings.yahoo_redirect_uri,
             "--client-id",
-            YAHOO_CLIENT_ID,
+            client_id,
             "--client-secret",
-            YAHOO_CLIENT_SECRET,
+            client_secret,
             "--listen-port",
             "8080",
         ]

@@ -53,8 +53,9 @@ the-front-office/
 ### Environment Variables
 - Store secrets in `.env` (never commit)
 - Document all env vars in `.env.template`
-- Use `python-dotenv` for loading
-- Always check for missing env vars and fail gracefully
+- Declare every env var as a typed field on `AppSettings` (`config/settings.py`); pydantic-settings
+  loads and validates them, so a malformed value fails at startup with a readable error
+- Read config through the `settings` singleton — never `os.getenv` at a call site
 
 ### Error Handling
 - Use specific exception types, not bare `except:`
@@ -126,12 +127,10 @@ def fetch_players(league, count: int = 20) -> list[object]:
 
 ### Environment Variables
 ```python
-import os
-from dotenv import load_dotenv
+from the_front_office.config.settings import settings
 
-load_dotenv()
-api_key = os.getenv("GOOGLE_API_KEY")
-assert api_key is not None, "GOOGLE_API_KEY must be set"
+if settings.gemini_api_key is None:
+    ...  # degrade gracefully; --mock must work without credentials
 ```
 
 ## AI Assistant Guidelines

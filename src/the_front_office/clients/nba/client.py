@@ -23,7 +23,7 @@ from the_front_office.clients.nba.types import (
     PlayerStats,
     ScheduleCache,
 )
-from the_front_office.config.settings import NBA_API_DELAY, NBA_CACHE_FILE
+from the_front_office.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class NBAClient:
 
     def __init__(self) -> None:
         self._last_call_time: float = 0.0
-        self._cache_file: Path = Path(NBA_CACHE_FILE)
+        self._cache_file: Path = Path(settings.nba_cache_file)
         # Initialize with empty structure
         self._cache_data: NBACacheData = {
             "league_gamelog": {"games": {}, "updated_at": ""},
@@ -133,10 +133,10 @@ class NBAClient:
     # ── Rate Limiting ──────────────────────────────────────────────
 
     def _wait_for_rate_limit(self) -> None:
-        """Ensures at least NBA_API_DELAY seconds between calls."""
+        """Ensures at least `nba_api_delay` seconds between calls."""
         elapsed = time.time() - self._last_call_time
-        if elapsed < NBA_API_DELAY:
-            time.sleep(NBA_API_DELAY - elapsed)
+        if elapsed < settings.nba_api_delay:
+            time.sleep(settings.nba_api_delay - elapsed)
         self._last_call_time = time.time()
 
     # ── Player Stats ───────────────────────────────────────────────

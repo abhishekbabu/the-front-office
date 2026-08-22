@@ -1,30 +1,59 @@
-import os
+"""Central application configuration backed by environment variables.
+
+A single flat Pydantic settings class — field names are snake_case and
+pydantic-settings matches them to SCREAMING_SNAKE env vars case-insensitively.
+Values are validated at import time, so a malformed .env fails immediately with
+a readable error instead of raising somewhere deep in a report run.
+"""
+
 from pathlib import Path
+from typing import Literal
 
-from dotenv import load_dotenv
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Ensure .env is loaded before evaluating os.getenv
-# Walk up from this file to find the project root: src/the_front_office/config -> root
-project_root = Path(__file__).resolve().parents[3]
-env_path = project_root / ".env"
-load_dotenv(env_path)
+# src/the_front_office/config/settings.py -> repo root
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
-# Gemini Settings
-GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
-DEFAULT_MODEL = "gemini-2.5-pro"
 
-# Yahoo Settings
-YAHOO_CLIENT_ID = os.getenv("YAHOO_CLIENT_ID")
-YAHOO_CLIENT_SECRET = os.getenv("YAHOO_CLIENT_SECRET")
-YAHOO_REDIRECT_URI = "https://localhost:8080"
-YAHOO_TOKEN_FILE = ".yahoofantasy"
-YAHOO_MAX_WEEKLY_ADDS = int(os.getenv("YAHOO_MAX_WEEKLY_ADDS", "3"))
+class AppSettings(BaseSettings):
+    """One field per environment variable, plus static tuning constants."""
 
-# Scouting Settings
-DEFAULT_FREE_AGENT_COUNT = 20
-REPORT_FREE_AGENT_LIMIT = 15
-NBA_API_DELAY = 4.0  # Seconds to wait between nba_api calls
-NBA_CACHE_FILE = ".nba_cache.json"  # Unified cache for all NBA data (stats + schedule)
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
-# Logging
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    # ── Gemini ──────────────────────────────────────────────────────────
+    # Optional: absent means AI features degrade to a clear message, and
+    # `--mock` still works without any credentials at all.
+    gemini_api_key: str | None = Field(default=None, validation_alias="GOOGLE_API_KEY")
+    default_model: str = "gemini-2.5-pro"
+
+    # ── Yahoo ───────────────────────────────────────────────────────────
+    yahoo_client_id: str | None = None
+    yahoo_client_secret: str | None = None
+    yahoo_redirect_uri: str = "https://localhost:8080"
+    yahoo_token_file: str = ".yahoofantasy"
+    yahoo_max_weekly_adds: int = Field(default=3, ge=0)
+
+    # ── Scouting ────────────────────────────────────────────────────────
+    default_free_agent_count: int = Field(default=20, gt=0)
+    report_free_agent_limit: int = Field(default=15, gt=0)
+    nba_api_delay: float = Field(default=4.0, ge=0.0)
+    """Seconds between nba_api calls — the project spec requires a delay to avoid IP blocks."""
+    nba_cache_file: str = ".nba_cache.json"
+    """Unified cache for all NBA data (stats + schedule)."""
+
+    # ── Logging ─────────────────────────────────────────────────────────
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def _upper(cls, v: object) -> object:
+        """Accept `log_level=debug` in .env without forcing the caller to shout."""
+        return v.upper() if isinstance(v, str) else v
+
+
+settings = AppSettings()
