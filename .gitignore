@@ -10,6 +10,7 @@ dist/
 build/
 *.egg
 .mypy_cache/
+.ruff_cache/
 
 # Virtual environments
 .venv/
