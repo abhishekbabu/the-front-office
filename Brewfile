@@ -1,4 +1,5 @@
-# System-level tooling. Install with `brew bundle`.
+# System-level tooling for macOS/Linux. Install with `brew bundle`.
+# Windows users: see the One-Time Machine Setup section of README.md (winget/scoop).
 # Python packages are NOT here — those live in pyproject.toml, pinned by uv.lock.
 
 # Task runner

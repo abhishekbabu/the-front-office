@@ -1,7 +1,6 @@
-set shell := ["bash", "-euo", "pipefail", "-c"]
-
-py := ".venv/bin/python"
-bin := ".venv/bin"
+# Recipes shell out only to `uv`, which resolves the project venv on every
+# platform — no .venv/bin vs .venv\Scripts split, no bash dependency.
+set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 
 # List available recipes
 default:
@@ -14,7 +13,7 @@ default:
 # Create the venv and install the exact locked dependencies + git hooks
 install:
     uv sync
-    {{bin}}/pre-commit install
+    uv run pre-commit install
     @echo "Ready. Copy .env.template to .env and fill in your credentials."
 
 # Re-resolve the lockfile after changing dependencies in pyproject.toml
@@ -37,29 +36,29 @@ check: lint typecheck test
 
 # Lint and auto-fix, then format
 fmt:
-    {{bin}}/ruff check src/ tests/ --fix
-    {{bin}}/ruff format src/ tests/
+    uv run ruff check src/ tests/ scripts/ --fix
+    uv run ruff format src/ tests/ scripts/
 
 # Lint without fixing — fails on any finding
 lint:
-    {{bin}}/ruff check src/ tests/
-    {{bin}}/ruff format --check src/ tests/
+    uv run ruff check src/ tests/ scripts/
+    uv run ruff format --check src/ tests/ scripts/
 
 # Type check
 typecheck:
-    {{bin}}/pyrefly check
+    uv run pyrefly check
 
 # Run the hermetic test suite
 test *args:
-    {{bin}}/pytest {{args}}
+    uv run pytest {{args}}
 
 # Run the tests that hit live APIs (needs credentials)
 test-integration:
-    {{bin}}/pytest -m integration
+    uv run pytest -m integration
 
 # Run all hooks against every file, as pre-commit would
 hooks:
-    {{bin}}/pre-commit run --all-files
+    uv run pre-commit run --all-files
 
 # ============================================================================
 # Run
@@ -67,7 +66,7 @@ hooks:
 
 # Start the interactive CLI
 run:
-    {{py}} -m the_front_office.main
+    uv run python -m the_front_office.main
 
 # ============================================================================
 # Housekeeping
@@ -75,11 +74,8 @@ run:
 
 # Delete caches and build artefacts (leaves .env and auth tokens alone)
 clean:
-    rm -rf .ruff_cache .pytest_cache .mypy_cache .pyrefly_cache
-    find . -type d -name __pycache__ -not -path "./.venv/*" -exec rm -rf {} + 2>/dev/null || true
-    @echo "Cleaned."
+    uv run python scripts/clean.py
 
 # Delete the cached NBA stats/schedule so the next run refetches
 clean-nba-cache:
-    rm -f .nba_cache.json
-    @echo "NBA cache cleared."
+    uv run python scripts/clean.py --nba-cache-only

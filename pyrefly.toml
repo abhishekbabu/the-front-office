@@ -1,6 +1,6 @@
 # Type checking config — replaces mypy.ini.
 python-version = "3.10"
-project-includes = ["src"]
+project-includes = ["src", "scripts", "tests"]
 search-path = ["src"]
 project-excludes = [
     "**/__pycache__/**",

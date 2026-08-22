@@ -23,17 +23,39 @@ remaining schedule.
 **Tooling**
 - `ruff` for lint and format, `pyrefly` for type checking, `pytest` for the hermetic suite
 - `pre-commit` runs all three on every commit; `just` is the entry point for everything
+- Every recipe and hook invokes tools through `uv run`, so the same commands work on macOS, Linux and Windows
 
 ## First-Time Setup
 
 ### One-Time Machine Setup
 
+The project needs two CLIs: [`uv`](https://docs.astral.sh/uv/) and
+[`just`](https://just.systems). Python itself is not installed separately — `uv`
+provisions an interpreter matching `requires-python`.
+
+**macOS / Linux**
+
 ```bash
 brew bundle
 ```
 
-`brew bundle` installs `just` and `uv`. Python itself is not installed via brew —
-`uv` provisions an interpreter matching `requires-python`.
+**Windows** (PowerShell)
+
+```powershell
+winget install --id=astral-sh.uv -e
+winget install --id=Casey.Just -e
+```
+
+<details>
+<summary>Scoop, or no package manager</summary>
+
+```powershell
+scoop install uv just
+```
+
+Or install `uv` from [astral.sh/uv](https://docs.astral.sh/uv/getting-started/installation/)
+and `just` from [just.systems](https://just.systems/man/en/packages.html).
+</details>
 
 ### Yahoo Developer App
 
@@ -63,8 +85,11 @@ installs the git hooks.
 
 ```bash
 uv sync
-.venv/bin/pre-commit install
+uv run pre-commit install
 ```
+
+Every recipe in the `justfile` is a thin wrapper over `uv run <tool>`, so any of
+them can be run directly this way.
 </details>
 
 ### Environment
@@ -171,6 +196,22 @@ default.
 Coverage targets the logic where a silent error changes a real decision —
 volume-weighted FG%/FT%, cache staleness boundaries, remaining-game counting,
 retry classification, and command parsing.
+
+## Platform Support
+
+Runs on macOS, Linux and Windows. Two Windows-specific details are handled in
+the application itself:
+
+- `pyreadline3` is installed only on Windows (`sys_platform == 'win32'`), giving
+  the REPL arrow-key history that `readline` provides elsewhere. Its import is
+  guarded, so a missing module degrades rather than crashes.
+- The Yahoo OAuth2 flow shells out to the `yahoofantasy` CLI, which is
+  `yahoofantasy.exe` under `.venv\Scripts\` on Windows and `yahoofantasy` on
+  PATH elsewhere. `YahooFantasyClient.login` probes for the former and falls
+  back to the latter.
+
+All filesystem access goes through `pathlib`, and no tooling depends on a POSIX
+shell — `just clean` is a Python script for this reason.
 
 ## Security
 

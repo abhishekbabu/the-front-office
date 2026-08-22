@@ -154,4 +154,9 @@ When working on this project:
 4. Create PRs with descriptive titles and bodies
 5. Keep commits atomic and well-described
 6. Never commit secrets or tokens
-7. **ALWAYS** run Python commands through the project venv. Prefer the `justfile` recipes (`just check`, `just test`, `just run`); they pin the interpreter so no activation step is needed.
+7. **ALWAYS** run Python commands through the project venv. Prefer the `justfile` recipes
+   (`just check`, `just test`, `just run`); otherwise use `uv run <tool>`.
+8. **NEVER hardcode `.venv/bin/...` or `.venv/Scripts/...`** in a justfile recipe, pre-commit hook,
+   or script. That path differs between Windows and POSIX; `uv run` resolves it on every platform.
+9. **Keep tooling shell-agnostic.** No `find`, `rm -rf`, or other POSIX-only commands in recipes —
+   the project supports Windows, where no bash is guaranteed. Write a script in `scripts/` instead.

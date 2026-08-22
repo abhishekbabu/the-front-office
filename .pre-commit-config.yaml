@@ -29,17 +29,17 @@ repos:
           - id: pyrefly
             name: pyrefly type check
             language: system
-            entry: .venv/bin/pyrefly
+            entry: uv run pyrefly
             args: ["check"]
             pass_filenames: false
-            files: ^src/.*\.py$
+            files: ^(src|scripts)/.*\.py$
             types: [python]
 
           - id: pytest
             name: pytest (hermetic suite)
             language: system
-            entry: .venv/bin/pytest
+            entry: uv run pytest
             args: ["-q"]
             pass_filenames: false
-            files: ^(src|tests)/.*\.py$
+            files: ^(src|tests|scripts)/.*\.py$
             types: [python]
