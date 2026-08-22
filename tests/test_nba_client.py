@@ -1,11 +1,11 @@
 """Tests for the pure logic in NBAClient — no network, no cache file on disk."""
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
 import pytest
 
-from the_front_office.clients.nba.client import PACIFIC, NBAClient
+from the_front_office.clients.nba.client import PACIFIC, NBAClient, _parse_timestamp, _utc_now
 from the_front_office.clients.nba.types import GameLogRecord
 
 
@@ -161,51 +161,146 @@ def test_undateable_schedule_reports_max_age() -> None:
 # ── get_remaining_games ─────────────────────────────────────────────────
 
 
+def _sched_game(day: str, tipoff_utc: str, status: int = 1) -> dict[str, object]:
+    return {"date": day, "tipoff_utc": tipoff_utc, "status": status, "home": "LAL", "away": "BOS"}
+
+
 def _schedule_client(games: list[dict[str, object]]) -> NBAClient:
     c = _client()
     c._cache_data["schedule"] = {
         "teams": {"LAL": games},  # type: ignore[typeddict-item]
-        "updated_at": datetime.now().isoformat(),
+        "updated_at": _utc_now().isoformat(),
     }
     c._ensure_schedule_loaded = lambda: None  # type: ignore[method-assign]
     return c
 
 
-def test_counts_only_future_scheduled_games() -> None:
-    today = date.today()
+WINDOW_START = date(2026, 2, 9)
+WINDOW_END = date(2026, 2, 15)
+
+
+def test_counts_only_games_that_have_not_tipped_off() -> None:
+    now = datetime(2026, 2, 10, 20, 0, tzinfo=timezone.utc)  # 12:00 PT Feb 10
     c = _schedule_client(
         [
-            {"date": (today + timedelta(days=1)).isoformat(), "status": 1, "home": "LAL", "away": "BOS"},
-            {"date": (today + timedelta(days=2)).isoformat(), "status": 2, "home": "LAL", "away": "NYK"},
-            {"date": (today + timedelta(days=3)).isoformat(), "status": 3, "home": "LAL", "away": "PHX"},
-            {"date": (today - timedelta(days=1)).isoformat(), "status": 1, "home": "LAL", "away": "MIA"},
+            _sched_game("2026-02-10", "2026-02-11T03:00:00Z"),  # tips tonight — counts
+            _sched_game("2026-02-12", "2026-02-13T03:00:00Z"),  # future — counts
+            _sched_game("2026-02-09", "2026-02-10T03:00:00Z"),  # already tipped — does not
         ]
     )
-    # status 1 (scheduled) and 2 (live) count; 3 (final) and past dates do not.
-    assert c.get_remaining_games("LAL", today, today + timedelta(days=7)) == 2
+    assert c.get_remaining_games("LAL", WINDOW_START, WINDOW_END, now=now) == 2
+
+
+def test_finished_games_are_excluded_by_status() -> None:
+    """A future-dated game marked final (postponed, rescheduled) must not count."""
+    now = datetime(2026, 2, 10, 20, 0, tzinfo=timezone.utc)
+    c = _schedule_client([_sched_game("2026-02-12", "2026-02-13T03:00:00Z", status=3)])
+    assert c.get_remaining_games("LAL", WINDOW_START, WINDOW_END, now=now) == 0
+
+
+def test_stale_cached_status_does_not_resurrect_a_played_sched_game() -> None:
+    """The schedule cache lives up to 24h, so a played game can still read
+    status=1. The tip-off check is what actually excludes it."""
+    now = datetime(2026, 2, 11, 6, 0, tzinfo=timezone.utc)
+    c = _schedule_client([_sched_game("2026-02-10", "2026-02-11T03:00:00Z", status=1)])
+    assert c.get_remaining_games("LAL", WINDOW_START, WINDOW_END, now=now) == 0
+
+
+def test_result_does_not_depend_on_the_machines_timezone() -> None:
+    """The regression this fix exists for.
+
+    21:30 PT on Feb 10 is already 00:30 ET on Feb 11. The old code compared the
+    game's date label against a local `date.today()`, so on an Eastern machine
+    the date had rolled over and a game tipping at 22:00 PT that night was
+    dropped from the count. The instant is the same either way, so the answer
+    must be too.
+    """
+    tonight = _sched_game("2026-02-10", "2026-02-11T06:00:00Z")  # 22:00 PT Feb 10
+    instant = datetime(2026, 2, 11, 5, 30, tzinfo=timezone.utc)  # 21:30 PT / 00:30 ET
+
+    counts = {
+        zone: _schedule_client([dict(tonight)]).get_remaining_games(
+            "LAL", WINDOW_START, WINDOW_END, now=instant.astimezone(ZoneInfo(zone))
+        )
+        for zone in ("America/Los_Angeles", "America/New_York", "UTC", "Australia/Sydney")
+    }
+    assert set(counts.values()) == {1}, counts
 
 
 def test_games_outside_the_matchup_window_are_excluded() -> None:
-    today = date.today()
+    now = datetime(2026, 2, 10, 20, 0, tzinfo=timezone.utc)
+    c = _schedule_client([_sched_game("2026-02-20", "2026-02-21T03:00:00Z")])
+    assert c.get_remaining_games("LAL", WINDOW_START, WINDOW_END, now=now) == 0
+
+
+def test_window_bounds_are_inclusive() -> None:
+    now = datetime(2026, 2, 8, 12, 0, tzinfo=timezone.utc)
     c = _schedule_client(
         [
-            {"date": (today + timedelta(days=10)).isoformat(), "status": 1, "home": "LAL", "away": "BOS"},
+            _sched_game("2026-02-09", "2026-02-10T03:00:00Z"),
+            _sched_game("2026-02-15", "2026-02-16T03:00:00Z"),
         ]
     )
-    assert c.get_remaining_games("LAL", today, today + timedelta(days=7)) == 0
+    assert c.get_remaining_games("LAL", WINDOW_START, WINDOW_END, now=now) == 2
 
 
 def test_team_abbreviation_is_case_insensitive() -> None:
-    today = date.today()
-    c = _schedule_client(
-        [
-            {"date": (today + timedelta(days=1)).isoformat(), "status": 1, "home": "LAL", "away": "BOS"},
-        ]
-    )
-    assert c.get_remaining_games("lal", today, today + timedelta(days=7)) == 1
+    now = datetime(2026, 2, 10, 20, 0, tzinfo=timezone.utc)
+    c = _schedule_client([_sched_game("2026-02-12", "2026-02-13T03:00:00Z")])
+    assert c.get_remaining_games("lal", WINDOW_START, WINDOW_END, now=now) == 1
 
 
 def test_unknown_team_returns_zero() -> None:
-    today = date.today()
     c = _schedule_client([])
-    assert c.get_remaining_games("XXX", today, today + timedelta(days=7)) == 0
+    assert c.get_remaining_games("XXX", WINDOW_START, WINDOW_END) == 0
+
+
+def test_z_suffixed_timestamps_parse_on_python_310() -> None:
+    """Regression: datetime.fromisoformat only accepts "Z" from 3.11, and this
+    project targets 3.10. Every gameDateTimeUTC the NBA returns ends in Z, so
+    without normalisation every game parsed as None and every team reported
+    zero remaining games."""
+    parsed = _parse_timestamp("2026-02-13T03:00:00Z")
+    assert parsed is not None
+    assert parsed == datetime(2026, 2, 13, 3, 0, tzinfo=timezone.utc)
+    # The +00:00 spelling must keep working too.
+    assert _parse_timestamp("2026-02-13T03:00:00+00:00") == parsed
+
+
+def test_unparseable_tipoff_is_skipped_not_counted() -> None:
+    now = datetime(2026, 2, 10, 20, 0, tzinfo=timezone.utc)
+    c = _schedule_client([_sched_game("2026-02-12", "not-a-timestamp")])
+    assert c.get_remaining_games("LAL", WINDOW_START, WINDOW_END, now=now) == 0
+
+
+def test_bulk_uses_one_instant_for_every_team() -> None:
+    now = datetime(2026, 2, 10, 20, 0, tzinfo=timezone.utc)
+    c = _schedule_client([_sched_game("2026-02-12", "2026-02-13T03:00:00Z")])
+    c._cache_data["schedule"]["teams"]["BOS"] = [  # type: ignore[typeddict-item]
+        _sched_game("2026-02-12", "2026-02-13T03:00:00Z")
+    ]
+    assert c.get_remaining_games_bulk(["LAL", "bos"], WINDOW_START, WINDOW_END, now=now) == {
+        "LAL": 1,
+        "BOS": 1,
+    }
+
+
+# ── schedule cache migration ────────────────────────────────────────────
+
+
+def test_schedule_written_before_tipoff_field_is_refetched() -> None:
+    c = _client()
+    c._cache_data["schedule"] = {
+        "teams": {"LAL": [{"date": "2026-02-10", "status": 1, "home": "LAL", "away": "BOS"}]},  # type: ignore[typeddict-item]
+        "updated_at": _utc_now().isoformat(),
+    }
+    assert c._schedule_predates_tipoff_field() is True
+
+
+def test_current_shape_is_not_refetched() -> None:
+    c = _schedule_client([_sched_game("2026-02-12", "2026-02-13T03:00:00Z")])
+    assert c._schedule_predates_tipoff_field() is False
+
+
+def test_empty_schedule_is_not_treated_as_outdated_shape() -> None:
+    assert _client()._schedule_predates_tipoff_field() is False

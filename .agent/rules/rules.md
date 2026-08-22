@@ -72,6 +72,10 @@ the-front-office/
   not to local time — the league schedules by Pacific, and a local clock silently shifts the
   boundaries by the machine's UTC offset.
 - `zoneinfo` needs the `tzdata` package on Windows; it is declared with a `sys_platform` marker.
+- **`datetime.fromisoformat` cannot parse a trailing `Z` on Python 3.10** (added in 3.11), and NBA
+  timestamps all end in `Z`. Parse through `_parse_timestamp`, never `fromisoformat` directly.
+- Keep the two notions of schedule time apart: `GameRecord["date"]` is a game-date *label* for window
+  comparisons; `GameRecord["tipoff_utc"]` is the real instant for has-it-started comparisons.
 
 ### Error Handling
 - Use specific exception types, not bare `except:`

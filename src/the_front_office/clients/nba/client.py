@@ -115,8 +115,12 @@ def _parse_timestamp(value: str) -> datetime | None:
     zone produced them, so they cannot be placed on a real timeline. Treating
     them as unusable costs one refetch on upgrade and is self-healing.
     """
+    # datetime.fromisoformat only learned the "Z" suffix in 3.11, and this
+    # project targets 3.10 — every gameDateTimeUTC the NBA returns ends in Z,
+    # so without this normalisation every schedule timestamp parses as None.
+    normalised = value[:-1] + "+00:00" if value.endswith("Z") else value
     try:
-        parsed = datetime.fromisoformat(value)
+        parsed = datetime.fromisoformat(normalised)
     except ValueError:
         return None
     if parsed.tzinfo is None:
@@ -328,9 +332,17 @@ class NBAClient:
         self._wait_for_rate_limit()
         return scheduleleaguev2.ScheduleLeagueV2(timeout=SCHEDULE_TIMEOUT_SECONDS).get_dict()
 
+    def _schedule_predates_tipoff_field(self) -> bool:
+        """Whether the cached schedule was written before tipoff_utc existed."""
+        for games in self._cache_data["schedule"]["teams"].values():
+            if games:
+                return "tipoff_utc" not in games[0]
+        return False
+
     def _ensure_schedule_loaded(self) -> None:
-        """Fetch full season schedule via nba_api if stale or missing."""
-        if self._cache_data["schedule"]["updated_at"] and self._get_schedule_age_hours() < SCHEDULE_TTL_HOURS:
+        """Fetch full season schedule via nba_api if stale, missing, or outdated in shape."""
+        fresh = self._cache_data["schedule"]["updated_at"] and self._get_schedule_age_hours() < SCHEDULE_TTL_HOURS
+        if fresh and not self._schedule_predates_tipoff_field():
             return
 
         logger.debug("Refreshing NBA schedule via nba_api...")
@@ -341,7 +353,12 @@ class NBAClient:
             for game_date_obj in data["leagueSchedule"]["gameDates"]:
                 for game in game_date_obj["games"]:
                     game_info: GameRecord = {
+                        # gameDateEst is midnight-anchored — a date *label*, not a
+                        # timestamp. Verified across a full 1400-game season: it is
+                        # always 00:00 and always equals the Eastern tip-off date,
+                        # because no game tips after 23:00 ET.
                         "date": str(game["gameDateEst"])[:10],
+                        "tipoff_utc": str(game["gameDateTimeUTC"]),
                         "status": int(game["gameStatus"]),
                         "home": str(game["homeTeam"]["teamTricode"]),
                         "away": str(game["awayTeam"]["teamTricode"]),
@@ -354,19 +371,50 @@ class NBAClient:
         except Exception as e:
             logger.warning(f"Failed to fetch NBA schedule: {e}")
 
-    def get_remaining_games(self, team_abbr: str, start_date: date, end_date: date) -> int:
-        """Count scheduled/live games for a team in a date range."""
+    def get_remaining_games(self, team_abbr: str, start_date: date, end_date: date, now: datetime | None = None) -> int:
+        """Count a team's not-yet-started games inside a matchup window.
+
+        Two different notions of time, deliberately kept apart:
+
+        * The **window** test uses the NBA game-date label, which is what Yahoo's
+          matchup start/end dates also mean. Comparing labels to labels avoids
+          any zone question.
+        * The **already-played** test uses the real tip-off instant in UTC. The
+          previous implementation used `date.today()` on the local clock, so on
+          an Eastern machine after 9pm PT the date had already rolled over and a
+          game that had not yet tipped on the West coast was dropped from the
+          count.
+
+        "Remaining" means not yet started: a game in progress has already begun
+        producing its stats, so it does not represent future production. The
+        status filter still runs, because a cached schedule can be up to
+        SCHEDULE_TTL_HOURS old and its statuses correspondingly stale.
+
+        Args:
+            now: override the current instant; must be timezone-aware. For tests.
+        """
         self._ensure_schedule_loaded()
         games = self._cache_data["schedule"]["teams"].get(team_abbr.upper(), [])
+        moment = now or _utc_now()
+
         count = 0
-        today = date.today()
         for g in games:
-            game_date = date.fromisoformat(g["date"])
-            if start_date <= game_date <= end_date and game_date >= today and g["status"] in (1, 2):
-                count += 1
+            if not (start_date <= date.fromisoformat(g["date"]) <= end_date):
+                continue
+            if g["status"] not in (1, 2):
+                continue
+            tipoff = _parse_timestamp(g["tipoff_utc"])
+            if tipoff is None or tipoff <= moment:
+                continue
+            count += 1
         return count
 
-    def get_remaining_games_bulk(self, team_abbrs: list[str], start_date: date, end_date: date) -> dict[str, int]:
-        """Bulk count remaining games."""
+    def get_remaining_games_bulk(
+        self, team_abbrs: list[str], start_date: date, end_date: date, now: datetime | None = None
+    ) -> dict[str, int]:
+        """Bulk count remaining games. One schedule load, one `now` for all teams."""
         self._ensure_schedule_loaded()
-        return {abbr.upper(): self.get_remaining_games(abbr, start_date, end_date) for abbr in set(team_abbrs)}
+        moment = now or _utc_now()
+        return {
+            abbr.upper(): self.get_remaining_games(abbr, start_date, end_date, now=moment) for abbr in set(team_abbrs)
+        }

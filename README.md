@@ -181,6 +181,12 @@ error string to signal failure; those are indistinguishable from real results.
 They raise a `FrontOfficeError` subclass, and the CLI catches it. An empty list
 is a valid answer (no search matches); a failed request is not.
 
+**Remaining-game counts are zone-independent.** The matchup *window* test uses
+the NBA game-date label (what Yahoo's matchup dates also mean), while the
+*already-played* test uses the true tip-off instant in UTC. "Remaining" means not
+yet started. The status filter still runs, since a cached schedule can be 24h old
+and its statuses correspondingly stale.
+
 **Rate limiting is deliberate.** `nba_api` calls are spaced by
 `settings.nba_api_delay` (4s default) and retried only on transient failures —
 timeouts, 5xx, and the non-JSON body stats.nba.com serves when throttling. A 4xx

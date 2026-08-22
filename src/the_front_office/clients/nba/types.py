@@ -48,7 +48,11 @@ class LeagueGamelogCache(TypedDict):
 
 class GameRecord(TypedDict):
     date: str
+    """NBA game-date label (the Eastern calendar date), matching Yahoo's matchup dates."""
+    tipoff_utc: str
+    """Actual tip-off instant, ISO-8601 UTC. The only field that says whether a game has started."""
     status: int
+    """1 = scheduled, 2 = live, 3 = final."""
     home: str
     away: str
 
