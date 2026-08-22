@@ -33,7 +33,8 @@ the-front-office/
 │   │   ├── __init__.py       # Re-exports Scout class
 │   │   └── engine.py         # Scout orchestrator
 │   └── main.py               # Interactive REPL entry point
-├── tests/                    # Unit tests (when added)
+├── tests/                    # Hermetic unit tests (pytest)
+├── justfile                  # Task runner (just check / test / run)
 ├── .agent/rules/rules.md     # Project configuration and rules
 ├── pyrefly.toml              # Type checking config
 └── pyproject.toml            # Project metadata & dependencies
@@ -146,4 +147,4 @@ When working on this project:
 4. Create PRs with descriptive titles and bodies
 5. Keep commits atomic and well-described
 6. Never commit secrets or tokens
-7. **ALWAYS** run Python commands through the project venv — prefer `uv run <cmd>`, which resolves the right interpreter on every platform.
+7. **ALWAYS** run Python commands through the project venv. Prefer the `justfile` recipes (`just check`, `just test`, `just run`); they pin the interpreter so no activation step is needed.

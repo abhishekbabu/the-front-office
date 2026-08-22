@@ -57,13 +57,19 @@ the-front-office/
 git clone <repo-url>
 cd the-front-office
 
-# Create the virtual environment and install locked dependencies
+# Create the venv, install locked dependencies, and install the git hooks
+just install
+```
+
+<details>
+<summary>Without <code>just</code></summary>
+
+```bash
 uv venv --python 3.10
 uv pip install -e ".[dev]"
-
-# Install the git hooks (ruff, ruff-format, pyrefly run on every commit)
-uv run pre-commit install
+.venv/bin/pre-commit install
 ```
+</details>
 
 ### 3. Configuration
 Copy `.env.template` to `.env` and configure your credentials:
@@ -81,8 +87,8 @@ LOG_LEVEL=INFO
 ### 4. Run (Interactive Mode)
 Start the CLI application. You will be prompted to authenticate with Yahoo on the first run.
 ```bash
-python -m the_front_office.main
-# OR if installed via pip:
+just run
+# OR, if installed on PATH:
 front-office
 ```
 
@@ -104,6 +110,18 @@ Once inside the shell, use the following commands:
 - [x] **Mission 3: Interactive CLI** — Robust command loop for easy navigation.
 - [x] **Mission 4: Trade War Room** — Natural language trade evaluation (Shutdown Risk, Roster Awareness, Live Search).
 - [ ] **Mission 5: Dashboard MVP** — Web-based "Morning Scout Report" (Streamlit/React).
+
+---
+
+## 🧰 Common Tasks
+```text
+just              List every recipe
+just check        Lint, type check and test — everything the git hooks run
+just fmt          Auto-fix lint findings and format
+just test         Run the hermetic test suite (add args: just test "-k scout")
+just run          Start the interactive CLI
+just clean        Remove caches and build artefacts
+```
 
 ---
 
