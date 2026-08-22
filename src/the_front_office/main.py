@@ -7,15 +7,18 @@ to run scouting reports, view rosters, etc.
 
 import sys
 from datetime import datetime
-from typing import List, Optional, TYPE_CHECKING, Union
-from the_front_office.config.logging import setup_logging
+from typing import TYPE_CHECKING, Union
+
+from yahoofantasy import League, Team  # type: ignore[import-untyped]
+
 from the_front_office.clients.yahoo.client import YahooFantasyClient
+from the_front_office.config.logging import setup_logging
 from the_front_office.scout import Scout
 from the_front_office.trade.engine import TradeEvaluator
-from yahoofantasy import League, Team  # type: ignore[import-untyped]
 
 if TYPE_CHECKING:
     from google.genai.chats import Chat
+
     from the_front_office.clients.gemini.types import MockChatSession
 
 try:
@@ -27,6 +30,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _print_header(text: str) -> None:
     """Print a styled section header."""
@@ -53,7 +57,7 @@ def _print_roster(team: Team) -> None:
 
 
 def _interactive_followup(
-    chat: Optional[Union["Chat", "MockChatSession"]],
+    chat: Union["Chat", "MockChatSession"] | None,
     noun: str,
 ) -> None:
     """Run a follow-up Q&A loop against an open AI chat session."""
@@ -102,12 +106,13 @@ def _print_help() -> None:
 # Command Handlers
 # ---------------------------------------------------------------------------
 
-def _cmd_scout(leagues: List[League], mock: bool = False) -> None:
+
+def _cmd_scout(leagues: list[League], mock: bool = False) -> None:
     """Run the scout report for all leagues."""
     for league in leagues:
         _print_header(f"Scouting Report: {league.name}")
         scout = Scout(league, mock_ai=mock)
-        
+
         print("  ⏳ Analyzing roster, free agents, and schedule... (this may take a moment)")
         report, chat = scout.start_analysis()
         print("\n" + report)
@@ -115,7 +120,7 @@ def _cmd_scout(leagues: List[League], mock: bool = False) -> None:
         _interactive_followup(chat, "report")
 
 
-def _cmd_trade(leagues: List[League], args: List[str], mock: bool = False) -> None:
+def _cmd_trade(leagues: list[League], args: list[str], mock: bool = False) -> None:
     """Run the trade evaluator."""
     if not args:
         print("  ⚠️  Usage: /trade <trade description>")
@@ -124,11 +129,11 @@ def _cmd_trade(leagues: List[League], args: List[str], mock: bool = False) -> No
         return
 
     trade_text = " ".join(args)
-    
+
     for league in leagues:
         _print_header(f"Trade Evaluation: {league.name}")
         evaluator = TradeEvaluator(league, mock_ai=mock)
-        
+
         print("  ⏳ Analyzing trade... (parsing & enriching data)")
         report, chat = evaluator.evaluate(trade_text)
         print("\n" + report)
@@ -136,7 +141,7 @@ def _cmd_trade(leagues: List[League], args: List[str], mock: bool = False) -> No
         _interactive_followup(chat, "trade")
 
 
-def _cmd_rosters(leagues: List[League]) -> None:
+def _cmd_rosters(leagues: list[League]) -> None:
     """Show all team rosters."""
     for league in leagues:
         _print_header(f"League: {league.name}")
@@ -148,7 +153,7 @@ def _cmd_rosters(leagues: List[League]) -> None:
             _print_roster(team)
 
 
-def _cmd_my_roster(leagues: List[League]) -> None:
+def _cmd_my_roster(leagues: list[League]) -> None:
     """Show only the user's roster."""
     for league in leagues:
         yahoo = YahooFantasyClient(league)
@@ -160,7 +165,7 @@ def _cmd_my_roster(leagues: List[League]) -> None:
             print(f"  ⚠️  Could not identify your team in {league.name}")
 
 
-def _cmd_matchup(leagues: List[League]) -> None:
+def _cmd_matchup(leagues: list[League]) -> None:
     """Show current matchup context."""
     for league in leagues:
         yahoo = YahooFantasyClient(league)
@@ -177,6 +182,7 @@ def _cmd_matchup(leagues: List[League]) -> None:
 # Interactive Loop
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     """Authenticate once, then run an interactive command loop."""
     setup_logging()
@@ -192,7 +198,7 @@ def main() -> None:
     # --- Fetch leagues (once) ---
     now = datetime.now()
     season_year = now.year if now.month >= 9 else now.year - 1
-    leagues: List[League] = ctx.get_leagues("nba", season_year)
+    leagues: list[League] = ctx.get_leagues("nba", season_year)
 
     if not leagues:
         print("  ⚠️  No NBA leagues found for this season.")

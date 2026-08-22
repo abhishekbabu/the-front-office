@@ -1,19 +1,22 @@
 """
 Scout Engine — Orchestrates data retrieval and AI analysis for scouting reports.
 """
+
 import logging
 from datetime import date
-from typing import Dict, List, Optional, TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Union
+
 from yahoofantasy import League, Player  # type: ignore[import-untyped]
 
-from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
-from the_front_office.config.settings import YAHOO_MAX_WEEKLY_ADDS
 from the_front_office.clients.nba.client import NBAClient
 from the_front_office.clients.yahoo.client import YahooFantasyClient
+from the_front_office.config.constants import SCOUT_PROMPT_TEMPLATE
+from the_front_office.config.settings import YAHOO_MAX_WEEKLY_ADDS
 from the_front_office.services import PlayerContextBuilder
 
 if TYPE_CHECKING:
     from google.genai.chats import Chat
+
     from the_front_office.clients.gemini.types import MockChatSession
 
 logger = logging.getLogger(__name__)
@@ -23,8 +26,10 @@ class Scout:
     """
     Orchestrates data retrieval and AI analysis to generate scouting reports.
     """
+
     def __init__(self, league: League, mock_ai: bool = False):
         from the_front_office.clients.gemini.client import GeminiClient
+
         self.ai = GeminiClient(mock_mode=mock_ai)
         self.nba = NBAClient()
         self.yahoo = YahooFantasyClient(league)
@@ -43,8 +48,8 @@ class Scout:
 
         # 1b. Get matchup dates for remaining games calculation
         week_start_str, week_end_str = self.yahoo.get_matchup_dates(my_team)
-        matchup_start: Optional[date] = None
-        matchup_end: Optional[date] = None
+        matchup_start: date | None = None
+        matchup_end: date | None = None
         if week_start_str and week_end_str:
             matchup_start = date.fromisoformat(week_start_str)
             matchup_end = date.fromisoformat(week_end_str)
@@ -61,18 +66,16 @@ class Scout:
             recommendation_instructions = "You have **0 adds remaining**. You CANNOT add players. Instead, identify **3 players to MONITOR** for next week who fit the team's needs."
 
         # 2. Enrich Roster with NBA Stats + Remaining Games
-        players_list = my_team.roster().players if hasattr(my_team, 'roster') else my_team.players()
+        players_list = my_team.roster().players if hasattr(my_team, "roster") else my_team.players()
         logger.debug(f"Fetching stats for {len(players_list)} rostered players...")
-        roster_enriched = self.context_builder.build_context_for_players(
-            players_list, matchup_start, matchup_end
-        )
+        roster_enriched = self.context_builder.build_context_for_players(players_list, matchup_start, matchup_end)
 
         # 3. Fetch Top Free Agents by Category (Last 7 Days)
         stat_leaders = self.yahoo.fetch_top_by_stat(per_stat=10)
 
         # Deduplicate: track which stats each player appears in
-        seen: Dict[str, List[str]] = {}  # player_key → [stat_names]
-        player_map: Dict[str, Player] = {}  # player_key → Player object
+        seen: dict[str, list[str]] = {}  # player_key → [stat_names]
+        player_map: dict[str, Player] = {}  # player_key → Player object
         for stat_name, players in stat_leaders.items():
             for p in players:
                 key = p.player_key
@@ -84,7 +87,7 @@ class Scout:
         # Build enriched free agent string sorted by number of categories (most versatile first)
         unique_players = sorted(seen.items(), key=lambda x: len(x[1]), reverse=True)
         logger.debug(f"Fetching NBA stats for {len(unique_players)} unique free agents...")
-        
+
         # Prepare list of players and annotations
         fa_players = []
         fa_annotations = {}
@@ -96,13 +99,13 @@ class Scout:
         fas_enriched = self.context_builder.build_context_for_players(
             fa_players, matchup_start, matchup_end, fa_annotations
         )
-        
+
         # 4. Build schedule context string
         schedule_context = ""
         if matchup_start and matchup_end:
             schedule_context = f"MATCHUP PERIOD: {week_start_str} to {week_end_str}\n"
             schedule_context += "REMAINING GAMES BY TEAM:\n"
-            
+
             # Re-fetch remaining games just for the summary (a bit redundant but clean for now)
             # Optimization: context_builder could return the remaining_games dict too, but let's keep it simple.
             all_teams = set()
@@ -110,7 +113,7 @@ class Scout:
                 all_teams.add(p.editorial_team_abbr)
             for p in fa_players:
                 all_teams.add(p.editorial_team_abbr)
-            
+
             remaining_games = self.nba.get_remaining_games_bulk(list(all_teams), matchup_start, matchup_end)
 
             # Sort by games remaining (descending) for clarity
@@ -126,10 +129,10 @@ class Scout:
             trans_context=trans_context,
             recommendation_instructions=recommendation_instructions,
         )
-        
+
         return prompt
 
-    def start_analysis(self) -> tuple[str, Optional[Union["Chat", "MockChatSession"]]]:
+    def start_analysis(self) -> tuple[str, Union["Chat", "MockChatSession"] | None]:
         """
         Start an interactive analysis session.
         Returns the initial report text and the chat session object.

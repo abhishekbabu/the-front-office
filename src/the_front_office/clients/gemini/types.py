@@ -1,21 +1,27 @@
 """
 Type definitions for Gemini Client.
 """
-from typing import Optional, Union, Protocol, TypedDict, List, Any
+
+from typing import Any, Protocol, TypedDict
+
 
 class ResponseProtocol(Protocol):
-    text: Optional[str]
+    text: str | None
+
 
 class ChatSession(Protocol):
-    def send_message(self, message: Union[str, List[str], Any]) -> ResponseProtocol: ...
+    def send_message(self, message: str | list[str] | Any) -> ResponseProtocol: ...
+
 
 class MockResponse:
-    def __init__(self, text: Optional[str]):
+    def __init__(self, text: str | None):
         self.text = text
+
 
 class MockChatSession:
     """Simulates a genai.chats.Chat object for testing."""
-    def send_message(self, message: Union[str, List[str], Any]) -> MockResponse:
+
+    def send_message(self, message: str | list[str] | Any) -> MockResponse:
         content = str(message)
         return MockResponse(self._get_response(content))
 
@@ -28,6 +34,7 @@ class MockChatSession:
         else:
             return "[MOCK] That's a great question. Based on the stats, we should proceed with the add."
 
+
 class HistoryItem(TypedDict):
     role: str
-    parts: List[str]
+    parts: list[str]

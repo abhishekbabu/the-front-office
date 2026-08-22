@@ -1,11 +1,13 @@
 """
 Yahoo Fantasy API type definitions.
 """
+
 from enum import Enum
 
 
 class PlayerStatus(str, Enum):
     """Yahoo API player status filter values."""
+
     ALL_AVAILABLE = "A"
     FREE_AGENT = "FA"
     WAIVERS = "W"
@@ -15,6 +17,7 @@ class PlayerStatus(str, Enum):
 
 class PlayerStat(str, Enum):
     """Yahoo API player stat / sort field values."""
+
     OVERALL_RANK = "OR"
     ACTUAL_RANK = "AR"
     FANTASY_POINTS = "PTS"
@@ -33,6 +36,7 @@ class PlayerStat(str, Enum):
 
 class Timeframe(str, Enum):
     """Yahoo API time window values for sorting."""
+
     SEASON = "season"
     DATE = "date"
     LAST_WEEK = "lastweek"
@@ -41,6 +45,7 @@ class Timeframe(str, Enum):
 
 class PlayerPosition(str, Enum):
     """NBA player position values."""
+
     POINT_GUARD = "PG"
     SHOOTING_GUARD = "SG"
     SMALL_FORWARD = "SF"

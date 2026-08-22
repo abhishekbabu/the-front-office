@@ -1,7 +1,9 @@
 """
 Shared types for NBA data.
 """
-from typing import TypedDict, Optional
+
+from typing import TypedDict
+
 
 class NineCatStats(TypedDict):
     PTS: float
@@ -14,6 +16,7 @@ class NineCatStats(TypedDict):
     FG_PCT: float
     FT_PCT: float
 
+
 class PlayerStats(TypedDict, total=False):
     last_5: NineCatStats
     last_10: NineCatStats
@@ -21,6 +24,7 @@ class PlayerStats(TypedDict, total=False):
 
 
 # --- Cache Specific Types ---
+
 
 class GameLogRecord(TypedDict):
     GAME_DATE: str
@@ -36,9 +40,11 @@ class GameLogRecord(TypedDict):
     FTA: float
     FTM: float
 
+
 class LeagueGamelogCache(TypedDict):
     games: dict[str, list[GameLogRecord]]
     updated_at: str
+
 
 class GameRecord(TypedDict):
     date: str
@@ -46,9 +52,11 @@ class GameRecord(TypedDict):
     home: str
     away: str
 
+
 class ScheduleCache(TypedDict):
     teams: dict[str, list[GameRecord]]
     updated_at: str
+
 
 class NBACacheData(TypedDict):
     league_gamelog: LeagueGamelogCache

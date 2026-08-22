@@ -1,20 +1,21 @@
 """
 Yahoo Fantasy Data Client.
 """
+
 import logging
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
-from yahoofantasy import Player, League, Team, Week, Context
+
+from yahoofantasy import Context, League, Player, Team, Week
 from yahoofantasy.api.parse import as_list, from_response_object
-from the_front_office.config.settings import (
-    YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET, YAHOO_REDIRECT_URI, YAHOO_TOKEN_FILE
-)
-from the_front_office.clients.yahoo.types import PlayerStatus, PlayerStat, Timeframe, PlayerPosition
-from the_front_office.clients.yahoo.constants import STAT_CATEGORIES, SCOUT_CATEGORIES
+
+from the_front_office.clients.yahoo.constants import SCOUT_CATEGORIES, STAT_CATEGORIES
+from the_front_office.clients.yahoo.types import PlayerPosition, PlayerStat, PlayerStatus, Timeframe
+from the_front_office.config.settings import YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET, YAHOO_REDIRECT_URI, YAHOO_TOKEN_FILE
 
 logger = logging.getLogger(__name__)
+
 
 class YahooFantasyClient:
     @staticmethod
@@ -45,10 +46,14 @@ class YahooFantasyClient:
         cmd = [
             yahoofantasy_bin,
             "login",
-            "--redirect-uri", YAHOO_REDIRECT_URI,
-            "--client-id", YAHOO_CLIENT_ID,
-            "--client-secret", YAHOO_CLIENT_SECRET,
-            "--listen-port", "8080",
+            "--redirect-uri",
+            YAHOO_REDIRECT_URI,
+            "--client-id",
+            YAHOO_CLIENT_ID,
+            "--client-secret",
+            YAHOO_CLIENT_SECRET,
+            "--listen-port",
+            "8080",
         ]
 
         try:
@@ -72,11 +77,11 @@ class YahooFantasyClient:
         self,
         count: int = 25,
         status: PlayerStatus = PlayerStatus.ALL_AVAILABLE,
-        sort: Optional[PlayerStat] = None,
-        sort_type: Optional[Timeframe] = None,
-        position: Optional[PlayerPosition] = None,
+        sort: PlayerStat | None = None,
+        sort_type: Timeframe | None = None,
+        position: PlayerPosition | None = None,
         **extra_params: str,
-    ) -> List[Player]:
+    ) -> list[Player]:
         """
         Fetch players from the Yahoo Fantasy API.
 
@@ -103,7 +108,7 @@ class YahooFantasyClient:
             fetch_players(sort=PlayerStat.FANTASY_POINTS, sort_type=Timeframe.LAST_WEEK, position=PlayerPosition.POINT_GUARD)
         """
         # Build query params — enums serialize to their .value via str(Enum)
-        params: Dict[str, str] = {"count": str(count), "status": status.value}
+        params: dict[str, str] = {"count": str(count), "status": status.value}
         if sort is not None:
             params["sort"] = sort.value
         if sort_type is not None:
@@ -126,7 +131,7 @@ class YahooFantasyClient:
             if not players_container or isinstance(players_container, str):
                 return []
 
-            players: List[Player] = []
+            players: list[Player] = []
             if "player" in players_container:
                 for player_data in as_list(players_container["player"]):
                     p = Player(self.league)
@@ -142,7 +147,7 @@ class YahooFantasyClient:
         self,
         per_stat: int = 10,
         sort_type: Timeframe = Timeframe.LAST_WEEK,
-    ) -> Dict[str, List[Player]]:
+    ) -> dict[str, list[Player]]:
         """
         Fetch the top available players for each scoutable stat category.
 
@@ -156,7 +161,7 @@ class YahooFantasyClient:
         Returns:
             Dict mapping stat display name → list of Player objects.
         """
-        results: Dict[str, List[Player]] = {}
+        results: dict[str, list[Player]] = {}
         for stat, stat_name in SCOUT_CATEGORIES.items():
             logger.debug(f"Fetching top {per_stat} players by {stat_name}...")
             players = self.fetch_players(
@@ -167,7 +172,7 @@ class YahooFantasyClient:
             results[stat_name] = players
         return results
 
-    def get_user_team(self) -> Optional[Team]:
+    def get_user_team(self) -> Team | None:
         """
         Identify the team owned by the current user.
         """
@@ -208,27 +213,27 @@ class YahooFantasyClient:
             current_week = getattr(self.league, "current_week", None)
             if not current_week:
                 return ""
-            
+
             week = Week(self.league.ctx, self.league, current_week)
             week.sync()
-            
+
             my_matchup = None
             for m in week.matchups:
                 if m.team1.team_key == my_team.team_key or m.team2.team_key == my_team.team_key:
                     my_matchup = m
                     break
-            
+
             if not my_matchup:
                 return ""
 
             is_team1 = my_matchup.team1.team_key == my_team.team_key
             opponent = my_matchup.team2 if is_team1 else my_matchup.team1
-            
+
             # Scores & Stats
             teams_data = as_list(my_matchup.teams.team)
             my_data = teams_data[0] if is_team1 else teams_data[1]
             opp_data = teams_data[1] if is_team1 else teams_data[0]
-            
+
             # Build Category Breakdown
             def get_stats(team_stats_obj):
                 stats_list = as_list(team_stats_obj.stats.stat)
@@ -236,28 +241,28 @@ class YahooFantasyClient:
 
             my_stats = get_stats(my_data.team_stats)
             opp_stats = get_stats(opp_data.team_stats)
-            
+
             breakdown = "\nCATEGORY BREAKDOWN (Us vs Opponent):"
             for stat, cat_name in STAT_CATEGORIES.items():
                 val1 = my_stats.get(stat.value, "N/A")
                 val2 = opp_stats.get(stat.value, "N/A")
                 breakdown += f"\n- {cat_name}: {val1} vs {val2}"
-            
+
             # Opponent Roster
-            opp_roster: List[Player] = opponent.players()
+            opp_roster: list[Player] = opponent.players()
             opp_roster_str = ", ".join([f"{p.name.full} ({p.display_position})" for p in opp_roster[:12]])
-            
+
             context = f"\nCURRENT MATCHUP: Playing against {opponent.name}"
             context += f"\nMATCHUP SCORE: You {my_data.team_points.total} - {opp_data.team_points.total} Opponent"
             context += breakdown
             context += f"\nOPPONENT KEY PLAYERS: {opp_roster_str}"
-            
+
             return context
         except Exception as e:
             logger.warning(f"Could not fetch matchup context: {e}")
             return ""
 
-    def search_players(self, query: str) -> List[Player]:
+    def search_players(self, query: str) -> list[Player]:
         """
         Search for players by name using the league context.
         Uses league/{id}/players;search={query}
@@ -268,12 +273,12 @@ class YahooFantasyClient:
             league_key = self.league.league_key
             query_str = f"league/{league_key}/players;search={query}"
             cache_key = f"player_search_{league_key}_{query}"
-            
+
             logger.debug(f"Searching players in league: {query_str}")
-            
+
             # _load_or_fetch expects the relative URL part
             data = self.league.ctx._load_or_fetch(cache_key, query_str)
-            
+
             # Navigate response structure:
             # fantasy_content -> league -> players -> player
             try:
@@ -286,14 +291,14 @@ class YahooFantasyClient:
             if not players_container or isinstance(players_container, str):
                 return []
 
-            results: List[Player] = []
+            results: list[Player] = []
             if "player" in players_container:
                 for player_data in as_list(players_container["player"]):
                     # Create player bound to this league/context
-                    p = Player(self.league) 
+                    p = Player(self.league)
                     from_response_object(p, player_data)
                     results.append(p)
-            
+
             return results
 
         except Exception as e:
