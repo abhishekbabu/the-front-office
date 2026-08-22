@@ -210,8 +210,31 @@ def _cmd_matchup(leagues: list[League]) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _configure_console() -> None:
+    """Make stdout/stderr able to carry the UI's emoji and box-drawing glyphs.
+
+    Python writes to a Windows *console* as UTF-16 and handles them fine, but as
+    soon as output is redirected to a file or pipe it falls back to the locale
+    encoding — cp1252 on most Windows installs — where every one of those
+    characters raises UnicodeEncodeError and takes the process down.
+
+    Reconfiguring to UTF-8 fixes redirection; errors="replace" means a terminal
+    that genuinely cannot represent a glyph degrades to a placeholder instead of
+    crashing. No-op where the streams are already UTF-8, or replaced entirely
+    (pytest's capture, for instance, offers no reconfigure()).
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        # Already detached, or not reconfigurable — the UI is still usable.
+        with contextlib.suppress(ValueError, OSError):
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> None:
     """Authenticate once, then run an interactive command loop."""
+    _configure_console()
     setup_logging()
 
     _print_header("🏀 The Front Office — NBA Fantasy Intelligence")

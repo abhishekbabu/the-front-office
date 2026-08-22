@@ -81,6 +81,9 @@ known-first-party = ["the_front_office"]
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+# Match .gitattributes (eol=lf) instead of inferring per file, so a Windows
+# checkout cannot produce a diff that only changes line endings.
+line-ending = "lf"
 
 
 [tool.pytest.ini_options]

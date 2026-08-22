@@ -11,6 +11,7 @@ def setup_logging():
 
     # Ensure checking if handlers already exist to avoid dupes
     if not root_logger.handlers:
+        # Bound at call time, after main() has reconfigured the stream.
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S"))
         root_logger.addHandler(handler)

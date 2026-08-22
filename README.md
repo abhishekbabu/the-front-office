@@ -74,8 +74,10 @@ Create a key at [aistudio.google.com](https://aistudio.google.com/app/apikey).
 
 ```bash
 just install
-cp .env.template .env    # then fill in your credentials
+cp .env.template .env    # PowerShell: Copy-Item .env.template .env
 ```
+
+Then fill in your credentials.
 
 `just install` runs `uv sync` (the exact versions in [`uv.lock`](uv.lock)) and
 installs the git hooks.
@@ -199,19 +201,31 @@ retry classification, and command parsing.
 
 ## Platform Support
 
-Runs on macOS, Linux and Windows. Two Windows-specific details are handled in
-the application itself:
+Runs on macOS, Linux and Windows.
 
+**In the application**
 - `pyreadline3` is installed only on Windows (`sys_platform == 'win32'`), giving
-  the REPL arrow-key history that `readline` provides elsewhere. Its import is
+  the REPL the arrow-key history `readline` provides elsewhere. The import is
   guarded, so a missing module degrades rather than crashes.
-- The Yahoo OAuth2 flow shells out to the `yahoofantasy` CLI, which is
-  `yahoofantasy.exe` under `.venv\Scripts\` on Windows and `yahoofantasy` on
-  PATH elsewhere. `YahooFantasyClient.login` probes for the former and falls
-  back to the latter.
+- The Yahoo OAuth2 flow shells out to the `yahoofantasy` CLI — `yahoofantasy.exe`
+  under `.venv\Scripts\` on Windows, `yahoofantasy` on PATH elsewhere.
+  `YahooFantasyClient.login` probes for the former and falls back to the latter.
+- `main()` reconfigures stdout/stderr to UTF-8. The UI prints emoji and
+  box-drawing characters; Windows sends those to a console as UTF-16 without
+  trouble, but falls back to cp1252 as soon as output is redirected to a file or
+  pipe, where they would raise `UnicodeEncodeError` and kill the process.
+- All filesystem access goes through `pathlib`, and cache reads/writes pass
+  `encoding="utf-8"` explicitly rather than inheriting the locale default.
 
-All filesystem access goes through `pathlib`, and no tooling depends on a POSIX
-shell — `just clean` is a Python script for this reason.
+**In the tooling**
+- Recipes and hooks call tools through `uv run`, never a `.venv/bin` or
+  `.venv\Scripts` path.
+- Nothing depends on a POSIX shell — `just clean` is `scripts/clean.py` for
+  exactly this reason.
+- `.gitattributes` pins `eol=lf` and ruff is configured to match, so a Windows
+  checkout cannot produce a diff that only changes line endings.
+- `uv.lock` is resolved universally: `pyreadline3` and `colorama` carry
+  `sys_platform == 'win32'` markers, so `uv sync` installs the right set.
 
 ## Security
 
