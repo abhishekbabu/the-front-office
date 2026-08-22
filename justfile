@@ -11,17 +11,21 @@ default:
 # Setup
 # ============================================================================
 
-# Create the venv and install locked dependencies + git hooks
+# Create the venv and install the exact locked dependencies + git hooks
 install:
-    uv venv --python 3.10
-    uv pip install -e ".[dev]"
+    uv sync
     {{bin}}/pre-commit install
-    @echo "✅ Ready. Copy .env.template to .env and fill in your credentials."
+    @echo "Ready. Copy .env.template to .env and fill in your credentials."
 
 # Re-resolve the lockfile after changing dependencies in pyproject.toml
 lock:
     uv lock
-    uv pip install -e ".[dev]"
+    uv sync
+
+# Verify the environment matches uv.lock exactly, without modifying either
+verify-lock:
+    uv lock --check
+    uv sync --locked --dry-run
 
 # ============================================================================
 # Quality
@@ -29,7 +33,7 @@ lock:
 
 # Run every check the pre-commit hooks run (lint, format, types, tests)
 check: lint typecheck test
-    @echo "✅ All checks passed."
+    @echo "All checks passed."
 
 # Lint and auto-fix, then format
 fmt:
@@ -73,9 +77,9 @@ run:
 clean:
     rm -rf .ruff_cache .pytest_cache .mypy_cache .pyrefly_cache
     find . -type d -name __pycache__ -not -path "./.venv/*" -exec rm -rf {} + 2>/dev/null || true
-    @echo "✅ Cleaned."
+    @echo "Cleaned."
 
 # Delete the cached NBA stats/schedule so the next run refetches
 clean-nba-cache:
     rm -f .nba_cache.json
-    @echo "✅ NBA cache cleared."
+    @echo "NBA cache cleared."

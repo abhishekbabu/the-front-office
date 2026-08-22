@@ -35,6 +35,8 @@ the-front-office/
 │   └── main.py               # Interactive REPL entry point
 ├── tests/                    # Hermetic unit tests (pytest)
 ├── justfile                  # Task runner (just check / test / run)
+├── Brewfile                  # System tooling (just, uv)
+├── uv.lock                   # Pinned dependency graph
 ├── .agent/rules/rules.md     # Project configuration and rules
 ├── pyrefly.toml              # Type checking config
 └── pyproject.toml            # Project metadata & dependencies
@@ -48,8 +50,13 @@ the-front-office/
 
 ### Dependencies
 - **Production**: Add to `dependencies` in `pyproject.toml`
-- **Development**: Add to `[project.optional-dependencies.dev]` in `pyproject.toml`
-- Bound both ends: `package>=X.Y.Z,<NEXT_MAJOR`, then refresh `uv.lock` with `uv lock`
+- **Development**: Add to `[dependency-groups] dev` in `pyproject.toml`
+- **Anything imported directly gets declared directly** — never rely on a transitive dependency,
+  even one that is certain to be installed. `requests` and `pydantic` are declared for this reason.
+- **System tooling** (CLIs, not Python packages) goes in the `Brewfile`
+- Bound both ends: `package>=X.Y.Z,<NEXT_MAJOR`, then run `just lock`
+- Install with `just install` / `just lock` (`uv sync`), never `uv pip install` — only `uv sync`
+  honours `uv.lock`. Verify with `just verify-lock`.
 
 ### Environment Variables
 - Store secrets in `.env` (never commit)

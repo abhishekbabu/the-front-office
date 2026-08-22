@@ -10,9 +10,16 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "yahoofantasy>=1.4.9,<2",
+    # Imported directly by config/settings.py; pulled in by pydantic-settings
+    # too, but a direct import belongs in direct dependencies.
+    "pydantic>=2.7.0,<3",
     "pydantic-settings>=2.7.0,<3",
     "google-genai>=1.63.0,<2",
     "nba_api>=1.11.0,<2",
+    # clients/nba/client.py catches requests' exception types by name to decide
+    # what is retryable. nba_api depends on requests, but relying on that
+    # transitively would break the retry policy if it ever swapped HTTP client.
+    "requests>=2.32.0,<3",
     "pandas>=2.2.0,<3",
     "tenacity>=9.0.0,<10",
     "pyreadline3>=3.4,<4; sys_platform == 'win32'",
@@ -21,7 +28,7 @@ dependencies = [
 [project.scripts]
 front-office = "the_front_office.main:main"
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pyrefly>=1.1.1,<2",
     "pytest>=8.0.0,<10",
