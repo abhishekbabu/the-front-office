@@ -512,3 +512,70 @@ def test_a_table_row_has_a_record_only_once_something_is_played(tmp_path: Path) 
 
     assert rows[0].record == "2W 0D 0L"
     assert rows[1].record == ""
+
+
+# ── chips ───────────────────────────────────────────────────────────────
+
+CHIPS_BOOTSTRAP = {
+    "chips": [
+        {"name": "wildcard", "number": 1, "start_event": 2, "stop_event": 19, "chip_type": "transfer"},
+        {"name": "bboost", "number": 1, "start_event": 1, "stop_event": 19, "chip_type": "team"},
+        # No name at all: nothing that can be shown or decided about.
+        {"number": 1, "start_event": 1, "stop_event": 19},
+    ],
+    # The guard on `_get_bootstrap` refuses a payload with no players, which
+    # is what an FPL outage looks like — so a fixture needs one.
+    "elements": [{"id": 1, "web_name": "Someone", "element_type": 3, "team": 1}],
+    "teams": [{"id": 1, "short_name": "ARS"}],
+    "events": [],
+}
+
+
+def test_the_chip_schedule_comes_off_the_bootstrap_everything_else_reads(tmp_path: Path) -> None:
+    """So it costs no extra request."""
+    session = FakeSession({"/bootstrap-static/": CHIPS_BOOTSTRAP})
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=session)
+
+    chips = client.get_chips()
+
+    assert [(c.name, c.start_event, c.stop_event) for c in chips] == [("wildcard", 2, 19), ("bboost", 1, 19)]
+    assert len([r for r in session.requests if "bootstrap" in r]) == 1
+
+
+def test_a_chip_carries_the_word_a_manager_uses_for_it() -> None:
+    from the_front_office.adapters.outbound.platforms.fpl.types import Chip
+
+    assert Chip(name="3xc", start_event=1, stop_event=19).label == "Triple Captain"
+    assert Chip(name="bboost", start_event=1, stop_event=19).label == "Bench Boost"
+
+
+def test_a_chip_knows_which_weeks_it_covers() -> None:
+    from the_front_office.adapters.outbound.platforms.fpl.types import Chip
+
+    wildcard = Chip(name="wildcard", start_event=2, stop_event=19)
+
+    assert not wildcard.covers(1)
+    assert wildcard.covers(2) and wildcard.covers(19)
+    assert not wildcard.covers(20)
+
+
+def test_an_unnamed_chip_is_skipped_rather_than_shown_blank(tmp_path: Path) -> None:
+    session = FakeSession({"/bootstrap-static/": CHIPS_BOOTSTRAP})
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=session)
+
+    assert all(c.name for c in client.get_chips())
+
+
+def test_chips_played_come_back_with_the_week_they_went(tmp_path: Path) -> None:
+    history = {"current": [], "chips": [{"name": "bboost", "time": "2026-01-01T00:00:00Z", "event": 3}]}
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=FakeSession({"/history/": history}))
+
+    played = client.get_chips_played(7)
+
+    assert [(c.name, c.event) for c in played] == [("bboost", 3)]
+
+
+def test_a_manager_who_has_played_none_has_none(tmp_path: Path) -> None:
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=FakeSession({"/history/": {"current": []}}))
+
+    assert client.get_chips_played(7) == []
