@@ -87,6 +87,22 @@
   animation: none !important;
 }
 
+/* The crossfade a mode or palette swap paints under. Slow enough to read as
+   a deliberate change rather than a flicker, short enough not to sit in the
+   way of the click that asked for it. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 260ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+
 html, body, #root { height: 100%; }
 
 body {

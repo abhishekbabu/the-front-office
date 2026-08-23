@@ -4,7 +4,7 @@ import {
   PALETTE_STORAGE_KEY,
   applyPalette,
   isPaletteId,
-  suppressThemeTransitions,
+  repaint,
   type PaletteId,
 } from "@/themes/registry";
 
@@ -48,17 +48,19 @@ export function useTheme() {
   const [palette, setPaletteState] = useState<PaletteId>(currentPalette);
 
   const setMode = useCallback((next: Mode) => {
-    suppressThemeTransitions();
-    document.documentElement.classList.toggle("dark", next === "dark");
+    repaint(() => {
+      document.documentElement.classList.toggle("dark", next === "dark");
+      setModeState(next);
+    });
     safeWrite(MODE_STORAGE_KEY, next);
-    setModeState(next);
   }, []);
 
   const setPalette = useCallback((next: PaletteId) => {
-    suppressThemeTransitions();
-    applyPalette(next);
+    repaint(() => {
+      applyPalette(next);
+      setPaletteState(next);
+    });
     safeWrite(PALETTE_STORAGE_KEY, next);
-    setPaletteState(next);
   }, []);
 
   // Follow the OS only while the user has expressed no preference of their own.

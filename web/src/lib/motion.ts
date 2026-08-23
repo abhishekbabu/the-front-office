@@ -18,10 +18,17 @@ export const quick: Transition = { duration: 0.18, ease: [0.22, 1, 0.36, 1] };
 /** For something entering from off-screen, where a little more travel reads better. */
 export const glide: Transition = { duration: 0.26, ease: [0.22, 1, 0.36, 1] };
 
-/** A panel arriving: content shifting up a few pixels as it fades in. */
+/**
+ * A panel arriving: content shifting up a few pixels as it fades in.
+ *
+ * Leaves downward, back the way it came, so a page swapped under `mode="wait"`
+ * reads as one movement rather than two unrelated ones. Faster out than in —
+ * the thing you are leaving has already been read.
+ */
 export const rise: Variants = {
   hidden: { opacity: 0, y: 6 },
   shown: { opacity: 1, y: 0, transition: quick },
+  gone: { opacity: 0, y: 6, transition: { duration: 0.12, ease: [0.22, 1, 0.36, 1] } },
 };
 
 /** A slide-over from the right. */

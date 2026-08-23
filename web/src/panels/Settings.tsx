@@ -78,9 +78,12 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
 
   return (
     <>
-      <PageHeader title="Settings" meta="Written to .env and applied immediately">
+      <PageHeader
+        title="Settings"
+        meta="Written to .env and applied immediately"
+        leading={<IconButton label="Back" icon={<ArrowLeft />} onClick={onBack} />}
+      >
         <div className="flex items-center gap-1">
-          <IconButton label="Back" icon={<ArrowLeft />} onClick={onBack} />
           {/* The count lives in the label rather than beside the icon: the
               control does one thing whether one field changed or six, and the
               rows that changed already say which. */}

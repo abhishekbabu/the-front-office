@@ -160,8 +160,12 @@ export default function App() {
       </nav>
 
       <main className="min-w-0 overflow-y-auto">
-        {/* Keyed on the view so switching one animates the new panel in;
-            without a key React reuses the tree and nothing transitions. */}
+        {/* One presence around the whole column, keyed on the view. Settings is
+            a place you go and come back from, so it earns the same in-and-out
+            as everything else — previously it swapped in with no transition at
+            all because it sat outside the only AnimatePresence here. */}
+        <AnimatePresence mode="wait">
+        <m.div key={view === "settings" ? "settings" : "app"} variants={rise} initial="hidden" animate="shown" exit="gone">
         {view === "settings" ? (
           <SettingsPanel onBack={() => setView(sport ? "scout" : "home")} />
         ) : sports.isSuccess && usable.length === 0 ? (
@@ -210,6 +214,8 @@ export default function App() {
             )}
           </div>
         )}
+        </m.div>
+        </AnimatePresence>
       </main>
     </div>
   );
