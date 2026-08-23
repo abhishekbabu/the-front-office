@@ -19,6 +19,7 @@ from the_front_office.adapters.outbound.platforms.fpl.client import FPLClient, f
 from the_front_office.adapters.outbound.platforms.fpl.types import (
     TRANSFER_HIT,
     Entry,
+    Gameweek,
     Player,
     Squad,
     as_millions,
@@ -186,7 +187,7 @@ class FPLProvider:
         constraints = self._constraints(squad, allowance, best, current_points)
 
         return SportContext(
-            headline=self._headline(entry, league_id, squad, allowance, best, current_points),
+            headline=self._headline(entry, league_id, squad, allowance, best, current_points, upcoming),
             prompt=FPL_SCOUT_PROMPT.format(
                 situation=situation,
                 constraints=constraints,
@@ -214,6 +215,7 @@ class FPLProvider:
         allowance: int,
         best: Lineup,
         current_points: float,
+        upcoming: Gameweek,
     ) -> list[Stat]:
         """Where this squad stands, in FPL's own currency.
 
@@ -225,6 +227,10 @@ class FPLProvider:
         league = next((lg for lg in entry.leagues if str(lg.id) == league_id), None)
 
         stats = [
+            Stat(label="Gameweek", value=str(upcoming.id)),
+            # Shown in UTC, which is what the API states. A local rendering would
+            # be friendlier and would also be a guess about where this is read.
+            Stat(label="Deadline", value=f"{upcoming.deadline:%a %d %b %H:%M} UTC"),
             Stat(label="Points", value=f"{entry.overall_points:,}"),
             Stat(label="Overall", value=f"{entry.overall_rank:,}"),
         ]

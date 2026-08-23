@@ -218,7 +218,7 @@ class SleeperNFLProvider:
         available_lines = {p.name: self._player_line(p) for p in available}
         trending_str = self._trending(projections, players)
 
-        situation = self._situation(league, roster, league_id, week)
+        situation, matchup_stats = self._matchup(league, roster, league_id, week)
         # Derived from the same rounded figures that are printed, so the three
         # numbers in the prompt agree.
         current_points = round(lineup_points(lineup), 1)
@@ -250,7 +250,7 @@ class SleeperNFLProvider:
             extra=f"LINEUP CHANGES IMPLIED BY PROJECTIONS:\n{changes_str}",
             roster_lines=roster_lines,
             candidate_lines=available_lines,
-            headline=self._headline(roster, week, current_points, best_points, on_bench),
+            headline=self._headline(roster, week, current_points, best_points, on_bench) + matchup_stats,
         )
 
     @staticmethod
@@ -361,7 +361,21 @@ class SleeperNFLProvider:
         league_id: str,
         week: int,
     ) -> str:
-        """The matchup block: opponent, record, and projected margin."""
+        """The matchup block for the prompt."""
+        return self._matchup(league, roster, league_id, week)[0]
+
+    def _matchup(
+        self,
+        league: SleeperLeague,
+        roster: SleeperRoster,
+        league_id: str,
+        week: int,
+    ) -> tuple[str, list[Stat]]:
+        """The matchup as prose for the prompt, and as figures for the header.
+
+        Built together because they come from the same three requests; deriving
+        them separately would fetch the scoreboard twice for one report.
+        """
         header = (
             f"LEAGUE: {league.name} ({league.total_rosters} teams)\n"
             f"WEEK: {week}\nYOUR RECORD: {roster.record}, {roster.points_for:.1f} points for\n"
@@ -370,11 +384,11 @@ class SleeperNFLProvider:
             matchups = self.client.get_matchups(league_id, week)
         except SleeperAPIError as e:
             logger.warning(f"No matchup data: {e}")
-            return header
+            return header, []
 
         mine = next((m for m in matchups if m.get("roster_id") == roster.roster_id), None)
         if not mine or mine.get("matchup_id") is None:
-            return header + "No head-to-head matchup this week.\n"
+            return header + "No head-to-head matchup this week.\n", []
 
         opponent = next(
             (
@@ -385,17 +399,32 @@ class SleeperNFLProvider:
             None,
         )
         if not opponent:
-            return header + "No opponent assigned this week.\n"
+            return header + "No opponent assigned this week.\n", []
 
         names = self.client.get_league_users(league_id)
         by_roster = {r.roster_id: r for r in self.client.get_rosters(league_id)}
         opp_roster = by_roster.get(int(opponent.get("roster_id", 0)))
         opp_name = names.get(opp_roster.owner_id, "Opponent") if opp_roster else "Opponent"
 
-        return (
+        mine_points = float(mine.get("points") or 0)
+        their_points = float(opponent.get("points") or 0)
+        margin = round(mine_points - their_points, 1)
+
+        prose = (
             header
             + f"OPPONENT: {opp_name}"
             + (f" ({opp_roster.record})" if opp_roster else "")
-            + f"\nLIVE SCORE: you {float(mine.get('points') or 0):.1f} - "
-            f"{float(opponent.get('points') or 0):.1f} them\n"
+            + f"\nLIVE SCORE: you {mine_points:.1f} - {their_points:.1f} them\n"
         )
+        stats = [
+            Stat(label="Opponent", value=opp_name + (f" ({opp_roster.record})" if opp_roster else "")),
+            Stat(label="Live", value=f"{mine_points:.1f} – {their_points:.1f}"),
+            # The only figure here that is a verdict rather than a reading, so
+            # it is the only one that takes a tone.
+            Stat(
+                label="Margin",
+                value=f"{margin:+.1f}",
+                tone="good" if margin > 0 else "warning" if margin < 0 else "neutral",
+            ),
+        ]
+        return prose, stats

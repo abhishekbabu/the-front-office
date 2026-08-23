@@ -418,3 +418,11 @@ def test_an_optimal_eleven_leaves_nothing_on_the_bench_to_report() -> None:
 
 def test_a_manager_in_no_mini_league_gets_no_mini_league_figure() -> None:
     assert "Mini-league" not in _headline(leagues=[])
+
+
+def test_the_header_names_the_gameweek_and_when_it_locks() -> None:
+    """A transfer after the deadline counts for the week after it."""
+    labels = _headline()
+
+    assert labels["Gameweek"] == "5"
+    assert labels["Deadline"].endswith("UTC")

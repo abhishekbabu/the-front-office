@@ -10,25 +10,28 @@ import { ScoutPanel } from "@/panels/Scout";
 import { TeamPanel } from "@/panels/Team";
 import { TradePanel } from "@/panels/Trade";
 import { SettingsPanel } from "@/panels/Settings";
+import { Landing } from "@/panels/Landing";
 import { cn } from "@/lib/utils";
 
 /** The views that need a sport and a league behind them. */
 type SportView = "scout" | "team" | "trade";
 
 /** Settings works with nothing configured, which is exactly when it is needed. */
-type View = SportView | "settings";
+type View = SportView | "settings" | "home";
 
 export default function App() {
   const { mode, setMode } = useTheme();
   const [sport, setSport] = useState<string | null>(null);
-  const [view, setView] = useState<View>("scout");
+  const [view, setView] = useState<View>("home");
   const [leagueId, setLeagueId] = useState<string | null>(null);
 
   const sports = useQuery({ queryKey: ["sports"], queryFn: api.sports });
   const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   const mockOn = (settings.data ?? []).some((s) => s.key === "MOCK_AI" && s.value === "true");
   const configured = useMemo(() => (sports.data ?? []).filter((s) => s.configured), [sports.data]);
-  const active: Sport | undefined = configured.find((s) => s.sport === sport) ?? configured[0];
+  // No fallback to the first configured sport: until one is chosen the landing
+  // page is what shows, and choosing for the user is what it exists to avoid.
+  const active: Sport | undefined = configured.find((s) => s.sport === sport);
 
   const leagues = useQuery({
     queryKey: ["leagues", active?.sport],
@@ -44,12 +47,16 @@ export default function App() {
   return (
     <div className="grid min-h-full grid-cols-[13rem_minmax(0,1fr)]">
       <nav className="flex flex-col gap-6 border-r border-border bg-card px-3 py-4">
-        <div className="flex items-center gap-2.5 px-1">
+        <button
+          onClick={() => setView("home")}
+          aria-label="Back to all leagues"
+          className="flex items-center gap-2.5 rounded-md px-1 py-1 text-left transition-colors hover:bg-muted"
+        >
           <span className="flex size-6 shrink-0 items-center justify-center rounded-sm bg-primary text-primary-foreground">
             <Trophy className="size-3.5" strokeWidth={2.25} aria-hidden />
           </span>
           <span className="font-display text-[15px] font-semibold tracking-tight">The Front Office</span>
-        </div>
+        </button>
 
         <Group label="Sport">
           {sports.isLoading && <Skeleton className="mx-2 h-7" />}
@@ -62,6 +69,7 @@ export default function App() {
               onClick={() => {
                 setSport(s.sport);
                 setLeagueId(null);
+                if (view === "home") setView("scout");
               }}
             >
               {s.label.replace(/\s*\(.*\)$/, "")}
@@ -127,6 +135,21 @@ export default function App() {
           <SettingsPanel />
         ) : sports.isSuccess && configured.length === 0 ? (
           <Empty sports={sports.data} />
+        ) : view === "home" ? (
+          sports.isSuccess ? (
+            <Landing
+              sports={sports.data}
+              onPick={(picked, picked_league) => {
+                setSport(picked.sport);
+                setLeagueId(picked_league.league_id);
+                setView("scout");
+              }}
+            />
+          ) : (
+            <div className="p-6">
+              <Skeleton className="h-40 w-full" />
+            </div>
+          )
         ) : active && league ? (
           current === "scout" ? (
             <ScoutPanel sport={active} league={league} />

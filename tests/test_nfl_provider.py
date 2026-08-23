@@ -62,6 +62,7 @@ class FakeSleeper:
         self.matchups = matchups or []
         self.trending = trending or []
         self.trending_error = trending_error
+        self.matchup_fetches = 0
 
     def get_state(self, sport: str = "nfl") -> SeasonState:
         return SeasonState(week=3, season="2026", season_type="regular")
@@ -82,6 +83,7 @@ class FakeSleeper:
         return {MY_ID: "Me", "user-2": "Rival"}
 
     def get_matchups(self, league_id: str, week: int) -> list[dict[str, Any]]:
+        self.matchup_fetches += 1
         return self.matchups
 
     def get_players(self) -> dict[str, PlayerMeta]:
@@ -355,3 +357,57 @@ def test_the_header_agrees_with_the_prompt_about_the_lineup_total() -> None:
     lineup = next(stat for stat in context.headline if stat.label == "Lineup")
 
     assert f"Current lineup projects {lineup.value} points" in context.constraints
+
+
+def test_the_header_carries_the_matchup() -> None:
+    """The question the page is opened to answer: who, and am I ahead."""
+    client = FakeSleeper(
+        projections=DEFAULT_PROJECTIONS,
+        matchups=[
+            {"roster_id": 1, "matchup_id": 7, "points": 88.5},
+            {"roster_id": 2, "matchup_id": 7, "points": 71.0},
+        ],
+    )
+    labels = {s.label: s for s in _provider(client).build_context("L1").headline}
+
+    assert "Opponent" in labels
+    assert labels["Live"].value == "88.5 – 71.0"
+    assert (labels["Margin"].value, labels["Margin"].tone) == ("+17.5", "good")
+
+
+def test_trailing_is_the_figure_that_warns() -> None:
+    client = FakeSleeper(
+        projections=DEFAULT_PROJECTIONS,
+        matchups=[
+            {"roster_id": 1, "matchup_id": 7, "points": 60.0},
+            {"roster_id": 2, "matchup_id": 7, "points": 84.0},
+        ],
+    )
+    margin = next(s for s in _provider(client).build_context("L1").headline if s.label == "Margin")
+
+    assert (margin.value, margin.tone) == ("-24.0", "warning")
+
+
+def test_a_week_with_no_opponent_reports_no_matchup_figures() -> None:
+    """A bye or a missing scoreboard is not a 0-0 scoreline."""
+    labels = {s.label for s in _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).build_context("L1").headline}
+
+    assert "Margin" not in labels
+    assert "Week" in labels  # the rest of the header still stands
+
+
+def test_the_matchup_is_fetched_once_for_both_the_prompt_and_the_header() -> None:
+    """Deriving them separately would pull the scoreboard twice per report, and
+    the scoreboard is the one thing here that changes minute to minute."""
+    client = FakeSleeper(
+        projections=DEFAULT_PROJECTIONS,
+        matchups=[
+            {"roster_id": 1, "matchup_id": 7, "points": 88.5},
+            {"roster_id": 2, "matchup_id": 7, "points": 71.0},
+        ],
+    )
+    context = _provider(client).build_context("L1")
+
+    assert client.matchup_fetches == 1
+    assert "OPPONENT:" in context.situation
+    assert any(s.label == "Opponent" for s in context.headline)
