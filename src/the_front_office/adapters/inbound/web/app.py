@@ -15,6 +15,7 @@ import streamlit as st
 from the_front_office.adapters.inbound.web import data
 from the_front_office.bootstrap import requirements_summary, scout_engine, trade_engine
 from the_front_office.config.logging import setup_logging
+from the_front_office.config.telemetry import setup_telemetry
 from the_front_office.domain.errors import FrontOfficeError
 from the_front_office.domain.models import Move, ScoutReport, TradeVerdict
 
@@ -223,6 +224,8 @@ def _pick_league(refs: list[Any]) -> Any:
 def main() -> None:
     st.set_page_config(page_title="The Front Office", page_icon="🏆", layout="wide")
     setup_logging()
+    # Idempotent: Streamlit reruns this whole script on every interaction.
+    setup_telemetry("front-office-web")
 
     st.sidebar.title("🏆 The Front Office")
     mock = st.sidebar.toggle("Mock AI", help="Skip Gemini calls. League data stays live.")

@@ -169,7 +169,17 @@ def _isolate_from_local_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     from the_front_office.config.settings import settings
 
-    for field in ("sleeper_username", "sleeper_league_id", "gemini_api_key", "yahoo_client_id", "yahoo_client_secret"):
+    for field in (
+        "sleeper_username",
+        "sleeper_league_id",
+        "fpl_entry_id",
+        "gemini_api_key",
+        "yahoo_client_id",
+        "yahoo_client_secret",
+        # Without this, running the suite on a machine with a token in .env
+        # exports spans from the tests into the developer's real project.
+        "logfire_token",
+    ):
         monkeypatch.setattr(settings, field, None)
 
 

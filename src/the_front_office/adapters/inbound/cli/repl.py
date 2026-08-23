@@ -20,6 +20,7 @@ from the_front_office.adapters.inbound.cli.output import _print_header
 from the_front_office.adapters.inbound.cli.session import Session
 from the_front_office.bootstrap import SportEntry, all_sports, configured_sports
 from the_front_office.config.logging import setup_logging
+from the_front_office.config.telemetry import setup_telemetry
 from the_front_office.domain.errors import FrontOfficeError
 
 # Graceful fallback on systems without readline
@@ -97,6 +98,9 @@ def main() -> None:
     """Start a REPL over whichever sports are configured."""
     _configure_console()
     setup_logging()
+    # After setup_logging, so the bridge attaches to a root logger that already
+    # has its level and its console handler.
+    setup_telemetry("front-office-cli")
 
     _print_header("🏆 The Front Office — Fantasy Intelligence")
     print(f"  {datetime.now().strftime('%A, %B %d %Y  •  %I:%M %p')}")

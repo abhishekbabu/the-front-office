@@ -35,6 +35,15 @@ No adapter is named anywhere in `domain/` or `application/`; the engines take an
 - **Fantasy Premier League** — public and auth-free, and the only platform here that is also its own stats provider: one `bootstrap-static` call carries the squad, the prices, the game's own `ep_next` projection and Opta expected goals. Cached in `.fpl_cache.json`
 - **Gemini** via `google-genai` — `gemini-2.5-pro` for analysis, `gemini-2.5-flash` for parsing
 
+**Tracing** — OpenTelemetry via `logfire`, configured in
+[`config/telemetry.py`](src/the_front_office/config/telemetry.py) and nowhere else.
+Everything worth measuring happens inside a library, so `requests`, `google-genai`
+and `pydantic` are auto-instrumented and no span is opened by hand — `domain/` and
+`application/` never learn that telemetry exists. The standard-library logging the
+app already does is bridged, so cache hits and retry warnings arrive as events on
+the span that caused them. Without `LOGFIRE_TOKEN` nothing is exported and no
+network call is made.
+
 **Tooling** — `ruff`, `pyrefly`, `pytest`, `pre-commit`, `just`. Every recipe and
 hook runs tools through `uv run`, so the same commands work on macOS, Linux and Windows.
 
@@ -71,6 +80,9 @@ Without `just`: `uv sync && uv run pre-commit install`.
 | `SLEEPER_USERNAME` | for football | — | Sleeper needs no key or OAuth — just the username |
 | `FPL_ENTRY_ID` | for FPL | — | The number in the URL of your own points page. FPL has no username lookup |
 | `YAHOO_MAX_WEEKLY_ADDS` | no | `3` | Integer ≥ 0; drives the scout's add budget |
+| `LOGFIRE_TOKEN` | no | — | A write token from a [Logfire](https://logfire.pydantic.dev) project. Omit and nothing is exported |
+| `LOGFIRE_ENVIRONMENT` | no | `local` | Separates traces from a laptop and a deployed run in one project |
+| `LOGFIRE_CAPTURE_PROMPTS` | no | `false` | Sends prompt and completion **text**. Off deliberately — a prompt carries your roster, leagues and FPL entry id |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG` \| `INFO` \| `WARNING` \| `ERROR` \| `CRITICAL` |
 | `NBA_API_DELAY` | no | `4.0` | Seconds between nba_api calls |
 

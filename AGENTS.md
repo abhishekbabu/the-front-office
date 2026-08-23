@@ -120,6 +120,16 @@ not a shape: three go through different vendor SDKs and cache differently, while
 Sleeper and FPL are both plain public JSON and share `JsonApiClient` — held as a
 collaborator, given its own retry policy and domain error, not inherited.
 
+**Telemetry.** All of it lives in `config/telemetry.py`, called once per process
+by each entry point. Never open a span by hand and never import `logfire`
+outside that module — the libraries carrying the latency are auto-instrumented,
+which is what keeps tracing out of `domain/` and `application/` and out of the
+ports. It must stay inert without a token (`send_to_logfire="if-token-present"`),
+so the suite and CI need no secret. Prompt text is not exported unless
+`LOGFIRE_CAPTURE_PROMPTS` is set: a prompt carries the user's roster, leagues and
+entry id. Each `logfire.instrument_*` needs its matching extra declared on the
+dependency, or it imports fine and raises at call time.
+
 **Layering.** Dependencies point inward only: `domain` imports nothing else in
 the package; `application` imports only `domain`; adapters implement ports;
 `bootstrap.py` is the one module allowed to name a concrete implementation.

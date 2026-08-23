@@ -57,6 +57,21 @@ class AppSettings(BaseSettings):
     nba_cache_file: str = ".nba_cache.json"
     """Unified cache for all NBA data (stats + schedule)."""
 
+    # ── Telemetry ───────────────────────────────────────────────────────
+    # Optional. Without a token nothing is exported and no network call is
+    # made, so a fresh clone and the test suite behave identically to before.
+    logfire_token: str | None = None
+    logfire_environment: str = "local"
+    """Separates traces from a laptop run and a deployed one in the same project."""
+
+    logfire_capture_prompts: bool = False
+    """Whether to send prompt and completion text to Logfire.
+
+    Off by default and deliberately so: a prompt carries the user's roster,
+    their leagues and their FPL entry id. Timings and token counts answer
+    almost every question without any of that leaving the machine.
+    """
+
     # ── Logging ─────────────────────────────────────────────────────────
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
@@ -67,6 +82,7 @@ class AppSettings(BaseSettings):
         "sleeper_username",
         "sleeper_league_id",
         "fpl_entry_id",
+        "logfire_token",
         mode="before",
     )
     @classmethod

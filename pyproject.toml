@@ -22,6 +22,11 @@ dependencies = [
     "requests>=2.32.0,<3",
     "pandas>=2.2.0,<3",
     "tenacity>=9.0.0,<10",
+    # Telemetry. Inert without LOGFIRE_TOKEN, so a fresh clone and the test
+    # suite never reach the network because it is installed. The extras are the
+    # two instrumentations config/telemetry.py enables; without them logfire
+    # imports fine and then raises at instrument_* time.
+    "logfire[google-genai,requests]>=4.41.0,<5",
     "streamlit>=1.40.0,<2",
     "pyreadline3>=3.4,<4; sys_platform == 'win32'",
     # zoneinfo reads the OS tz database, which Windows does not ship. Without
