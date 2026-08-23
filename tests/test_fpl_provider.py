@@ -16,6 +16,7 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
     Gameweek,
     GameweekResult,
     H2HMatch,
+    LiveStat,
     MiniLeague,
     PastSeason,
     Pick,
@@ -163,6 +164,8 @@ class FakeFPL:
         h2h_season_error: Exception | None = None,
         standings: list[TableRow] | None = None,
         standings_error: Exception | None = None,
+        live: dict[int, LiveStat] | None = None,
+        live_error: Exception | None = None,
     ) -> None:
         self.past_seasons = past_seasons if past_seasons is not None else list(DEFAULT_PAST_SEASONS)
         self.past_seasons_error = past_seasons_error
@@ -202,6 +205,8 @@ class FakeFPL:
         self.h2h_season_error = h2h_season_error
         self.standings = standings if standings is not None else DEFAULT_TABLE
         self.standings_error = standings_error
+        self.live = live if live is not None else {}
+        self.live_error = live_error
 
     def upcoming_gameweek(self, now: datetime | None = None) -> Gameweek:
         return Gameweek(
@@ -245,13 +250,23 @@ class FakeFPL:
             raise self.fixtures_error
         return self.fixtures
 
+    def current_gameweek(self) -> Gameweek | None:
+        return next((gw for gw in self.get_gameweeks() if gw.is_current), None)
+
+    def get_live(self, gameweek: int) -> dict[int, LiveStat]:
+        if self.live_error:
+            raise self.live_error
+        return self.live
+
     def get_gameweeks(self) -> list[Gameweek]:
         return [
             Gameweek(
                 id=i,
                 name=f"Gameweek {i}",
                 deadline=datetime(2026, 8, 7 + i, 17, 30, tzinfo=timezone.utc),
-                is_current=i == self.upcoming,
+                # The one being played is the one before the next deadline,
+                # which is the whole distinction this fake exists to model.
+                is_current=i == self.upcoming - 1,
                 average_score=50,
             )
             for i in range(1, 9)
@@ -750,13 +765,14 @@ def test_a_played_gameweek_carries_its_tie_and_whether_it_was_won() -> None:
     assert season["Gameweek 2"].tone == "warning"
 
 
-def test_the_current_gameweek_has_no_result_yet() -> None:
-    """It is in progress, and a score mid-week is not a result."""
+def test_the_row_marked_now_is_the_one_being_played() -> None:
+    """Not the next deadline. The week view and the season table have to agree
+    about which row is "now", or one of them is describing a different week."""
     season = {row.label: row for row in provider().schedule(H2H_LEAGUE).season}
     current = [row.label for row in season.values() if row.is_current]
 
-    assert current == ["Gameweek 5"]
-    assert season["Gameweek 5"].result == ""
+    assert current == ["Gameweek 4"]
+    assert season["Gameweek 4"].result == ""  # in progress is not a result
 
 
 def test_a_classic_league_has_deadlines_but_no_opponents() -> None:
@@ -819,5 +835,71 @@ def test_failed_fixtures_leave_no_matches_rather_than_failing() -> None:
     assert provider(fixtures_error=FPLAPIError("down")).schedule(H2H_LEAGUE).matches == []
 
 
-def test_the_gameweek_says_when_its_deadline_is() -> None:
-    assert provider().summary(H2H_LEAGUE).window == "Gameweek 5 · deadline Sat 12 Sep, 00:00"
+def test_the_week_view_shows_the_gameweek_being_played() -> None:
+    """The bug this distinction exists for: on a Saturday in August the week
+    you can still act on is next week's, and the one being played — where the
+    points are landing — is this one."""
+    assert provider().summary(H2H_LEAGUE).window.startswith("Gameweek 4")
+
+
+def test_a_gameweek_with_no_ball_kicked_yet_shows_its_deadline() -> None:
+    assert provider().summary(H2H_LEAGUE).window == "Gameweek 4 · deadline Tue 11 Aug, 17:30"
+
+
+# ── the week as it is actually going ────────────────────────────────────
+
+LIVE = {
+    8: LiveStat(points=12, minutes=90),  # played, hauled
+    9: LiveStat(points=1, minutes=64),  # played, blanked
+    10: LiveStat(points=0, minutes=0),  # kicks off later
+}
+
+
+def test_a_player_who_has_played_shows_what_they_scored() -> None:
+    """The number somebody is looking for once a gameweek is under way."""
+    spots = {s.player: s for s in provider(live=LIVE).summary(H2H_LEAGUE).mine.lineup}
+
+    scored = next(s for s in spots.values() if s.value.endswith("pts"))
+    assert scored.value in {"12 pts", "24 pts", "1 pts"}
+
+
+def test_a_haul_and_a_blank_are_toned_apart() -> None:
+    lineup = provider(live=LIVE).summary(H2H_LEAGUE).mine.lineup
+    by_value = {s.value: s.tone for s in lineup}
+
+    assert by_value.get("12 pts") == "good" or by_value.get("24 pts") == "good"
+    assert by_value.get("1 pts") == "warning"
+
+
+def test_a_player_yet_to_kick_a_ball_keeps_their_projection() -> None:
+    """Nought against somebody whose match is on Sunday says they blanked."""
+    lineup = provider(live=LIVE).summary(H2H_LEAGUE).mine.lineup
+
+    waiting = [s for s in lineup if s.value.endswith("xPts")]
+    assert waiting, "a squad of eleven cannot all have played"
+    assert all("0 pts" not in s.value for s in waiting)
+
+
+def test_a_captain_scores_double() -> None:
+    lineup = provider(live=LIVE).summary(H2H_LEAGUE).mine.lineup
+    captain = next((s for s in lineup if "(C)" in s.player), None)
+
+    if captain and captain.value.endswith("pts"):
+        assert captain.value == "24 pts"
+
+
+def test_a_week_under_way_says_so_rather_than_naming_a_deadline() -> None:
+    assert provider(live=LIVE).summary(H2H_LEAGUE).window == "Gameweek 4 · in progress"
+
+
+def test_before_a_ball_is_kicked_there_is_no_score() -> None:
+    """Zero reads as a bad week rather than a week that has not started."""
+    assert provider().summary(H2H_LEAGUE).mine.points == ""
+
+
+def test_a_missing_live_feed_falls_back_to_projections() -> None:
+    """Enrichment, not a dependency."""
+    summary = provider(live_error=FPLAPIError("down")).summary(H2H_LEAGUE)
+
+    assert summary.mine is not None
+    assert all(s.value.endswith("xPts") for s in summary.mine.lineup)

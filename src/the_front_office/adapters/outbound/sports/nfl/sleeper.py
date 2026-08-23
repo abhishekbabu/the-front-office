@@ -92,6 +92,35 @@ def _projection_lines(stats: dict[str, float]) -> list[Stat]:
 
 
 @dataclass(frozen=True)
+class _Live:
+    """The week as it has actually gone, so far.
+
+    Zero points is ambiguous on its own — a receiver who dropped everything and
+    a receiver whose game is on Monday both sit at nought — so the real-world
+    schedule decides which of the two a row is showing.
+    """
+
+    started: set[str]
+    """Clubs whose real-world game has kicked off."""
+
+    points: dict[str, float]
+    """What each player has scored, keyed by Sleeper's player_id."""
+
+    def scored(self, player_id: str, team: str) -> float | None:
+        """Points where that club's game has started, and nothing before it."""
+        if not self.under_way or team not in self.started:
+            return None
+        return self.points.get(player_id)
+
+    @property
+    def under_way(self) -> bool:
+        """Both halves are required. Kickoffs with no scoreboard behind them
+        would render every row as nought — a whole team that blanked, rather
+        than a request that failed."""
+        return bool(self.started) and bool(self.points)
+
+
+@dataclass(frozen=True)
 class _Week:
     """One week's state, gathered once and read by both callers."""
 
@@ -187,6 +216,11 @@ def _moment(epoch_ms: int) -> str:
         return ""
     return day_month(datetime.fromtimestamp(epoch_ms / 1000, tz=timezone.utc))
 
+
+# A week made and a week wasted, on a points-league scale where a startable
+# flex is worth around ten.
+HAUL_POINTS = 20.0
+BLANK_POINTS = 5.0
 
 REGULAR_SEASON_WEEKS = 18
 # "What did I miss", not the season's whole transaction log.
@@ -444,6 +478,7 @@ class SleeperNFLProvider:
         """The week as it stands: both lineups, the swaps, the byes. No model."""
         state = self._week(league_id)
         _, matchup_stats = self._matchup(state.league, state.roster, league_id, state.week)
+        live = self._live(state, league_id)
         starters = {slot.player.player_id for slot in state.lineup if slot.player}
         # Before the season opens Sleeper publishes no fixtures at all, and
         # flagging every player for having no game turns the page amber over a
@@ -456,16 +491,16 @@ class SleeperNFLProvider:
             mine=Side(
                 name="Your lineup",
                 detail=state.roster.record,
-                points=f"{state.current_points:.1f} proj",
-                lineup=[self._lineup_spot(slot, scheduled) for slot in state.lineup],
+                points=self._side_total(state, live),
+                lineup=[self._lineup_spot(slot, scheduled, live) for slot in state.lineup],
                 bench=[
-                    self._spot(p, scheduled)
+                    self._spot(p, scheduled, live=live)
                     for p in sorted(
                         (p for p in state.projected if p.player_id not in starters), key=lambda p: -p.points
                     )
                 ],
             ),
-            opponent=self._opponent(state, league_id, scheduled),
+            opponent=self._opponent(state, league_id, scheduled, live),
             swaps=[
                 Swap(
                     start=f"{change.start.name} ({change.slot})",
@@ -674,7 +709,35 @@ class SleeperNFLProvider:
             by_week.setdefault(g.week, []).append(g)
         return by_week
 
-    def _opponent(self, state: _Week, league_id: str, scheduled: bool) -> Side | None:
+    def _live(self, state: _Week, league_id: str) -> _Live:
+        """What has actually been scored, and whose clubs have kicked off."""
+        started = {
+            club
+            for game in self._games_by_week(state.season).get(state.week, [])
+            if game.status and game.status != "pre_game"
+            for club in (game.home, game.away)
+        }
+        try:
+            matchups = self.client.get_matchups(league_id, state.week)
+        except SleeperAPIError as e:
+            logger.warning(f"Continuing without live scores: {e}")
+            return _Live(started=started, points={})
+
+        points: dict[str, float] = {}
+        for entry in matchups:
+            for player_id, scored in (entry.get("players_points") or {}).items():
+                points[str(player_id)] = float(scored or 0)
+        return _Live(started=started, points=points)
+
+    @staticmethod
+    def _side_total(state: _Week, live: _Live) -> str:
+        """The projection until the ball is rolling, then what is on the board."""
+        if not live.under_way:
+            return f"{state.current_points:.1f} proj"
+        scored = sum(live.scored(slot.player.player_id, slot.player.team) or 0 for slot in state.lineup if slot.player)
+        return f"{scored:.1f} pts"
+
+    def _opponent(self, state: _Week, league_id: str, scheduled: bool, live: _Live) -> Side | None:
         """The team you are playing, and what they are starting.
 
         Their lineup is the other half of the only question this week asks, and
@@ -720,7 +783,7 @@ class SleeperNFLProvider:
         slots = state.league.starting_slots
         if len(roster.starter_ids) == len(slots):
             lineup = [
-                self._spot(by_id[pid], scheduled, slot=slot)
+                self._spot(by_id[pid], scheduled, slot=slot, live=live)
                 if pid in by_id
                 else Spot(slot=slot, player="—", detail="empty", value="0.0", tone="warning")
                 for slot, pid in zip(slots, roster.starter_ids, strict=True)
@@ -729,13 +792,13 @@ class SleeperNFLProvider:
             # Off-length means the positions cannot be trusted, and a WR
             # labelled QB is worse than a row carrying no label at all.
             logger.warning(f"Roster {roster.roster_id} starts {len(roster.starter_ids)} into {len(slots)} slots")
-            lineup = [self._spot(p, scheduled) for p in projected if p.player_id in starting]
+            lineup = [self._spot(p, scheduled, live=live) for p in projected if p.player_id in starting]
         return Side(
             name=names.get(roster.owner_id, "Opponent"),
             detail=roster.record,
             points=f"{float(theirs.get('points') or 0):.1f}",
             lineup=lineup,
-            bench=[self._spot(p, scheduled) for p in projected if p.player_id not in starting],
+            bench=[self._spot(p, scheduled, live=live) for p in projected if p.player_id not in starting],
         )
 
     def _past_seasons(self, player_id: str, state: _Week) -> list[StatGroup]:
@@ -789,27 +852,43 @@ class SleeperNFLProvider:
             return []
         return [str(year - 1), str(year - 2)]
 
-    def _lineup_spot(self, slot: LineupSlot, scheduled: bool) -> Spot:
+    def _lineup_spot(self, slot: LineupSlot, scheduled: bool, live: _Live | None = None) -> Spot:
         if slot.player is None:
             return Spot(slot=slot.slot, player="—", detail="empty", value="0.0", tone="warning")
-        return Spot(
-            player_id=slot.player.player_id,
-            slot=slot.slot,
-            player=slot.player.name,
-            detail=self._spot_detail(slot.player, scheduled, slot.slot),
-            value=f"{slot.points:.1f}",
-            tone=self._spot_tone(slot.player, scheduled),
-        )
+        return self._spot(slot.player, scheduled, slot=slot.slot, live=live, projected=slot.points)
 
-    def _spot(self, projection: WeeklyProjection, scheduled: bool, slot: str = "") -> Spot:
+    def _spot(
+        self,
+        projection: WeeklyProjection,
+        scheduled: bool,
+        slot: str = "",
+        live: _Live | None = None,
+        projected: float | None = None,
+    ) -> Spot:
+        """One row, showing what happened where the game has started.
+
+        Once a club has kicked off, what its players actually scored is the
+        number somebody is looking for, and the projection beside it is a guess
+        about a question already being answered.
+        """
+        scored = live.scored(projection.player_id, projection.team) if live else None
+        points = projection.points if projected is None else projected
         return Spot(
             player_id=projection.player_id,
             slot=slot,
             player=projection.name,
             detail=self._spot_detail(projection, scheduled, slot),
-            value=f"{projection.points:.1f}",
-            tone=self._spot_tone(projection, scheduled),
+            value=f"{scored:.1f} pts" if scored is not None else f"{points:.1f}",
+            tone=self._live_tone(scored) if scored is not None else self._spot_tone(projection, scheduled),
         )
+
+    @staticmethod
+    def _live_tone(scored: float) -> Tone:
+        """A game already played answers its own question: a doubt about
+        somebody who has been on the field is no longer a doubt."""
+        if scored >= HAUL_POINTS:
+            return "good"
+        return "warning" if scored <= BLANK_POINTS else "neutral"
 
     @staticmethod
     def _spot_detail(projection: WeeklyProjection, scheduled: bool, slot: str = "") -> str:

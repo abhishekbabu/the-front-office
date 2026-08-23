@@ -47,6 +47,7 @@ class FakeSleeper:
         self.season_stats = season_stats if season_stats is not None else {}
         self.season_stats_error = season_stats_error
         self.season_schedule = season_schedule if season_schedule is not None else []
+        self.matchups_error: Exception | None = None
         self.schedule_error = schedule_error
         self.transactions = transactions if transactions is not None else {}
         self.transactions_error = transactions_error
@@ -117,6 +118,8 @@ class FakeSleeper:
 
     def get_matchups(self, league_id: str, week: int) -> list[dict[str, Any]]:
         self.matchup_fetches += 1
+        if self.matchups_error:
+            raise self.matchups_error
         return self.matchups
 
     def get_players(self) -> dict[str, PlayerMeta]:
@@ -874,3 +877,71 @@ def test_a_flex_still_says_which_position_is_filling_it() -> None:
 
     flex = next(spot for spot in summary.mine.lineup if spot.slot == "FLEX")
     assert flex.detail.startswith("WR")
+
+
+# ── the week as it is actually going ────────────────────────────────────
+# Not reachable with live data outside the season, so the shape of a week in
+# progress is only ever exercised here.
+
+KICKED_OFF = [
+    ScheduledGame(week=3, date="2026-09-24", home="BUF", away="MIA", status="complete"),
+    ScheduledGame(week=3, date="2026-09-28", home="KC", away="DEN", status="pre_game"),
+]
+
+
+def _live_client(points: dict[str, float]) -> FakeSleeper:
+    return FakeSleeper(
+        projections=DEFAULT_PROJECTIONS,
+        season_schedule=KICKED_OFF,
+        rosters=[
+            SleeperRoster(roster_id=1, owner_id=MY_ID, player_ids=["qb1", "rb1", "rb2"], starter_ids=["qb1", "rb2"])
+        ],
+        matchups=[{"roster_id": 1, "matchup_id": 4, "players_points": points}],
+    )
+
+
+def test_a_player_whose_game_has_started_shows_what_they_scored() -> None:
+    """Every fake projection is a BUF player, and BUF has finished."""
+    summary = _provider(_live_client({"qb1": 24.5, "rb2": 3.0})).summary("L1")
+
+    values = {spot.player: spot.value for spot in summary.mine.lineup}
+    assert values["Star QB"] == "24.5 pts"
+
+
+def test_a_haul_and_a_blank_are_toned_apart() -> None:
+    summary = _provider(_live_client({"qb1": 24.5, "rb2": 3.0})).summary("L1")
+
+    tones = {spot.player: spot.tone for spot in summary.mine.lineup}
+    assert tones["Star QB"] == "good"
+    assert tones["Bad RB"] == "warning"
+
+
+def test_a_player_whose_game_has_not_kicked_off_keeps_their_projection() -> None:
+    """Nought against somebody playing on Monday says they blanked."""
+    client = _live_client({"qb1": 0.0})
+    client.season_schedule = [ScheduledGame(week=3, date="2026-09-24", home="BUF", away="MIA", status="pre_game")]
+
+    summary = _provider(client).summary("L1")
+
+    assert all(not spot.value.endswith("pts") for spot in summary.mine.lineup)
+
+
+def test_the_side_total_switches_from_projected_to_scored() -> None:
+    assert _provider(_live_client({"qb1": 24.5, "rb2": 3.0})).summary("L1").mine.points == "27.5 pts"
+
+
+def test_before_kickoff_the_side_total_is_still_a_projection() -> None:
+    client = _live_client({})
+    client.season_schedule = [ScheduledGame(week=3, date="2026-09-24", home="BUF", away="MIA", status="pre_game")]
+
+    assert _provider(client).summary("L1").mine.points.endswith("proj")
+
+
+def test_a_missing_scoreboard_falls_back_to_projections() -> None:
+    client = _live_client({})
+    client.matchups_error = SleeperAPIError("down")
+
+    summary = _provider(client).summary("L1")
+
+    assert summary.mine is not None
+    assert summary.mine.points.endswith("proj")

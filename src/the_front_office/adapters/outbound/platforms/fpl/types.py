@@ -333,3 +333,20 @@ class PastSeason:
         """Per start rather than per appearance: a substitute cameo and a full
         ninety are not the same denominator, and starts is what FPL records."""
         return self.total_points / self.starts if self.starts else 0.0
+
+
+@dataclass(frozen=True)
+class LiveStat:
+    """What one player has done in the gameweek being played.
+
+    Minutes are here because zero points alone cannot be read: a player who
+    blanked and a player whose match is on Sunday both sit at nought, and only
+    one of them is bad news.
+    """
+
+    points: int
+    minutes: int
+
+    @property
+    def has_played(self) -> bool:
+        return self.minutes > 0
