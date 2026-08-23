@@ -36,12 +36,17 @@ class YahooAuthError(FrontOfficeError):
 
     def __init__(self) -> None:
         super().__init__(
-            "Yahoo accepted the token and granted it nothing: every endpoint returns 403, "
-            "including ones that need no permission at all. The grant is fixed when you "
-            "authorise, from whatever API permissions the app had saved at that moment, and "
-            "a refresh cannot widen it. Confirm API Permissions → Fantasy Sports → Read is "
-            "saved at https://developer.yahoo.com/apps/ (the Update button, not just the "
-            "checkbox), then run `just yahoo-login --force` to obtain a new grant."
+            "Yahoo accepted the token and granted it nothing — every endpoint returns 403, "
+            "including ones needing no permission at all, and the authorisation completes "
+            "without ever showing a consent screen. That means the app itself carries no API "
+            "permission, whatever the developer console displays. In order: (1) at "
+            "https://developer.yahoo.com/apps/ press Update on the app and confirm Fantasy "
+            "Sports → Read persists across a reload; (2) remove the app under Apps connected "
+            "to your account at https://login.yahoo.com/account/security so the next "
+            "authorisation has no stored grant to reuse; (3) failing both, create a new app "
+            "with the permission set at creation — a permission added to an existing Yahoo "
+            "app is unreliable — and put its Client ID and Secret in Settings. Then run "
+            "`just yahoo-login --force`."
         )
 
 
@@ -53,10 +58,13 @@ class YahooLoginRequiredError(FrontOfficeError):
     cannot see.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, detail: str = "") -> None:
         super().__init__(
-            "Yahoo is not authorised on this machine yet. Run `just yahoo-login` once; "
-            "the token is cached in .yahoofantasy and reused after that."
+            detail
+            or (
+                "Yahoo is not authorised on this machine yet. Run `just yahoo-login` once; "
+                "the token is cached in .yahoofantasy and reused after that."
+            )
         )
 
 

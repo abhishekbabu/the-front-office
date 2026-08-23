@@ -173,3 +173,82 @@ def test_an_expiry_is_stored_as_an_absolute_time(
     oauth.authorise("id", "secret", REDIRECT)
 
     assert saved[0][1]["access_token_expires"] > time.time()
+
+
+# ── waiting for the real redirect ───────────────────────────────────────
+
+
+class _OneShotServer:
+    """Serves a scripted sequence of connections, one per handle_request."""
+
+    timeout = None
+
+    def __init__(self, arrivals: list[tuple[str | None, str | None]]) -> None:
+        self.arrivals = list(arrivals)
+        self.handled = 0
+        self.closed = False
+
+    def handle_request(self) -> None:
+        self.handled += 1
+        if self.arrivals:
+            code, error = self.arrivals.pop(0)
+            if code:
+                oauth._Callback.code = code
+            if error:
+                oauth._Callback.error = error
+
+    def server_close(self) -> None:
+        self.closed = True
+
+
+@pytest.fixture
+def quiet_browser(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(oauth.webbrowser, "open_new_tab", lambda url: None)
+    monkeypatch.setattr(oauth, "_certificate", lambda: None)
+
+
+def _serve(monkeypatch: pytest.MonkeyPatch, arrivals: list[tuple[str | None, str | None]]) -> _OneShotServer:
+    server = _OneShotServer(arrivals)
+    monkeypatch.setattr(oauth, "HTTPServer", lambda *a, **k: server)
+    oauth._Callback.code = oauth._Callback.error = None
+    return server
+
+
+def test_a_preconnect_does_not_end_the_handshake(monkeypatch: pytest.MonkeyPatch, quiet_browser: None) -> None:
+    """The bug this loop exists for.
+
+    A browser opens speculative connections to a host it is about to visit, and
+    the certificate interstitial opens its own. Handling exactly one connection
+    treats the first of those as the answer and gives up a second in.
+    """
+    server = _serve(monkeypatch, [(None, None), (None, None), ("the-code", None)])
+
+    assert oauth._capture_code("http://localhost:9999", "id", "fspt-r") == "the-code"
+    assert server.handled == 3
+    assert server.closed
+
+
+def test_waiting_is_bounded(monkeypatch: pytest.MonkeyPatch, quiet_browser: None) -> None:
+    """A closed tab must not hang the terminal, which serve_forever would."""
+    server = _serve(monkeypatch, [])
+    monkeypatch.setattr(oauth, "CALLBACK_TIMEOUT_SECONDS", 0)
+
+    with pytest.raises(YahooLoginRequiredError, match="No redirect arrived"):
+        oauth._capture_code("http://localhost:9999", "id", "fspt-r")
+    assert server.closed
+
+
+def test_a_refusal_is_reported_in_yahoos_own_words(monkeypatch: pytest.MonkeyPatch, quiet_browser: None) -> None:
+    _serve(monkeypatch, [(None, "user denied access")])
+
+    with pytest.raises(YahooLoginRequiredError, match="user denied access"):
+        oauth._capture_code("http://localhost:9999", "id", "fspt-r")
+
+
+def test_the_socket_is_closed_even_when_the_code_arrives(monkeypatch: pytest.MonkeyPatch, quiet_browser: None) -> None:
+    """Otherwise port 8080 stays bound and the next login cannot start."""
+    server = _serve(monkeypatch, [("c", None)])
+
+    oauth._capture_code("http://localhost:9999", "id", "fspt-r")
+
+    assert server.closed

@@ -18,7 +18,6 @@ keeps working and only the handshake changes.
 
 import logging
 import ssl
-import threading
 import time
 import urllib.parse
 import webbrowser
@@ -76,7 +75,21 @@ class _Callback(BaseHTTPRequestHandler):
         self.wfile.write(_DONE.encode())
 
     def log_message(self, format: str, *args: Any) -> None:
-        """Silence the default stderr access log; this is a one-shot server."""
+        """Silence the default access log; this server exists for one redirect."""
+
+    def handle_one_request(self) -> None:
+        """Tolerate a connection that never becomes a request.
+
+        A browser opens speculative connections to a host it is about to visit,
+        and the certificate interstitial opens its own. Those arrive here as
+        TLS or parse errors; letting one kill the server would abandon the
+        handshake before the real redirect had a chance to arrive.
+        """
+        try:
+            super().handle_one_request()
+        except (ssl.SSLError, OSError) as e:
+            logger.debug(f"Ignoring a connection that carried no request: {e}")
+            self.close_connection = True
 
 
 def _capture_code(redirect_uri: str, client_id: str, scope: str) -> str:
@@ -95,25 +108,40 @@ def _capture_code(redirect_uri: str, client_id: str, scope: str) -> str:
         server.socket = context.wrap_socket(server.socket, server_side=True)
 
     query = urllib.parse.urlencode(
-        {"client_id": client_id, "redirect_uri": redirect_uri, "response_type": "code", "scope": scope}
+        {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": scope,
+            # Ask to be re-consented rather than handed a stored grant. Yahoo
+            # does not appear to honour this, but requesting it is correct and
+            # costs nothing: without it, an app authorised before its
+            # permissions were saved would silently keep the older grant.
+            "prompt": "consent",
+        }
     )
     url = f"{AUTH_URL}?{query}"
     logger.info(f"Opening browser for Yahoo authorisation: {url}")
     webbrowser.open_new_tab(url)
 
-    # Served on a thread so the wait is bounded: `serve_forever` would hang a
-    # terminal indefinitely if the browser tab is simply closed.
-    thread = threading.Thread(target=server.handle_request, daemon=True)
-    thread.start()
-    thread.join(timeout=CALLBACK_TIMEOUT_SECONDS)
+    # Serve until the redirect actually arrives rather than handling a single
+    # connection: the first one through is usually a browser preconnect or the
+    # certificate interstitial, and treating that as the answer ends the
+    # handshake a second after it began. Bounded, so a closed tab does not hang
+    # the terminal the way `serve_forever` would.
+    server.timeout = 1
+    deadline = time.monotonic() + CALLBACK_TIMEOUT_SECONDS
+    while _Callback.code is None and _Callback.error is None and time.monotonic() < deadline:
+        server.handle_request()
     server.server_close()
 
     if _Callback.error:
-        logger.error(f"Yahoo refused the authorisation: {_Callback.error}")
-        raise YahooLoginRequiredError()
+        raise YahooLoginRequiredError(f"Yahoo refused the authorisation: {_Callback.error}")
     if not _Callback.code:
-        logger.error("No authorisation code arrived before the timeout.")
-        raise YahooLoginRequiredError()
+        raise YahooLoginRequiredError(
+            f"No redirect arrived within {CALLBACK_TIMEOUT_SECONDS}s. The browser must reach "
+            f"{redirect_uri} — accept the certificate warning if one appears."
+        )
     return _Callback.code
 
 
