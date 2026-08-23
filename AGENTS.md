@@ -42,9 +42,9 @@ everywhere. Test modules mirror the module they cover.
 Under `adapters/outbound/sports/<sport>/`, the provider file is named for the
 platform that owns the **league** — `nba/yahoo.py`, `nfl/sleeper.py`. Other
 platforms a sport reads from are role-named helpers (`projections.py`,
-`lineup.py`), never a second file named after a platform. A provider's own work
-splits the same way in every sport: `week.py` (state), `league.py` (season,
-table), `prompt.py` (model text), platform file holding the port and delegating.
+`lineup.py`), never a second file named after a platform. A provider that
+outgrows one file splits the same way each time — `week.py` (state),
+`league.py` (season, table), `prompt.py` (model text) — leaving the port behind.
 
 **Types.** Avoid `Any`; prefer builtin generics and PEP 604 unions, which ruff's
 `UP` rules enforce. `missing-attribute` is disabled for modules touching the

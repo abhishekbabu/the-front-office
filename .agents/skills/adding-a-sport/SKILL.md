@@ -46,7 +46,7 @@ Name helpers for what they produce, not where the data came from. A file called
 ## Where the provider's own work goes
 
 A provider answers four separable questions, and past a few hundred lines they
-stop fitting in one file. Both football and FPL are split the same way, and a
+stop fitting in one file. Football and FPL are both split the same way, and a
 third sport should reach for the same names before inventing others:
 
 ```text
@@ -59,6 +59,14 @@ sports/<sport>/prompt.py      gathered state rendered as the text a model reads
 `week.py` is the base: nothing in it imports the others, so `league.py` and
 `prompt.py` can both build on it without a cycle. Nothing in `prompt.py`
 decides anything — the provider fetches and the prompt describes.
+
+Split when a provider outgrows one file, not on the way in. Basketball is one
+file on purpose: a category league has no weekly lineup to solve and almost
+none of its methods are free functions, so the same split there would be four
+files holding one idea.
+
+Test modules mirror whatever the source ends up as — `test_nfl_week.py` beside
+`week.py` — with the fakes they share living in `tests/conftest.py`.
 
 ## Rules
 
