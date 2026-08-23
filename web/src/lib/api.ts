@@ -74,8 +74,22 @@ export type Setting = {
 export type Evaluation = { verdict: TradeVerdict; chat_id: string };
 export type RosterRow = Record<string, string>;
 
-/** A failure the server described in its own words, ready to show as-is. */
-export class ApiError extends Error {}
+/**
+ * A failure the server described in its own words, ready to show as-is.
+ *
+ * `code` names conditions this app can offer to fix. Matching on it rather than
+ * on the message leaves the wording free to change.
+ */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly code: string = "error",
+  ) {
+    super(message);
+  }
+}
+
+export type LoginState = { status: "idle" | "running" | "ok" | "failed"; detail: string };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -86,7 +100,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     // Every expected failure carries `detail` written for a person; anything
     // without one is a genuine fault and gets the status line instead.
     const body = await response.json().catch(() => null);
-    throw new ApiError(body?.detail ?? `${response.status} ${response.statusText}`);
+    throw new ApiError(body?.detail ?? `${response.status} ${response.statusText}`, body?.code);
   }
   return response.json() as Promise<T>;
 }
@@ -106,5 +120,7 @@ export const api = {
     post<Evaluation>(`/api/${sport}/leagues/${league}/trade`, { text }),
   ask: (chatId: string, message: string) => post<{ answer: string }>(`/api/chat/${chatId}`, { message }),
   settings: () => request<Setting[]>("/api/settings"),
+  yahooLogin: () => post<LoginState>("/api/yahoo/login", {}),
+  yahooLoginState: () => request<LoginState>("/api/yahoo/login"),
   saveSettings: (values: Record<string, string>) => put<Setting[]>("/api/settings", { values }),
 };

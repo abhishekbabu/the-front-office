@@ -426,7 +426,7 @@ def test_a_403_names_the_permission_that_is_actually_missing() -> None:
 
     assert isinstance(error, YahooAuthError)
     assert "reviews every application" in str(error)
-    assert "yahoo-login --force" in str(error)
+    assert error.code == "yahoo_not_approved"
 
 
 def test_any_other_failure_stays_a_generic_api_error() -> None:
@@ -459,7 +459,7 @@ def test_a_missing_token_is_reported_not_obtained(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr(settings, "yahoo_token_file", str(tmp_path / "absent"))
 
-    with pytest.raises(YahooLoginRequiredError, match="just yahoo-login"):
+    with pytest.raises(YahooLoginRequiredError, match="not authorised on this machine"):
         YahooClient.ensure_authorised()
 
 
@@ -563,3 +563,24 @@ def test_get_context_never_starts_the_browser_handshake(monkeypatch: pytest.Monk
 
     with pytest.raises(YahooLoginRequiredError):
         YahooClient.get_context()
+
+
+def test_conditions_an_adapter_can_offer_to_fix_carry_a_code() -> None:
+    """Message text is free to change; a client matching on it would break.
+
+    The remedy differs by adapter — a terminal names a command, the web offers a
+    button — so neither belongs in the error and both need to recognise it.
+    """
+    from the_front_office.domain.errors import YahooAuthError, YahooLoginRequiredError
+
+    assert YahooLoginRequiredError().code == "yahoo_login_required"
+    assert YahooAuthError().code == "yahoo_not_approved"
+
+
+def test_no_error_message_names_a_command_or_a_button() -> None:
+    """The same text is read in a terminal and in a browser."""
+    from the_front_office.domain.errors import YahooAuthError, YahooLoginRequiredError
+
+    for error in (YahooLoginRequiredError(), YahooAuthError()):
+        assert "just " not in str(error)
+        assert "click" not in str(error).lower()

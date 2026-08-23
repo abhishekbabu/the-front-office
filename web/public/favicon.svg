@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Follows the OS theme the way the app does: the mark is the foreground
+       colour on the ground, so it stays legible on either browser chrome. -->
+  <style>
+    .ground { fill: #171717 }
+    .mark   { stroke: #ffffff }
+    @media (prefers-color-scheme: dark) {
+      .ground { fill: #ededed }
+      .mark   { stroke: #000000 }
+    }
+  </style>
+  <rect class="ground" width="32" height="32" rx="7"/>
+  <g class="mark" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 8h10v5a5 5 0 0 1-10 0z"/>
+    <path d="M11 9H8.5a2.5 2.5 0 0 0 2.5 4"/>
+    <path d="M21 9h2.5a2.5 2.5 0 0 1-2.5 4"/>
+    <path d="M16 18v3"/>
+    <path d="M12.5 24h7"/>
+    <path d="M14 21h4v3h-4z"/>
+  </g>
+</svg>

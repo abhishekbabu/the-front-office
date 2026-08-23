@@ -16,7 +16,7 @@ from the_front_office.adapters.inbound.cli.commands import (
     _cmd_trade,
     _print_help,
 )
-from the_front_office.adapters.inbound.cli.output import _print_header
+from the_front_office.adapters.inbound.cli.output import _print_header, print_error
 from the_front_office.adapters.inbound.cli.session import Session
 from the_front_office.bootstrap import SportEntry, all_sports, configured_sports
 from the_front_office.config.logging import setup_logging
@@ -146,7 +146,7 @@ def main() -> None:
         except FrontOfficeError as e:
             # Safety net — handlers render their own errors, but a session must
             # never die because one command raised.
-            print(f"  ❌ {e}")
+            print_error(e)
         except QuitRequested:
             _print_header("Goodbye 👋")
             break

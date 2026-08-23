@@ -12,6 +12,7 @@ back here across the proxy configured in `web/vite.config.ts`.
 """
 
 import logging
+import threading
 import uuid
 from typing import Any
 
@@ -90,6 +91,15 @@ class SettingsUpdate(BaseModel):
     values: dict[str, str]
 
 
+class LoginState(BaseModel):
+    """Where the Yahoo handshake has got to."""
+
+    status: str
+    """idle, running, ok or failed."""
+
+    detail: str = ""
+
+
 class Analysis(BaseModel):
     """A finished report plus the handle for asking about it."""
 
@@ -109,6 +119,30 @@ class Evaluation(BaseModel):
 # somewhere shared to put these.
 
 _chats: dict[str, ChatSession] = {}
+
+
+# The Yahoo handshake opens a browser and waits for a click, which no request
+# can hold open. It runs on a thread and the client watches this instead.
+_login = LoginState(status="idle")
+_login_lock = threading.Lock()
+
+
+def _run_yahoo_login() -> None:
+    """Authorise, then confirm the grant is real before reporting success."""
+    from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
+
+    global _login
+    try:
+        YahooClient.login(force=True)
+        YahooClient.verify()
+    except FrontOfficeError as e:
+        logger.error(f"Yahoo authorisation failed: {e}")
+        _login = LoginState(status="failed", detail=str(e))
+    except Exception as e:  # a browser or socket failure, not a domain condition
+        logger.error(f"Yahoo authorisation failed unexpectedly: {e}")
+        _login = LoginState(status="failed", detail=f"Authorisation failed: {e}")
+    else:
+        _login = LoginState(status="ok", detail="Yahoo accepted a Fantasy Sports read.")
 
 
 def _as_text(value: object) -> str:
@@ -138,7 +172,7 @@ def create_app() -> FastAPI:
         player — not faults in the server.
         """
         logger.info(f"Domain error: {exc}")
-        return JSONResponse(status_code=400, content={"detail": str(exc)})
+        return JSONResponse(status_code=400, content={"detail": str(exc), "code": exc.code})
 
     _register_routes(app)
     _serve_frontend(app)
@@ -208,6 +242,27 @@ def _register_routes(app: FastAPI) -> None:
             logger.error(f"Could not write .env: {e}")
             raise HTTPException(status_code=500, detail=f"Could not write .env: {e}") from e
         return read_settings()
+
+    @app.get("/api/yahoo/login", response_model=LoginState)
+    def yahoo_login_state() -> LoginState:
+        return _login
+
+    @app.post("/api/yahoo/login", response_model=LoginState)
+    def start_yahoo_login() -> LoginState:
+        """Begin the handshake and return at once.
+
+        The browser tab it opens is on this machine — the server and the person
+        are the same place — but the click cannot be waited on inside a request,
+        so progress is reported through the companion GET.
+        """
+        global _login
+        with _login_lock:
+            if _login.status == "running":
+                return _login
+            # A stale outcome from a previous attempt would read as this one's.
+            _login = LoginState(status="running", detail="Authorise in the browser tab that just opened.")
+        threading.Thread(target=_run_yahoo_login, daemon=True).start()
+        return _login
 
     @app.get("/api/{sport}/leagues", response_model=list[League])
     def list_leagues(sport: str) -> list[League]:

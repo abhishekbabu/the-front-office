@@ -1,5 +1,6 @@
 """Terminal output helpers."""
 
+from the_front_office.domain.errors import FrontOfficeError
 from the_front_office.domain.ports import ChatSession
 
 
@@ -51,3 +52,20 @@ def _interactive_followup(
         except Exception as e:
             print(f"  ❌ Error: {e}")
             break
+
+
+# What a terminal can do about a condition the domain only describes. The web
+# adapter offers a button for the same codes; neither belongs in the error.
+CLI_REMEDIES = {
+    "yahoo_login_required": "Run `just yahoo-login` to authorise.",
+    "yahoo_not_approved": "Apply at https://sports.yahoo.com/developer/access/, then `just yahoo-login --force`.",
+}
+
+
+def print_error(error: FrontOfficeError, prefix: str = "") -> None:
+    """Render a failure, plus the terminal's way of fixing it if there is one."""
+    label = f"{prefix}: " if prefix else ""
+    print(f"  ❌ {label}{error}")
+    remedy = CLI_REMEDIES.get(error.code)
+    if remedy:
+        print(f"     {remedy}")

@@ -60,6 +60,7 @@ class FakeChat:
 def _clear_chats() -> None:
     web._chats.clear()
     _Engine.seen_mock.clear()
+    web._login = web.LoginState(status="idle")
 
 
 @pytest.fixture
@@ -326,3 +327,96 @@ def test_a_shell_variable_is_reported_so_a_futile_edit_is_visible(
     entry = next(s for s in settings_client.get("/api/settings").json() if s["key"] == "FPL_ENTRY_ID")
 
     assert entry["shadowed"] is True
+
+
+# ── the Yahoo handshake, driven from the UI ─────────────────────────────
+
+
+def test_a_domain_error_carries_a_code_the_client_can_act_on(client: TestClient) -> None:
+    """The message deliberately names no command, so the client needs this to
+    know it can offer a button."""
+    from the_front_office.domain.errors import YahooLoginRequiredError
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(web.data, "build_provider", _raising(YahooLoginRequiredError()))
+        body = client.get("/api/nba/leagues").json()
+
+    assert body["code"] == "yahoo_login_required"
+    assert "just " not in body["detail"]
+
+
+def _raising(error: Exception) -> Any:
+    def _build(sport: str) -> Any:
+        raise error
+
+    return _build
+
+
+def test_starting_the_handshake_returns_at_once(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """It waits on a person and a browser tab; no request can hold that open."""
+    monkeypatch.setattr(web.threading, "Thread", _NoopThread)
+
+    body = client.post("/api/yahoo/login").json()
+
+    assert body["status"] == "running"
+
+
+def test_a_second_start_does_not_open_a_second_browser_tab(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    started: list[Any] = []
+    monkeypatch.setattr(web.threading, "Thread", lambda **kw: started.append(kw) or _NoopThread(**kw))
+
+    client.post("/api/yahoo/login")
+    client.post("/api/yahoo/login")
+
+    assert len(started) == 1
+
+
+def test_a_previous_outcome_does_not_leak_into_a_new_attempt(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stale "ok" would report success before anyone had clicked anything."""
+    monkeypatch.setattr(web.threading, "Thread", _NoopThread)
+    web._login = web.LoginState(status="ok", detail="from last time")
+
+    assert client.post("/api/yahoo/login").json()["status"] == "running"
+
+
+def test_progress_is_readable_while_it_waits(client: TestClient) -> None:
+    web._login = web.LoginState(status="running", detail="waiting")
+    assert client.get("/api/yahoo/login").json() == {"status": "running", "detail": "waiting"}
+
+
+def test_a_failed_handshake_is_reported_in_the_domains_words(monkeypatch: pytest.MonkeyPatch) -> None:
+    from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
+    from the_front_office.domain.errors import YahooAuthError
+
+    monkeypatch.setattr(YahooClient, "login", classmethod(lambda cls, force=False: None))
+    monkeypatch.setattr(YahooClient, "verify", classmethod(_raising(YahooAuthError())))
+
+    web._run_yahoo_login()
+
+    assert web._login.status == "failed"
+    assert "reviews every application" in web._login.detail
+
+
+def test_success_is_only_reported_once_the_grant_is_verified(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A login that completes and hands back an inert token is not a success."""
+    from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
+
+    calls: list[str] = []
+    monkeypatch.setattr(YahooClient, "login", classmethod(lambda cls, force=False: calls.append("login")))
+    monkeypatch.setattr(YahooClient, "verify", classmethod(lambda cls: calls.append("verify")))
+
+    web._run_yahoo_login()
+
+    assert calls == ["login", "verify"]
+    assert web._login.status == "ok"
+
+
+class _NoopThread:
+    """Starts nothing; the handshake itself is tested directly."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        self.kwargs = kwargs
+
+    def start(self) -> None: ...

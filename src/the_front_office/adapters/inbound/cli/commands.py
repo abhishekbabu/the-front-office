@@ -1,6 +1,6 @@
 """One function per slash command."""
 
-from the_front_office.adapters.inbound.cli.output import _interactive_followup, _print_header, _print_rows
+from the_front_office.adapters.inbound.cli.output import _interactive_followup, _print_header, _print_rows, print_error
 from the_front_office.adapters.inbound.cli.render import render_scout_report, render_trade_verdict
 from the_front_office.adapters.inbound.cli.session import Session
 from the_front_office.bootstrap import SportEntry, find, scout_engine, trade_engine
@@ -68,7 +68,7 @@ def _cmd_scout(session: Session, entries: list[SportEntry], args: list[str], moc
             provider = session.provider(entry)
             refs = provider.list_leagues()
         except FrontOfficeError as e:
-            print(f"  ❌ {entry.label}: {e}")
+            print_error(e, entry.label)
             continue
 
         if not refs:
@@ -84,7 +84,7 @@ def _cmd_scout(session: Session, entries: list[SportEntry], args: list[str], moc
             try:
                 report, chat = engine.start_analysis(ref.league_id)
             except FrontOfficeError as e:
-                print(f"  ❌ {e}")
+                print_error(e)
                 continue
             print("\n" + render_scout_report(report))
             _interactive_followup(chat, "report")
@@ -99,7 +99,7 @@ def _cmd_roster(session: Session, entries: list[SportEntry], args: list[str]) ->
                 _print_header(f"{entry.label} — {ref.name}")
                 _print_rows(provider.roster_rows(ref.league_id))
         except FrontOfficeError as e:
-            print(f"  ❌ {entry.label}: {e}")
+            print_error(e, entry.label)
 
 
 def _cmd_leagues(session: Session, entries: list[SportEntry]) -> None:
@@ -109,7 +109,7 @@ def _cmd_leagues(session: Session, entries: list[SportEntry]) -> None:
         try:
             refs = session.provider(entry).list_leagues()
         except FrontOfficeError as e:
-            print(f"  ❌ {e}")
+            print_error(e)
             continue
         if not refs:
             print("  (none this season)")
@@ -171,7 +171,7 @@ def _cmd_trade(session: Session, entries: list[SportEntry], args: list[str], moc
         try:
             verdict, chat = engine.evaluate(ref.league_id, trade_text)
         except FrontOfficeError as e:
-            print(f"  ❌ {e}")
+            print_error(e)
             continue
         print("\n" + render_trade_verdict(verdict))
         _interactive_followup(chat, "trade")

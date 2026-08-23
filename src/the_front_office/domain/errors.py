@@ -7,7 +7,15 @@ caller can tell apart from a real result. The inbound adapters catch
 
 
 class FrontOfficeError(Exception):
-    """Base class for every expected, user-facing failure."""
+    """Base class for every expected, user-facing failure.
+
+    The message describes the condition; it never names a command or a button,
+    because the same error is read in a terminal and in a browser and the
+    remedy differs. `code` is how an inbound adapter recognises a condition it
+    can offer to fix, without matching on message text that is free to change.
+    """
+
+    code: str = "error"
 
 
 class TeamNotFoundError(FrontOfficeError):
@@ -36,16 +44,17 @@ class YahooAuthError(FrontOfficeError):
     which is what distinguishes it from a consent that went wrong.
     """
 
+    code = "yahoo_not_approved"
+
     def __init__(self) -> None:
         super().__init__(
             "Yahoo refused the Fantasy Sports API for this application. The token is valid — "
             "an invalid one returns 401, not 403 — and even endpoints needing no user "
             "permission are refused, so this is about the app rather than the login. Yahoo "
-            "reviews every application before granting access to this API; creating the app "
-            "and ticking Fantasy Sports → Read is necessary but not sufficient. Apply at "
-            "https://sports.yahoo.com/developer/access/ (personal, single-league use is an "
-            "accepted category) and run `just yahoo-login --force` once approved. NFL and FPL "
-            "are unaffected."
+            "reviews every application before granting access to this API, so creating the app "
+            "and ticking Fantasy Sports → Read is necessary but not sufficient. Personal, "
+            "single-league use is an accepted category. Authorise again once approved. NFL and "
+            "FPL are unaffected."
         )
 
 
@@ -57,13 +66,11 @@ class YahooLoginRequiredError(FrontOfficeError):
     cannot see.
     """
 
+    code = "yahoo_login_required"
+
     def __init__(self, detail: str = "") -> None:
         super().__init__(
-            detail
-            or (
-                "Yahoo is not authorised on this machine yet. Run `just yahoo-login` once; "
-                "the token is cached in .yahoofantasy and reused after that."
-            )
+            detail or "Yahoo is not authorised on this machine yet. Authorising caches a token and is done once."
         )
 
 
