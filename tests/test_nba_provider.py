@@ -13,7 +13,7 @@ from the_front_office.adapters.outbound.sports.nba.yahoo import YahooNBAProvider
 from the_front_office.application.scouting import ScoutEngine
 from the_front_office.domain.errors import TeamNotFoundError
 from the_front_office.domain.mocks import MOCK_NBA_REPORT
-from the_front_office.domain.models import ScoutReport
+from the_front_office.domain.models import ScoutReport, Stat
 
 
 def _scout(yahoo: FakeYahoo, ai: FakeAI | None = None, nba: FakeNBA | None = None) -> ScoutEngine:
@@ -25,8 +25,31 @@ def test_returns_a_validated_report_and_an_open_chat() -> None:
     ai = FakeAI()
     report, chat = _scout(FakeYahoo(), ai=ai).start_analysis("")
     assert isinstance(report, ScoutReport)
-    assert report == MOCK_NBA_REPORT
+    assert report.model_dump(exclude={"headline"}) == MOCK_NBA_REPORT.model_dump(exclude={"headline"})
     assert chat is ai.chat
+
+
+def test_headline_figures_come_from_the_platform_not_the_model() -> None:
+    """The model is told to leave the field empty but is not trusted to.
+
+    A hallucinated rank or add budget would sit in the header looking exactly
+    as authoritative as a real one, so the engine overwrites rather than merges.
+    """
+    invented = MOCK_NBA_REPORT.model_copy(update={"headline": [Stat(label="Overall", value="1")]})
+    report, _ = _scout(FakeYahoo(adds_used=1), ai=FakeAI(report=invented)).start_analysis("")
+
+    labels = {stat.label: stat.value for stat in report.headline}
+    assert labels["Adds used"] == "1/3"
+    assert "1" not in [s.value for s in report.headline if s.label == "Overall"]
+
+
+def test_an_exhausted_add_budget_is_flagged_rather_than_stated() -> None:
+    """With no adds left every recommendation becomes a MONITOR, so it is the
+    one figure in the header that has to pull the eye."""
+    report, _ = _scout(FakeYahoo(adds_used=3), ai=FakeAI()).start_analysis("")
+
+    left = next(stat for stat in report.headline if stat.label == "Adds left")
+    assert (left.value, left.tone) == ("0", "warning")
 
 
 def test_follow_up_chat_is_seeded_with_the_report() -> None:
@@ -36,7 +59,8 @@ def test_follow_up_chat_is_seeded_with_the_report() -> None:
     roles = [item["role"] for item in ai.history]
     assert roles == ["user", "model"]
     # The model turn is the report itself, as JSON the follow-up can reason over.
-    assert ScoutReport.model_validate_json(ai.history[1]["parts"][0]) == MOCK_NBA_REPORT
+    seeded = ScoutReport.model_validate_json(ai.history[1]["parts"][0])
+    assert seeded.model_dump(exclude={"headline"}) == MOCK_NBA_REPORT.model_dump(exclude={"headline"})
 
 
 def test_follow_up_is_seeded_with_a_briefing_not_the_whole_prompt() -> None:

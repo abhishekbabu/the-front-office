@@ -12,6 +12,7 @@ from the_front_office.adapters.outbound.sports.fpl.squad import (
     effective_points,
     formations,
     lineup_changes,
+    points_with_captain,
 )
 
 
@@ -273,3 +274,28 @@ def test_the_best_upgrades_come_first() -> None:
     squad = [player(1, "MID", 1.0, cost=40), player(2, "DEF", 1.0, cost=40)]
     market = [player(10, "MID", 4.0, cost=40), player(11, "DEF", 9.0, cost=40)]
     assert [t.incoming.id for t in affordable_transfers(squad, market, bank=100)] == [11, 10]
+
+
+# ── comparing two elevens ───────────────────────────────────────────────
+
+
+def test_a_captained_total_counts_its_captain_twice() -> None:
+    starters = squad_of(("MID", 5.0), ("FWD", 8.0))
+    assert points_with_captain(starters, starters[1]) == 21.0
+
+
+def test_an_uncaptained_total_is_the_plain_sum() -> None:
+    starters = squad_of(("MID", 5.0), ("FWD", 8.0))
+    assert points_with_captain(starters, None) == 13.0
+
+
+def test_the_best_lineups_total_goes_through_the_same_function() -> None:
+    """Comparing a captained total against an uncaptained one overstates the gap
+    by a captain's score — the largest single number on the page."""
+    lineup = best_lineup(FIFTEEN)
+    assert lineup.points == points_with_captain(lineup.starters, lineup.captain)
+
+
+def test_a_ruled_out_captain_adds_nothing() -> None:
+    starters = [player(1, "MID", 5.0), player(2, "FWD", 8.0, chance=0)]
+    assert points_with_captain(starters, starters[1]) == 5.0

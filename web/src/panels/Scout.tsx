@@ -3,6 +3,7 @@ import { api, type Analysis, type League, type Sport } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatStrip } from "@/components/ui/stat";
 import { Chat, Chips, ErrorNote, MoveRow, PageHeader } from "@/panels/shared";
 
 export function ScoutPanel({ sport, league, mock }: { sport: Sport; league: League; mock: boolean }) {
@@ -17,6 +18,8 @@ export function ScoutPanel({ sport, league, mock }: { sport: Sport; league: Leag
           {run.isPending ? "Building…" : run.data ? "Run again" : "Run report"}
         </Button>
       </PageHeader>
+
+      {run.data && <StatStrip stats={run.data.report.headline} />}
 
       {run.isError && <ErrorNote error={run.error} />}
 

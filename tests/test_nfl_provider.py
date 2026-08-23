@@ -334,3 +334,24 @@ def test_roster_rows_mark_starters_and_bench() -> None:
 def test_roster_rows_skip_players_missing_from_the_catalogue() -> None:
     client = FakeSleeper(rosters=[SleeperRoster(roster_id=1, owner_id=MY_ID, player_ids=["ghost"], starter_ids=[])])
     assert _provider(client).roster_rows("L1") == []
+
+
+# ── headline figures ────────────────────────────────────────────────────
+
+
+def test_the_header_carries_the_weeks_standing() -> None:
+    context = _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).build_context("L1")
+    labels = {stat.label: stat.value for stat in context.headline}
+
+    assert labels["Week"] == "3"
+    assert labels["Record"] == "2-1"
+    assert labels["Points for"] == "250.5"
+
+
+def test_the_header_agrees_with_the_prompt_about_the_lineup_total() -> None:
+    """Two numbers for the same thing, differing in the last decimal, reads as
+    a bug even when neither is wrong."""
+    context = _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).build_context("L1")
+    lineup = next(stat for stat in context.headline if stat.label == "Lineup")
+
+    assert f"Current lineup projects {lineup.value} points" in context.constraints

@@ -42,6 +42,24 @@ class Move(BaseModel):
     replaces_rationale: str = Field(default="", description="Why that counterpart is the right one to move.")
 
 
+class Stat(BaseModel):
+    """One headline figure: where the team stands before any reading happens.
+
+    Computed by the provider from league state, never by the model — these are
+    exact and a hallucinated rank or bank balance would be worse than none.
+    """
+
+    label: str = Field(description="Short name in the league's own vocabulary: 'Bank', 'Free transfers'.")
+    value: str = Field(description="Already formatted for display, with its unit: '£2.5m', '340,112', '0-0'.")
+    tone: Literal["neutral", "good", "warning"] = Field(
+        default="neutral",
+        description=(
+            "Whether this figure should pull the eye. 'warning' for something costing points now — "
+            "points left on the bench, an expiring allowance — and 'good' for headroom worth spending."
+        ),
+    )
+
+
 class ScoutReport(BaseModel):
     """A scouting report for any sport."""
 
@@ -54,6 +72,14 @@ class ScoutReport(BaseModel):
     )
     moves: list[Move] = Field(description="Recommended moves, most valuable first.")
     strategy: str = Field(description="One-sentence summary of the plan.")
+
+    headline: list[Stat] = Field(
+        default_factory=list,
+        description=(
+            "LEAVE THIS EMPTY. The application overwrites it with figures read straight from the "
+            "platform, so anything put here is discarded."
+        ),
+    )
 
 
 class TradeVerdict(BaseModel):
@@ -113,6 +139,8 @@ class SportContext:
     extra: str = ""
     roster_lines: dict[str, str] = field(default_factory=dict)
     candidate_lines: dict[str, str] = field(default_factory=dict)
+    headline: list[Stat] = field(default_factory=list)
+    """Exact figures for the report header, read from league state rather than written by the model."""
 
     def briefing(self, report: ScoutReport) -> str:
         """A compact context for follow-up questions about `report`.

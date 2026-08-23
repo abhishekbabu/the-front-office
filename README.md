@@ -83,6 +83,11 @@ cp .env.template .env        # PowerShell: Copy-Item .env.template .env
 
 Without `just`: `uv sync && uv run pre-commit install`.
 
+The UI's **Settings** page writes `.env` directly, so a fresh machine can be
+configured without opening an editor. Secrets are write-only there: the server
+reports whether one is set, never what it is. Saving re-reads configuration into
+the running process, so a sport becomes available without a restart.
+
 **On a second machine**, copy `.env` across by hand — the four secrets
 (`YAHOO_CLIENT_ID`, `YAHOO_CLIENT_SECRET`, `GOOGLE_API_KEY`, `LOGFIRE_TOKEN`)
 belong in a password manager, not in this repo, which is public. Then run
@@ -144,8 +149,10 @@ First run opens a browser for the Yahoo OAuth2 handshake; the token is cached in
 Add `--mock` to `/scout` or `/trade` to swap Gemini for canned responses and
 exercise the report path without spending tokens. League data stays live.
 
-The web UI covers the same ground with a sport picker in the sidebar. Both
-front ends render the same validated models.
+The web UI covers the same ground with a sport picker in the sidebar, plus a
+Settings page for `.env` and a header strip of exact figures — rank, bank,
+transfers remaining, points sitting on the bench — read from league state rather
+than written by the model. Both front ends render the same validated models.
 
 `/scout` and `/trade` accept `--mock`, which swaps Gemini for canned responses so
 you can exercise the report path without spending tokens. Yahoo stays live —

@@ -22,8 +22,9 @@ from pydantic import BaseModel, Field
 
 from the_front_office.adapters.inbound.web import data
 from the_front_office.bootstrap import SportEntry, all_sports, scout_engine, trade_engine
+from the_front_office.config import env_file
 from the_front_office.config.logging import setup_logging
-from the_front_office.config.settings import PROJECT_ROOT
+from the_front_office.config.settings import PROJECT_ROOT, settings
 from the_front_office.config.telemetry import setup_telemetry
 from the_front_office.domain.errors import FrontOfficeError
 from the_front_office.domain.models import ScoutReport, TradeVerdict
@@ -70,6 +71,24 @@ class ChatRequest(BaseModel):
 
 class Reply(BaseModel):
     answer: str
+
+
+class Setting(BaseModel):
+    """One configurable value, described without ever carrying a secret."""
+
+    key: str
+    field: str
+    secret: bool
+    present: bool
+    value: str = ""
+    """Empty for a secret. Presence is all the UI needs, and all it should hold."""
+
+    shadowed: bool = False
+    """A shell variable is overriding .env, so an edit here will not take effect."""
+
+
+class SettingsUpdate(BaseModel):
+    values: dict[str, str]
 
 
 class Analysis(BaseModel):
@@ -144,6 +163,44 @@ def _register_routes(app: FastAPI) -> None:
             )
             for entry in all_sports()
         ]
+
+    @app.get("/api/settings", response_model=list[Setting])
+    def read_settings() -> list[Setting]:
+        """Every configurable value, with secrets reported as present or absent.
+
+        A secret's contents never leave the process. There is nothing the UI can
+        do with the characters of an API key that it cannot do with the fact
+        that one is set, and a page that renders them puts them in screenshots.
+        """
+        stored = env_file.read_values()
+        return [
+            Setting(
+                key=key,
+                field=field,
+                secret=key in env_file.SECRET_KEYS,
+                present=bool(getattr(settings, field, None)),
+                value="" if key in env_file.SECRET_KEYS else str(stored.get(key, "")),
+                shadowed=env_file.is_shadowed(key),
+            )
+            for key, field in env_file.declared().items()
+        ]
+
+    @app.put("/api/settings", response_model=list[Setting])
+    def save_settings(update: SettingsUpdate) -> list[Setting]:
+        """Write values to .env and re-read configuration into the running app.
+
+        Rejects any key no setting reads rather than writing it: a line nothing
+        picks up looks saved and changes nothing, which is the exact failure
+        this endpoint exists to prevent.
+        """
+        try:
+            env_file.write_values(update.values)
+        except env_file.UnknownSettingError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except OSError as e:
+            logger.error(f"Could not write .env: {e}")
+            raise HTTPException(status_code=500, detail=f"Could not write .env: {e}") from e
+        return read_settings()
 
     @app.get("/api/{sport}/leagues", response_model=list[League])
     def list_leagues(sport: str) -> list[League]:

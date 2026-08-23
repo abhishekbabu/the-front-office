@@ -1,0 +1,166 @@
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, type Setting } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorNote, PageHeader } from "@/panels/shared";
+
+/**
+ * Grouped by what each key unlocks, in the order someone sets them up, rather
+ * than by the order they happen to sit in `.env`. A key on its own means
+ * nothing; "this is the one that turns on football" is what a person is
+ * actually looking for.
+ */
+const GROUPS: { title: string; note: string; keys: string[] }[] = [
+  {
+    title: "Fantasy Premier League",
+    note: "FPL has no username lookup. The entry id is the number in the URL of your own points page: fantasy.premierleague.com/entry/<THIS>/event/1",
+    keys: ["FPL_ENTRY_ID"],
+  },
+  {
+    title: "NFL on Sleeper",
+    note: "Sleeper needs no key or OAuth — just the username your leagues are under.",
+    keys: ["SLEEPER_USERNAME", "SLEEPER_LEAGUE_ID"],
+  },
+  {
+    title: "NBA on Yahoo",
+    note: "From a Yahoo developer app with Fantasy Sports read permission and redirect URI https://localhost:8080. The first report opens a browser to authorise.",
+    keys: ["YAHOO_CLIENT_ID", "YAHOO_CLIENT_SECRET", "YAHOO_REDIRECT_URI", "YAHOO_MAX_WEEKLY_ADDS"],
+  },
+  {
+    title: "AI",
+    note: "Without a key every report still runs with Mock AI on — the league data is real, the analysis is canned.",
+    keys: ["GOOGLE_API_KEY"],
+  },
+  {
+    title: "Tracing",
+    note: "Optional. Without a token nothing is exported and no network call is made. Prompt text is never sent unless you turn it on, and a prompt carries your roster and your leagues.",
+    keys: ["LOGFIRE_TOKEN", "LOGFIRE_ENVIRONMENT", "LOGFIRE_CAPTURE_PROMPTS"],
+  },
+  {
+    title: "Advanced",
+    note: "Rarely worth changing; each already has the shown value as its default.",
+    keys: ["LOG_LEVEL", "NBA_API_DELAY", "NBA_CACHE_FILE", "SLEEPER_CACHE_FILE", "FPL_CACHE_FILE", "YAHOO_TOKEN_FILE"],
+  },
+];
+
+export function SettingsPanel() {
+  const queryClient = useQueryClient();
+  const settings = useQuery<Setting[], Error>({ queryKey: ["settings"], queryFn: api.settings });
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  const save = useMutation<Setting[], Error, Record<string, string>>({
+    mutationFn: api.saveSettings,
+    onSuccess: () => {
+      setDrafts({});
+      // Everything downstream depends on configuration: which sports appear,
+      // which leagues they hold. Drop it all rather than guess what moved.
+      queryClient.invalidateQueries();
+    },
+  });
+
+  const byKey = useMemo(() => new Map((settings.data ?? []).map((s) => [s.key, s])), [settings.data]);
+
+  // Anything the groups above forgot still has to be reachable, or a setting
+  // added later becomes invisible here with nothing to say so.
+  const ungrouped = (settings.data ?? []).filter((s) => !GROUPS.some((g) => g.keys.includes(s.key)));
+  const groups = ungrouped.length
+    ? [...GROUPS, { title: "Other", note: "Declared in settings.py but not grouped here.", keys: ungrouped.map((s) => s.key) }]
+    : GROUPS;
+
+  const pending = Object.keys(drafts).length;
+
+  return (
+    <>
+      <PageHeader title="Settings" meta="Written to .env and applied immediately">
+        <Button variant="primary" disabled={!pending || save.isPending} onClick={() => save.mutate(drafts)}>
+          {save.isPending ? "Saving…" : pending ? `Save ${pending}` : "Saved"}
+        </Button>
+      </PageHeader>
+
+      {settings.isError && <ErrorNote error={settings.error} />}
+      {save.isError && <ErrorNote error={save.error} />}
+      {settings.isLoading && <Skeleton className="m-5 h-96" />}
+
+      {settings.data && (
+        <div className="flex flex-col gap-4 p-5">
+          {groups.map((group) => (
+            <Card key={group.title}>
+              <CardHeader>
+                <span>{group.title}</span>
+              </CardHeader>
+              <p className="max-w-[70ch] px-4 pt-3 text-[13px] leading-relaxed text-muted-foreground">{group.note}</p>
+              <div className="flex flex-col p-4 pt-3">
+                {group.keys.map((key) => {
+                  const setting = byKey.get(key);
+                  if (!setting) return null;
+                  return (
+                    <Row
+                      key={key}
+                      setting={setting}
+                      draft={drafts[key]}
+                      onChange={(value) =>
+                        setDrafts((current) => {
+                          const next = { ...current };
+                          // Typing back to the stored value is not a change.
+                          if (value === (setting.secret ? "" : setting.value)) delete next[key];
+                          else next[key] = value;
+                          return next;
+                        })
+                      }
+                    />
+                  );
+                })}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function Row({
+  setting,
+  draft,
+  onChange,
+}: {
+  setting: Setting;
+  draft: string | undefined;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="grid grid-cols-1 items-baseline gap-1.5 border-b border-border/45 py-2.5 last:border-b-0 sm:grid-cols-[16rem_minmax(0,1fr)] sm:gap-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <code className="font-mono text-[12px] text-foreground">{setting.key}</code>
+        {setting.secret && (
+          <Badge variant={setting.present ? "ok" : "muted"} appearance="status">
+            {setting.present ? "set" : "not set"}
+          </Badge>
+        )}
+        {setting.shadowed && (
+          <Badge
+            variant="warn"
+            appearance="status"
+            title="This is exported in your shell, which pydantic reads ahead of .env — saving here will not change the running value."
+          >
+            shell wins
+          </Badge>
+        )}
+      </div>
+      <input
+        type={setting.secret ? "password" : "text"}
+        autoComplete="off"
+        spellCheck={false}
+        value={draft ?? (setting.secret ? "" : setting.value)}
+        onChange={(e) => onChange(e.target.value)}
+        // A secret's characters never reach the client, so there is nothing to
+        // show as a current value — only whether one exists.
+        placeholder={setting.secret ? (setting.present ? "•••••••• — type to replace" : "not set") : "not set"}
+        className="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 font-mono text-[12.5px] placeholder:font-sans placeholder:text-muted-foreground"
+      />
+    </label>
+  );
+}

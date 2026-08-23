@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Settings, Sun, Trophy } from "lucide-react";
 import { api, type League, type Sport } from "@/lib/api";
 import { useTheme } from "@/lib/useTheme";
 import { PALETTES } from "@/themes/registry";
@@ -10,9 +10,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScoutPanel } from "@/panels/Scout";
 import { TeamPanel } from "@/panels/Team";
 import { TradePanel } from "@/panels/Trade";
+import { SettingsPanel } from "@/panels/Settings";
 import { cn } from "@/lib/utils";
 
-type View = "scout" | "team" | "trade";
+/** The views that need a sport and a league behind them. */
+type SportView = "scout" | "team" | "trade";
+
+/** Settings works with nothing configured, which is exactly when it is needed. */
+type View = SportView | "settings";
 
 export default function App() {
   const { mode, setMode, palette, setPalette } = useTheme();
@@ -33,15 +38,15 @@ export default function App() {
   const league: League | undefined = (leagues.data ?? []).find((l) => l.league_id === leagueId) ?? leagues.data?.[0];
 
   // A sport that cannot trade must not leave the tab selected behind it.
-  const views: View[] = active?.supports_trades ? ["scout", "team", "trade"] : ["scout", "team"];
-  const current = views.includes(view) ? view : "scout";
+  const views: SportView[] = active?.supports_trades ? ["scout", "team", "trade"] : ["scout", "team"];
+  const current: SportView = views.find((v) => v === view) ?? "scout";
 
   return (
     <div className="grid min-h-full grid-cols-[13rem_minmax(0,1fr)]">
       <nav className="flex flex-col gap-6 border-r border-border bg-card px-3 py-4">
         <div className="flex items-center gap-2.5 px-1">
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-sm bg-primary font-display text-[13px] font-bold text-primary-foreground">
-            FO
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-sm bg-primary text-primary-foreground">
+            <Trophy className="size-3.5" strokeWidth={2.25} aria-hidden />
           </span>
           <span className="font-display text-[15px] font-semibold tracking-tight">The Front Office</span>
         </div>
@@ -90,6 +95,13 @@ export default function App() {
         )}
 
         <div className="mt-auto flex flex-col gap-3">
+          <RailItem active={view === "settings"} onClick={() => setView("settings")}>
+            <span className="flex items-center gap-2">
+              <Settings className="size-3.5" aria-hidden />
+              Settings
+            </span>
+          </RailItem>
+
           <label className="flex cursor-pointer items-center justify-between gap-2 px-2 text-[13px] text-muted-foreground">
             <span>Mock AI</span>
             <input
@@ -129,7 +141,9 @@ export default function App() {
       </nav>
 
       <main className="min-w-0">
-        {sports.isSuccess && configured.length === 0 ? (
+        {view === "settings" ? (
+          <SettingsPanel />
+        ) : sports.isSuccess && configured.length === 0 ? (
           <Empty sports={sports.data} />
         ) : active && league ? (
           current === "scout" ? (
@@ -193,8 +207,7 @@ function Empty({ sports }: { sports: Sport[] }) {
     <div className="mx-auto max-w-xl p-10">
       <h1 className="font-display text-2xl font-semibold tracking-tight">No sports configured</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Set one of these in <code className="font-mono text-accent-foreground">.env</code>, then run{" "}
-        <code className="font-mono text-accent-foreground">just doctor</code> to check it took.
+        Set one of these in Settings, or in <code className="font-mono text-accent-foreground">.env</code> directly.
       </p>
       <ul className="mt-5 flex flex-col gap-2">
         {sports.map((s) => (

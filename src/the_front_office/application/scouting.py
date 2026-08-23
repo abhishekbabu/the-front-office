@@ -38,6 +38,11 @@ class ScoutEngine:
         context = self.provider.build_context(league_id)
         report = self.ai.generate_structured(context.prompt, ScoutReport, mock=mock_report_for(self.provider.sport))
 
+        # The provider read these off the platform; the model was told to leave
+        # the field empty but is not trusted to. Overwriting rather than merging
+        # means a hallucinated rank can never reach the page.
+        report = report.model_copy(update={"headline": context.headline})
+
         briefing = context.briefing(report)
         logger.debug(
             f"{self.provider.sport}: briefing is {len(briefing):,} chars vs {len(context.prompt):,} for the prompt"

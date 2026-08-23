@@ -29,11 +29,19 @@ export type Move = {
   replaces_rationale: string;
 };
 
+export type Stat = {
+  label: string;
+  value: string;
+  tone: "neutral" | "good" | "warning";
+};
+
 export type ScoutReport = {
   situation: string;
   focus: string[];
   moves: Move[];
   strategy: string;
+  /** Read off the platform by the provider, not written by the model. */
+  headline: Stat[];
 };
 
 export type TradeVerdict = {
@@ -48,6 +56,18 @@ export type TradeVerdict = {
 };
 
 export type Analysis = { report: ScoutReport; chat_id: string };
+
+export type Setting = {
+  key: string;
+  field: string;
+  secret: boolean;
+  /** Whether a value is set. For a secret this is all the client is ever told. */
+  present: boolean;
+  /** Always empty for a secret; a secret's characters never leave the server. */
+  value: string;
+  /** A shell variable is overriding .env, so an edit here will not take effect. */
+  shadowed: boolean;
+};
 export type Evaluation = { verdict: TradeVerdict; chat_id: string };
 export type RosterRow = Record<string, string>;
 
@@ -71,6 +91,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 const post = <T,>(path: string, body: unknown) =>
   request<T>(path, { method: "POST", body: JSON.stringify(body) });
 
+const put = <T,>(path: string, body: unknown) =>
+  request<T>(path, { method: "PUT", body: JSON.stringify(body) });
+
 export const api = {
   sports: () => request<Sport[]>("/api/sports"),
   leagues: (sport: string) => request<League[]>(`/api/${sport}/leagues`),
@@ -80,4 +103,6 @@ export const api = {
   trade: (sport: string, league: string, text: string, mock: boolean) =>
     post<Evaluation>(`/api/${sport}/leagues/${league}/trade`, { text, mock }),
   ask: (chatId: string, message: string) => post<{ answer: string }>(`/api/chat/${chatId}`, { message }),
+  settings: () => request<Setting[]>("/api/settings"),
+  saveSettings: (values: Record<string, string>) => put<Setting[]>("/api/settings", { values }),
 };

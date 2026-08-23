@@ -24,7 +24,7 @@ from the_front_office.adapters.outbound.sports.trades import resolve_sides
 from the_front_office.config.constants import NBA_SCOUT_PROMPT, NBA_TRADE_PROMPT
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import FrontOfficeError, LeagueNotFoundError
-from the_front_office.domain.models import SportContext, TradeProposal
+from the_front_office.domain.models import SportContext, Stat, TradeProposal
 from the_front_office.domain.ports import LeagueRef
 
 logger = logging.getLogger(__name__)
@@ -299,6 +299,18 @@ class YahooNBAProvider:
             extra=schedule_context,
             roster_lines=roster_lines,
             candidate_lines=fa_lines,
+            headline=[
+                Stat(label="Team", value=str(my_team.name)),
+                Stat(label="Roster", value=str(len(roster_lines))),
+                Stat(label="Adds used", value=f"{used_adds}/{limit}"),
+                # An exhausted add budget is the constraint the whole report
+                # bends around — it turns every recommendation into a MONITOR.
+                Stat(
+                    label="Adds left",
+                    value=str(remaining_adds),
+                    tone="good" if remaining_adds else "warning",
+                ),
+            ],
         )
 
     def _rank_free_agents(self) -> tuple[list[Player], dict[str, str]]:

@@ -216,3 +216,67 @@ def test_an_empty_follow_up_is_rejected(client: TestClient) -> None:
 def test_the_api_serves_without_a_built_front_end(client: TestClient) -> None:
     """`dist/` is absent during front-end development and in the test suite."""
     assert client.get("/api/sports").status_code == 200
+
+
+# ── settings ────────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def settings_client(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    """A client editing a throwaway .env rather than the developer's own."""
+    from the_front_office.config import env_file
+
+    path = tmp_path / ".env"
+    path.write_text("SLEEPER_USERNAME=abhibeast\n", encoding="utf-8")
+    monkeypatch.setattr(env_file, "ENV_PATH", path)
+    monkeypatch.setattr(env_file, "reload_settings", lambda: None)
+    return TestClient(web.create_app())
+
+
+def test_settings_list_every_variable_the_app_reads(settings_client: TestClient) -> None:
+    keys = {s["key"] for s in settings_client.get("/api/settings").json()}
+    assert {"GOOGLE_API_KEY", "FPL_ENTRY_ID", "SLEEPER_USERNAME"} <= keys
+
+
+def test_a_secret_is_never_sent_to_the_client(settings_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """There is nothing the UI can do with the characters of an API key that it
+    cannot do with the fact that one is set — and a page that renders them puts
+    them in screenshots."""
+    from the_front_office.config.settings import settings
+
+    monkeypatch.setattr(settings, "gemini_api_key", "super-secret-value")
+
+    entry = next(s for s in settings_client.get("/api/settings").json() if s["key"] == "GOOGLE_API_KEY")
+
+    assert entry["secret"] is True
+    assert entry["present"] is True
+    assert entry["value"] == ""
+
+
+def test_a_non_secret_carries_its_value_so_it_can_be_edited(settings_client: TestClient) -> None:
+    entry = next(s for s in settings_client.get("/api/settings").json() if s["key"] == "SLEEPER_USERNAME")
+    assert entry["value"] == "abhibeast"
+
+
+def test_saving_writes_the_value_and_returns_the_new_state(settings_client: TestClient) -> None:
+    body = settings_client.put("/api/settings", json={"values": {"FPL_ENTRY_ID": "4242"}}).json()
+
+    entry = next(s for s in body if s["key"] == "FPL_ENTRY_ID")
+    assert entry["value"] == "4242"
+
+
+def test_a_key_no_setting_reads_is_refused_with_its_name(settings_client: TestClient) -> None:
+    response = settings_client.put("/api/settings", json={"values": {"GOOGLE_APIKEY": "oops"}})
+
+    assert response.status_code == 400
+    assert "GOOGLE_APIKEY" in response.json()["detail"]
+
+
+def test_a_shell_variable_is_reported_so_a_futile_edit_is_visible(
+    settings_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FPL_ENTRY_ID", "999")
+
+    entry = next(s for s in settings_client.get("/api/settings").json() if s["key"] == "FPL_ENTRY_ID")
+
+    assert entry["shadowed"] is True

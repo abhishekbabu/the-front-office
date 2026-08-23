@@ -94,8 +94,13 @@ recipe, hook or script; `uv run` resolves it everywhere. No POSIX-only commands
 in tooling — the project supports Windows, where no bash is guaranteed. Put
 scripts in `scripts/` instead.
 
-**Secrets.** Never commit `.env`, `.yahoofantasy`, or `.nba_cache.json`. Read
+**Secrets.** Never commit `.env`, `.yahoofantasy`, or any `.*_cache.json`. Read
 config through the `settings` singleton, never `os.getenv` at a call site.
+`config/env_file.py` is the only writer: it accepts just the keys `AppSettings`
+declares, so a typo is refused rather than written as a line nothing reads, and
+it edits line by line so comments survive. A secret's value must never leave the
+process — report presence, never contents. `reload_settings` mutates the
+singleton in place; rebinding would strand every module that imported it.
 
 **UI.** The API returns the domain models themselves — never define a parallel
 response type for something `domain/models.py` already models, or the two drift.
@@ -137,6 +142,11 @@ so the suite and CI need no secret. Prompt text is not exported unless
 `LOGFIRE_CAPTURE_PROMPTS` is set: a prompt carries the user's roster, leagues and
 entry id. Each `logfire.instrument_*` needs its matching extra declared on the
 dependency, or it imports fine and raises at call time.
+
+**Headline figures.** `ScoutReport.headline` is filled by the engine from the
+provider's `SportContext`, never by the model — the field's description tells it
+to leave the field empty and the engine overwrites regardless. A hallucinated
+rank would sit in the header looking exactly as authoritative as a real one.
 
 **Layering.** Dependencies point inward only: `domain` imports nothing else in
 the package; `application` imports only `domain`; adapters implement ports;

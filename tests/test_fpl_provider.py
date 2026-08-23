@@ -374,3 +374,47 @@ def test_an_empty_bank_with_no_upgrade_says_so() -> None:
     prompt = provider(bank=0).build_context(LEAGUE_ID).prompt
     transfers = prompt.split("AFFORDABLE TRANSFERS")[1].split("TOP AVAILABLE")[0]
     assert "nothing in the bank buys an upgrade" in transfers
+
+
+# ── headline figures ────────────────────────────────────────────────────
+
+
+def _headline(**kwargs: object) -> dict[str, str]:
+    context = provider(**kwargs).build_context(LEAGUE_ID)
+    return {stat.label: stat.value for stat in context.headline}
+
+
+def test_the_header_carries_the_squads_standing_and_its_money() -> None:
+    labels = _headline()
+    assert labels["Points"] == "412"
+    assert labels["Overall"] == "340,112"
+    assert labels["Mini-league"] == "3 of 12"
+    assert labels["Bank"] == "£3.0m"
+
+
+def test_points_left_on_the_bench_are_the_figure_that_warns() -> None:
+    """The only entry that is a mistake rather than a fact."""
+    context = provider().build_context(LEAGUE_ID)
+    bench = next(stat for stat in context.headline if stat.label == "On bench")
+    assert bench.tone == "warning"
+
+
+def test_an_optimal_eleven_leaves_nothing_on_the_bench_to_report() -> None:
+    from the_front_office.adapters.outbound.sports.fpl.squad import best_lineup
+
+    best = best_lineup(list(SQUAD_PLAYERS.values()))
+    # Captained, because FPL always is — and the comparison only holds between
+    # two elevens that each count a captain twice.
+    picks = [
+        Pick(element=p.id, position=i, multiplier=2 if p is best.captain else 1, is_captain=p is best.captain)
+        for i, p in enumerate(best.starters, start=1)
+    ]
+    picks += [Pick(element=p.id, position=i, multiplier=0) for i, p in enumerate(best.bench, start=12)]
+    squad = Squad(gameweek=4, picks=picks, bank=30, value=1004)
+
+    context = FPLProvider(ENTRY_ID, client=FakeFPL(squad=squad)).build_context(LEAGUE_ID)  # type: ignore[arg-type]
+    assert not [stat for stat in context.headline if stat.label == "On bench"]
+
+
+def test_a_manager_in_no_mini_league_gets_no_mini_league_figure() -> None:
+    assert "Mini-league" not in _headline(leagues=[])

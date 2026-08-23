@@ -28,7 +28,7 @@ from the_front_office.adapters.outbound.sports.trades import resolve_sides
 from the_front_office.config.constants import NFL_SCOUT_PROMPT, NFL_TRADE_PROMPT
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import LeagueNotFoundError, SleeperAPIError
-from the_front_office.domain.models import SportContext, TradeProposal
+from the_front_office.domain.models import SportContext, Stat, TradeProposal
 from the_front_office.domain.ports import LeagueRef
 
 logger = logging.getLogger(__name__)
@@ -250,7 +250,32 @@ class SleeperNFLProvider:
             extra=f"LINEUP CHANGES IMPLIED BY PROJECTIONS:\n{changes_str}",
             roster_lines=roster_lines,
             candidate_lines=available_lines,
+            headline=self._headline(roster, week, current_points, best_points, on_bench),
         )
+
+    @staticmethod
+    def _headline(
+        roster: SleeperRoster,
+        week: int,
+        current_points: float,
+        best_points: float,
+        on_bench: float,
+    ) -> list[Stat]:
+        """Where this team stands this week, in points.
+
+        Only points sitting on the bench warns: it is the one figure here that
+        represents a decision still open rather than a result already in.
+        """
+        stats = [
+            Stat(label="Week", value=str(week)),
+            Stat(label="Record", value=roster.record),
+            Stat(label="Points for", value=f"{roster.points_for:.1f}"),
+            Stat(label="Lineup", value=f"{current_points:.1f}"),
+            Stat(label="Best legal", value=f"{best_points:.1f}", tone="good" if on_bench > 0 else "neutral"),
+        ]
+        if on_bench > 0:
+            stats.append(Stat(label="On bench", value=f"+{on_bench:.1f}", tone="warning"))
+        return stats
 
     # ── helpers ─────────────────────────────────────────────────────
 

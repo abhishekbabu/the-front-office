@@ -64,8 +64,18 @@ class Lineup:
     @property
     def points(self) -> float:
         """Expected points with the captain counted twice."""
-        total = sum(effective_points(p) for p in self.starters)
-        return round(total + (effective_points(self.captain) if self.captain else 0.0), 2)
+        return points_with_captain(self.starters, self.captain)
+
+
+def points_with_captain(starters: list[Player], captain: Player | None) -> float:
+    """What an eleven expects, counting its captain twice.
+
+    Comparing a captained total against an uncaptained one overstates the gap by
+    roughly a captain's score, which is the largest single number on the page —
+    so every comparison between two lineups has to go through here.
+    """
+    total = sum(effective_points(p) for p in starters)
+    return round(total + (effective_points(captain) if captain else 0.0), 2)
 
 
 def best_lineup(squad: list[Player]) -> Lineup:

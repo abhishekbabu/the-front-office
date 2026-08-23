@@ -31,11 +31,12 @@ from the_front_office.adapters.outbound.sports.fpl.squad import (
     best_lineup,
     effective_points,
     lineup_changes,
+    points_with_captain,
 )
 from the_front_office.config.constants import FPL_SCOUT_PROMPT
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import FPLAPIError, LeagueNotFoundError
-from the_front_office.domain.models import SportContext
+from the_front_office.domain.models import SportContext, Stat
 from the_front_office.domain.ports import LeagueRef
 
 logger = logging.getLogger(__name__)
@@ -164,7 +165,9 @@ class FPLProvider:
         catalogue = self.client.get_players()
 
         captain_id = next((pick.element for pick in squad.picks if pick.is_captain), None)
+        captain = next((p for p in current_starters if p.id == captain_id), None)
         best = best_lineup(players)
+        current_points = points_with_captain(current_starters, captain)
         changes = lineup_changes(current_starters, best)
         allowance = free_transfers(self.client.get_history(entry_id), upcoming.id)
 
@@ -180,9 +183,10 @@ class FPLProvider:
         transfers = affordable_transfers(players, market, squad.bank, limit=TRANSFER_LIMIT)
 
         situation = self._situation(entry, league_id, squad, upcoming.name, upcoming.average_score)
-        constraints = self._constraints(squad, allowance, best, current_starters)
+        constraints = self._constraints(squad, allowance, best, current_points)
 
         return SportContext(
+            headline=self._headline(entry, league_id, squad, allowance, best, current_points),
             prompt=FPL_SCOUT_PROMPT.format(
                 situation=situation,
                 constraints=constraints,
@@ -202,6 +206,38 @@ class FPLProvider:
             candidate_lines=market_lines,
         )
 
+    @staticmethod
+    def _headline(
+        entry: Entry,
+        league_id: str,
+        squad: Squad,
+        allowance: int,
+        best: Lineup,
+        current_points: float,
+    ) -> list[Stat]:
+        """Where this squad stands, in FPL's own currency.
+
+        Points left on the bench is the only figure here that is a mistake
+        rather than a fact, so it is the only one that ever warns — and only
+        when the current eleven really is behind the best legal one.
+        """
+        behind = round(best.points - current_points, 1)
+        league = next((lg for lg in entry.leagues if str(lg.id) == league_id), None)
+
+        stats = [
+            Stat(label="Points", value=f"{entry.overall_points:,}"),
+            Stat(label="Overall", value=f"{entry.overall_rank:,}"),
+        ]
+        if league:
+            stats.append(Stat(label="Mini-league", value=f"{league.rank:,} of {league.rank_count:,}"))
+        stats += [
+            Stat(label="Bank", value=as_millions(squad.bank)),
+            Stat(label="Free transfers", value=str(allowance), tone="good" if allowance else "neutral"),
+        ]
+        if behind > 0:
+            stats.append(Stat(label="On bench", value=f"+{behind:.1f} xPts", tone="warning"))
+        return stats
+
     # ── prompt blocks ───────────────────────────────────────────────
 
     def _situation(self, entry: Entry, league_id: str, squad: Squad, gameweek_name: str, average: int) -> str:
@@ -219,14 +255,14 @@ class FPLProvider:
             lines.append(f"LAST GAMEWEEK: {squad.points_on_bench} points were left on the bench.")
         return "\n".join(lines) + "\n"
 
-    def _constraints(self, squad: Squad, allowance: int, best: Lineup, current_starters: list[Player]) -> str:
+    def _constraints(self, squad: Squad, allowance: int, best: Lineup, current_points: float) -> str:
         """What the manager can actually do this week, and what it is worth."""
-        current = round(sum(effective_points(p) for p in current_starters), 1)
+        current = round(current_points, 1)
         gain = round(best.points - current, 1)
         lines = [
             f"FREE TRANSFERS: {allowance}. Each extra transfer costs {TRANSFER_HIT} points.",
             f"BANK: {as_millions(squad.bank)}.",
-            f"- The eleven as set expects {current:.1f} points before the captain.",
+            f"- The eleven as set expects {current:.1f} points with its captain doubled.",
             f"- The best legal eleven is a {best.formation} expecting {best.points:.1f} with the captain doubled"
             + (f", {gain:.1f} more than the current shape.\n" if gain > 0 else ".\n"),
             "- A start/sit change is free. A transfer is not, so it has to beat the alternative by "
