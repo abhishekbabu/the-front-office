@@ -80,10 +80,10 @@ relied on transitively. Bound both ends (`>=X.Y.Z,<NEXT_MAJOR`), then `just lock
 System CLIs go in the `Brewfile`. Use `just install` / `just lock` (`uv sync`) —
 `uv pip install` ignores `uv.lock`.
 
-**Portability.** Never hardcode `.venv/bin/...` or `.venv/Scripts/...` in a
-recipe, hook or script; `uv run` resolves it everywhere. No POSIX-only commands
-in tooling — the project supports Windows, where no bash is guaranteed. Put
-scripts in `scripts/` instead.
+**Portability.** Never hardcode `.venv/bin/...` or `.venv/Scripts/...`; `uv run`
+resolves it everywhere. No POSIX-only commands in tooling and no `strftime`
+dash-modifiers (`%-d`) — both are glibc-only and the project supports Windows.
+Format dates through `sports/dates.py`; put scripts in `scripts/`.
 
 **Secrets.** Never commit `.env`, `.yahoofantasy`, or any `.*_cache.json`. Read
 config through the `settings` singleton, never `os.getenv` at a call site.

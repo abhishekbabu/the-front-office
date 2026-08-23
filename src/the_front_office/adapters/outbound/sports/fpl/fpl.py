@@ -27,6 +27,7 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
     Squad,
     as_millions,
 )
+from the_front_office.adapters.outbound.sports.dates import at_time
 from the_front_office.adapters.outbound.sports.fpl.squad import (
     Lineup,
     LineupChange,
@@ -799,8 +800,8 @@ def _deadline_label(deadline: datetime | None) -> str:
     Rendered in UTC, which is what FPL publishes and what its own site shows
     every manager regardless of where they are.
     """
-    return deadline.strftime("%a %-d %b, %H:%M") if deadline else ""
+    return at_time(deadline) if deadline else ""
 
 
 def _kickoff_label(kickoff: datetime | None) -> str:
-    return kickoff.strftime("%a %-d %b, %H:%M") if kickoff else "TBC"
+    return at_time(kickoff) if kickoff else "TBC"

@@ -22,6 +22,7 @@ from the_front_office.adapters.outbound.platforms.sleeper.types import (
     Transaction,
     WeeklyProjection,
 )
+from the_front_office.adapters.outbound.sports.dates import day_month, weekday_day_month
 from the_front_office.adapters.outbound.sports.names import NameIndex
 from the_front_office.adapters.outbound.sports.nfl.lineup import (
     LineupChange,
@@ -157,7 +158,7 @@ def _date(iso: str) -> date | None:
 def _day(iso: str) -> str:
     """One date, as a person reads it: 'Sun 13 Sep'."""
     parsed = _date(iso)
-    return parsed.strftime("%a %-d %b") if parsed else ""
+    return weekday_day_month(parsed) if parsed else ""
 
 
 def _week_dates(games: list[ScheduledGame]) -> str:
@@ -170,10 +171,10 @@ def _week_dates(games: list[ScheduledGame]) -> str:
     if not days:
         return ""
     if days[0] == days[-1]:
-        return days[0].strftime("%-d %b")
+        return day_month(days[0])
     if days[0].month == days[-1].month:
-        return f"{days[0].strftime('%-d')}-{days[-1].strftime('%-d %b')}"
-    return f"{days[0].strftime('%-d %b')} - {days[-1].strftime('%-d %b')}"
+        return f"{days[0].day}-{day_month(days[-1])}"
+    return f"{day_month(days[0])} - {day_month(days[-1])}"
 
 
 def _moment(epoch_ms: int) -> str:
@@ -184,7 +185,7 @@ def _moment(epoch_ms: int) -> str:
     """
     if not epoch_ms:
         return ""
-    return datetime.fromtimestamp(epoch_ms / 1000, tz=timezone.utc).strftime("%-d %b")
+    return day_month(datetime.fromtimestamp(epoch_ms / 1000, tz=timezone.utc))
 
 
 REGULAR_SEASON_WEEKS = 18
