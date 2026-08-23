@@ -91,9 +91,49 @@ MOCK_NFL_REPORT = ScoutReport(
     strategy="[MOCK] Fix the flex, then stream the open roster spot for upside.",
 )
 
+MOCK_FPL_REPORT = ScoutReport(
+    situation=(
+        "[MOCK] 412 points, ranked 340,112 overall and 3rd of 12 in the mini-league. "
+        "The gameweek turns on the captaincy and one free transfer."
+    ),
+    focus=["captaincy", "DEF fixtures", "1 free transfer"],
+    moves=[
+        Move(
+            action="CAPTAIN",
+            player="Mock Striker",
+            position="FWD",
+            team="MCI",
+            metric="7.4 xPts, fixture difficulty 2",
+            rationale="[MOCK] Home to the weakest defence in the division, and on penalties.",
+        ),
+        Move(
+            action="TRANSFER",
+            player="Mock Wing Back",
+            position="DEF",
+            team="LIV",
+            metric="£5.8m, +1.9 xPts",
+            rationale="[MOCK] Three consecutive difficulty-2 fixtures and attacking returns.",
+            replaces="Mock Benched Defender",
+            replaces_rationale="[MOCK] Lost his place and faces two difficulty-5 fixtures.",
+        ),
+        Move(
+            action="START",
+            player="Mock Midfielder",
+            position="MID",
+            team="ARS",
+            metric="5.1 xPts, +2.3 over the current starter",
+            rationale="[MOCK] Back from suspension into a settled front three.",
+            replaces="Mock Rotation Risk",
+            replaces_rationale="[MOCK] Started one of the last four with a cup tie midweek.",
+        ),
+    ],
+    strategy="[MOCK] Take the free transfer in defence, captain the premium, no hit.",
+)
+
 MOCK_REPORTS: dict[str, ScoutReport] = {
     "nba": MOCK_NBA_REPORT,
     "nfl": MOCK_NFL_REPORT,
+    "fpl": MOCK_FPL_REPORT,
 }
 
 

@@ -1,4 +1,4 @@
-"""Tests for REPL command parsing."""
+"""Tests for REPL command parsing and sport selection."""
 
 from the_front_office.adapters.inbound.cli.repl import parse_command
 
@@ -336,11 +336,12 @@ def test_a_leading_word_that_is_not_a_sport_stays_in_the_description() -> None:
     assert args == ["Give", "nfl-ish", "player"]
 
 
-def test_a_sport_that_cannot_trade_is_not_selectable(capsys: pytest.CaptureFixture[str]) -> None:
-    """`nba` is a real sport but absent from the trade-capable list here."""
+def test_an_unconfigured_trading_sport_says_what_to_set(capsys: pytest.CaptureFixture[str]) -> None:
+    """`nba` trades, but is absent from the trade-capable list here."""
     entry, args = cmd._trade_sport([_tradeable("nfl")], ["nba", "Give", "A"])
-    assert entry is not None
-    assert entry.sport == "nfl"
+
+    assert entry is None
+    assert "is not configured" in capsys.readouterr().out
     assert args == ["nba", "Give", "A"]  # left in the text rather than silently dropped
 
 
@@ -352,3 +353,12 @@ def test_no_trading_sport_says_so(capsys: pytest.CaptureFixture[str]) -> None:
 def test_usage_is_shown_when_only_a_sport_is_given(capsys: pytest.CaptureFixture[str]) -> None:
     cmd._cmd_trade(Session(), [_tradeable("nfl")], ["nfl"], True)
     assert "Usage: /trade" in capsys.readouterr().out
+
+
+def test_a_sport_that_cannot_trade_at_all_says_so(capsys: pytest.CaptureFixture[str]) -> None:
+    """FPL managers transfer against the market, so there is no trade to price."""
+    entry, args = cmd._trade_sport([_tradeable("nfl")], ["fpl", "Give", "Saka"])
+
+    assert entry is None
+    assert "does not support trade evaluation" in capsys.readouterr().out
+    assert args == ["fpl", "Give", "Saka"]

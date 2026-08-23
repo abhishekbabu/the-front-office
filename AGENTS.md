@@ -31,7 +31,8 @@ anything persisted or compared — store aware UTC, convert at the comparison.
 NBA-schedule logic is anchored to `PACIFIC` in the nba_stats client, because
 the league schedules by Pacific and a local clock shifts the boundaries by the
 machine's offset. `datetime.fromisoformat` cannot parse a trailing `Z` on
-Python 3.10 and every NBA timestamp has one, so parse via `_parse_timestamp`.
+Python 3.10; every NBA and FPL timestamp has one, so parse via
+`_parse_timestamp` / `_parse_deadline` rather than directly.
 Keep `GameRecord["date"]` (a game-date label, for window tests) distinct from
 `GameRecord["tipoff_utc"]` (a real instant, for has-it-started tests).
 
@@ -44,7 +45,9 @@ everywhere. Test modules mirror the module they cover.
 Under `adapters/outbound/sports/<sport>/`, the provider file is named for the
 platform that owns the **league** — `nba/yahoo.py`, `nfl/sleeper.py`. Other
 platforms a sport reads from are role-named helpers (`projections.py`,
-`lineup.py`), never a second file named after a platform.
+`lineup.py`), never a second file named after a platform. When the sport and
+the platform are the same thing the names coincide (`fpl/fpl.py`,
+`FPLProvider`); do not invent a distinction to avoid the repetition.
 
 **Types.** Avoid `Any`; prefer builtin generics and PEP 604 unions, which ruff's
 `UP` rules enforce. `missing-attribute` is disabled for modules touching the
@@ -58,6 +61,15 @@ an explicit short `persist_ttl`; the default is an hour.
 
 **Chat history is resent every turn.** Seed follow-up chats with a briefing, not
 the generation prompt, and say explicitly what was left out.
+
+**FPL.** The only platform that is also its own stats provider — one
+`bootstrap-static` call carries prices, `ep_next` and expected goals — so it
+joins no names and needs no second source. Money stays in the API's tenths of a
+million until it is displayed, because transfer affordability is exact
+arithmetic. `my-team/{id}` is the one authenticated endpoint and is deliberately
+unused: everything in it is derivable from the public history, and the free
+transfer allowance is computed in `free_transfers`. There is no trade path;
+managers transfer against the market, not each other.
 
 **Player identity across platforms.** Yahoo and Sleeper share no identifier, so
 the NBA projection join is by normalised name (`adapters/outbound/sports/nba/
@@ -97,15 +109,16 @@ shared. When you find yourself writing something a second time, extract it then
 — not on the third. Existing seams:
 
 - `adapters/outbound/platforms/` — infrastructure every platform needs:
-  `retry.py` (transient-failure policy), `cache.py` (TTL'd disk cache).
+  `http.py` (cached, retried JSON GETs), `retry.py` (transient-failure policy),
+  `cache.py` (TTL'd disk cache).
 - `adapters/outbound/sports/` — policy every sport needs: `names.py`
   (cross-platform player matching), `trades.py` (resolving a proposal).
 - `domain/` — rules that hold regardless of sport or platform.
 
 **Prefer composition to a base class.** The outbound clients share behaviours,
-not a shape: one does raw HTTP and three go through different vendor SDKs, and
-each caches differently. Shared behaviour is a function you call or a
-collaborator you are given, so a client adopts only the parts that apply.
+not a shape: three go through different vendor SDKs and cache differently, while
+Sleeper and FPL are both plain public JSON and share `JsonApiClient` — held as a
+collaborator, given its own retry policy and domain error, not inherited.
 
 **Layering.** Dependencies point inward only: `domain` imports nothing else in
 the package; `application` imports only `domain`; adapters implement ports;

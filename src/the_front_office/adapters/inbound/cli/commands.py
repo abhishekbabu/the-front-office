@@ -127,6 +127,17 @@ def _trade_sport(tradeable: list[SportEntry], args: list[str]) -> tuple[SportEnt
     if args and (chosen := _match_sport(tradeable, args[0])) is not None:
         return chosen, args[1:]
 
+    # A sport that exists but is not in `tradeable` has to be named as such.
+    # Falling through would fold the sport token into the trade description and
+    # price the trade against whichever sport happened to be the only tradeable
+    # one — silently, because a description is free text.
+    if args and (known := find(args[0])) is not None:
+        if known.supports_trades:
+            print(f"  ⚠️  {known.label} is not configured. Set {known.requires} in .env.")
+        else:
+            print(f"  ⚠️  {known.label} does not support trade evaluation.")
+        return None, args
+
     if len(tradeable) == 1:
         return tradeable[0], args
 

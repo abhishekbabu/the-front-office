@@ -97,6 +97,7 @@ Check these before implementing anything a sport "needs":
 | Resolve the players in a trade | `sports/trades.py` — `resolve_sides` |
 | Retry a flaky platform call | `platforms/retry.py` — `build_retry`, `is_transient` |
 | Cache a platform response | `platforms/cache.py` — `JsonDiskCache` |
+| Talk to a public JSON API | `platforms/http.py` — `JsonApiClient` |
 
 If a second sport needs something the first already does, extract it into one of
 those modules rather than copying it. Extract on the second instance, not the

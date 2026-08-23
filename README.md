@@ -2,7 +2,8 @@
 
 [![CI](https://github.com/abhishekbabu/the-front-office/actions/workflows/ci.yml/badge.svg)](https://github.com/abhishekbabu/the-front-office/actions/workflows/ci.yml)
 
-AI-powered fantasy sports general manager. NBA on Yahoo, NFL on Sleeper.
+AI-powered fantasy sports general manager. NBA on Yahoo, NFL on Sleeper, Fantasy
+Premier League on the official game.
 
 Scouts the waiver wire, sets lineups, evaluates trades, and answers follow-up
 questions about any of it — grounding every prompt in live league state, real
@@ -31,6 +32,7 @@ No adapter is named anywhere in `domain/` or `application/`; the engines take an
 - **Yahoo Fantasy** via `yahoofantasy` — OAuth2, rosters, matchups, and hand-built player queries that sort free agents by an individual stat category
 - **NBA.com** via `nba_api` — one full-season `LeagueGameLog` call bucketed by player for recent form (L5/L10/L15), cached in `.nba_cache.json`, with `tenacity` retries classified by error type
 - **Sleeper** — public and auth-free, and used by both sports: football leagues, rosters, matchups and weekly projections; NBA per-game projections summed into category totals for the matchup period. Cached in `.sleeper_cache.json`
+- **Fantasy Premier League** — public and auth-free, and the only platform here that is also its own stats provider: one `bootstrap-static` call carries the squad, the prices, the game's own `ep_next` projection and Opta expected goals. Cached in `.fpl_cache.json`
 - **Gemini** via `google-genai` — `gemini-2.5-pro` for analysis, `gemini-2.5-flash` for parsing
 
 **Tooling** — `ruff`, `pyrefly`, `pytest`, `pre-commit`, `just`. Every recipe and
@@ -67,6 +69,7 @@ Without `just`: `uv sync && uv run pre-commit install`.
 | `YAHOO_CLIENT_SECRET` | yes | — | From your Yahoo developer app |
 | `GOOGLE_API_KEY` | for AI features | — | Omit to run `--mock` only |
 | `SLEEPER_USERNAME` | for football | — | Sleeper needs no key or OAuth — just the username |
+| `FPL_ENTRY_ID` | for FPL | — | The number in the URL of your own points page. FPL has no username lookup |
 | `YAHOO_MAX_WEEKLY_ADDS` | no | `3` | Integer ≥ 0; drives the scout's add budget |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG` \| `INFO` \| `WARNING` \| `ERROR` \| `CRITICAL` |
 | `NBA_API_DELAY` | no | `4.0` | Seconds between nba_api calls |
@@ -90,7 +93,7 @@ First run opens a browser for the Yahoo OAuth2 handshake; the token is cached in
 | `/scout [sport]` | Scouting report. No sport runs every configured one |
 | `/roster [sport]` | Your roster |
 | `/leagues` | Every league, per sport |
-| `/trade [sport] <text>` | Evaluate a trade, e.g. `/trade nfl Give Bijan, Get Puka`. The sport is optional when only one supports trades |
+| `/trade [sport] <text>` | Evaluate a trade, e.g. `/trade nfl Give Bijan, Get Puka`. The sport is optional when only one supports trades. FPL is excluded — its managers transfer against the market rather than trading each other |
 | `/help` · `/quit` | — |
 
 Add `--mock` to `/scout` or `/trade` to swap Gemini for canned responses and
@@ -156,6 +159,6 @@ the-front-office/
 
 ## Security
 
-Never commit `.env`, `.yahoofantasy`, or `.nba_cache.json` — all three are
+Never commit `.env`, `.yahoofantasy`, or any `.*_cache.json` — all of them are
 gitignored, and `detect-private-key` runs as a pre-commit hook. Credentials are
 read only through `AppSettings`.

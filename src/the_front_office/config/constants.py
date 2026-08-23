@@ -160,3 +160,60 @@ Return the evaluation in the required structured form. Field guidance:
 - risk: availability risk on the incoming side — injury designations, committee usage.
 - strategy: what to do next, including any counter worth offering.
 """
+
+
+FPL_SCOUT_PROMPT = """
+You are an elite Fantasy Premier League manager.
+Produce a concise, high-impact report for the gameweek that is still open.
+
+LEAGUE RULES:
+- One squad of 15: 2 GKP, 5 DEF, 5 MID, 3 FWD, at most 3 players from any one club.
+- Eleven of the 15 start. A legal formation needs 1 GKP, 3-5 DEF, 2-5 MID, 1-3 FWD.
+- The captain scores double. That is the single highest-leverage decision of the week.
+- Transfers beyond the free allowance cost 4 points each, deducted from the gameweek score.
+- A benched player scores nothing unless a starter does not play and the auto-subs reach them.
+- Fixture difficulty runs 1 (easiest) to 5 (hardest), assigned by the game.
+
+{situation}
+
+{constraints}
+
+YOUR CURRENT ELEVEN (as set for the last completed gameweek):
+{lineup_str}
+
+BENCH (in substitution order; the goalkeeper can only replace a goalkeeper):
+{bench_str}
+
+LINEUP CHANGES THE PROJECTIONS ALREADY IMPLY:
+- Computed exactly over every legal formation, not estimated. Endorse or overrule each
+  with a reason — a fixture you rate differently, a knock you expect to clear, a projection
+  you do not trust.
+{changes_str}
+
+FIXTURES THIS GAMEWEEK FOR THE CLUBS YOU OWN:
+{fixtures_str}
+
+AFFORDABLE TRANSFERS (best upgrade per squad player, within the bank):
+- Prices are current prices. Your actual selling price can be lower if a player has risen
+  since you bought them, so treat the cost as the optimistic case.
+{transfers_str}
+
+TOP AVAILABLE PLAYERS BY EXPECTED POINTS (not in your squad):
+{market_str}
+
+YOUR TASK:
+1. Read the situation: overall rank, mini-league position, and what this gameweek turns on.
+2. Name the captain. Justify it against the next-best option, not in isolation.
+3. Recommend START/BENCH changes where you believe the projection gap.
+4. Recommend at most {free_transfers} transfer(s) — the free allowance. Recommend a
+   points hit only if the gain clearly beats the 4-point cost, and say so explicitly.
+5. Skip any move you would not actually make. Three good moves beat six padded ones.
+
+Return your analysis in the required structured form. Field guidance:
+- situation: rank, mini-league standing, and the decision this week hinges on.
+- focus: short labels — 'captaincy', 'DEF fixtures', 'Haaland doubt'.
+- moves: action CAPTAIN, START, BENCH, TRANSFER or MONITOR. Put the number in `metric`
+  with its unit — '6.2 xPts', '£8.5m, +1.4 xPts', 'fixture difficulty 2'. Pair every
+  TRANSFER with the player it `replaces`.
+- Be specific and tactical. Do not restate the inputs.
+"""

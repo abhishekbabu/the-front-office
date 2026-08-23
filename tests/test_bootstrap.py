@@ -130,11 +130,14 @@ def test_every_sport_declares_its_trade_support() -> None:
 
 def test_a_trading_sport_implements_the_trade_port() -> None:
     """`supports_trades` and `build_trade_context` must not drift apart."""
+    from the_front_office.adapters.outbound.sports.fpl.fpl import FPLProvider
     from the_front_office.adapters.outbound.sports.nba.yahoo import YahooNBAProvider
     from the_front_office.adapters.outbound.sports.nfl.sleeper import SleeperNFLProvider
 
-    implementations = {"nba": YahooNBAProvider, "nfl": SleeperNFLProvider}
+    implementations = {"nba": YahooNBAProvider, "nfl": SleeperNFLProvider, "fpl": FPLProvider}
     for entry in registry.all_sports():
+        # A sport missing here is a sport the registry knows about and this
+        # guard does not, which is the drift it exists to catch.
         provider = implementations[entry.sport]
         has_method = callable(getattr(provider, "build_trade_context", None))
         assert has_method == entry.supports_trades, entry.sport

@@ -45,6 +45,12 @@ class AppSettings(BaseSettings):
     """Pin a specific league. Optional — otherwise leagues are discovered from the username."""
     sleeper_cache_file: str = ".sleeper_cache.json"
 
+    # ── Fantasy Premier League ──────────────────────────────────────────
+    # FPL needs no credentials, and has no public username lookup — the entry
+    # id is the number in the URL of your own points page.
+    fpl_entry_id: int | None = Field(default=None, gt=0)
+    fpl_cache_file: str = ".fpl_cache.json"
+
     # ── Scouting ────────────────────────────────────────────────────────
     nba_api_delay: float = Field(default=4.0, ge=0.0)
     """Seconds between nba_api calls — the project spec requires a delay to avoid IP blocks."""
@@ -60,6 +66,7 @@ class AppSettings(BaseSettings):
         "yahoo_client_secret",
         "sleeper_username",
         "sleeper_league_id",
+        "fpl_entry_id",
         mode="before",
     )
     @classmethod

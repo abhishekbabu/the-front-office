@@ -36,3 +36,4 @@ token.json
 # Data caches
 .nba_cache.json
 .sleeper_cache.json
+.fpl_cache.json

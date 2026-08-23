@@ -34,11 +34,19 @@ class SleeperAPIError(FrontOfficeError):
     """
 
 
+class FPLAPIError(FrontOfficeError):
+    """A Fantasy Premier League API call failed.
+
+    Distinct from an empty result: a gameweek with no fixtures for your clubs is
+    a valid answer, a failed request is not.
+    """
+
+
 class LeagueNotFoundError(FrontOfficeError):
-    """The configured Sleeper user has no matching league."""
+    """The configured account has no matching league on its platform."""
 
     def __init__(self, detail: str) -> None:
-        super().__init__(f"Could not find your Sleeper league: {detail}")
+        super().__init__(f"Could not find your league: {detail}")
 
 
 class PlayerNotFoundError(FrontOfficeError):
@@ -48,7 +56,7 @@ class PlayerNotFoundError(FrontOfficeError):
         joined = ", ".join(names)
         super().__init__(
             f"Could not find {'these players' if len(names) > 1 else 'this player'} in the league: {joined}. "
-            "Check the spelling, or use the full name as it appears on Yahoo."
+            "Check the spelling, or use the full name as the platform shows it."
         )
         self.names = names
 

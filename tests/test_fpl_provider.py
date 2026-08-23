@@ -1,0 +1,376 @@
+"""Tests for the Fantasy Premier League provider.
+
+The assertions are mostly on prompt content: the rules of the game are what
+the prompt has to carry, and a report that omits the captaincy or the transfer
+allowance is wrong however well it renders.
+"""
+
+from datetime import datetime, timezone
+
+import pytest
+
+from the_front_office.adapters.outbound.platforms.fpl.types import (
+    Entry,
+    Fixture,
+    Gameweek,
+    GameweekResult,
+    MiniLeague,
+    Pick,
+    Player,
+    Squad,
+)
+from the_front_office.adapters.outbound.sports.fpl.fpl import FPLProvider
+from the_front_office.domain.errors import FPLAPIError, LeagueNotFoundError
+
+ENTRY_ID = 77
+LEAGUE_ID = "900"
+
+
+def player(pid: int, position: str, points: float, cost: int = 50, team: str = "ARS", **kwargs: object) -> Player:
+    return Player(
+        id=pid,
+        name=f"P{pid}",
+        full_name=f"Player {pid}",
+        position=position,
+        team=team,
+        cost=cost,
+        expected_points=points,
+        form=points,
+        points_per_game=points,
+        total_points=int(points * 10),
+        selected_by=5.0,
+        minutes=900,
+        **kwargs,  # type: ignore[arg-type]
+    )
+
+
+# A fifteen whose set eleven is deliberately not the best one: P15, the strongest
+# forward, starts on the bench behind P7, the weakest defender.
+SQUAD_PLAYERS = {
+    1: player(1, "GKP", 4.0, team="ARS"),
+    2: player(2, "GKP", 1.0, team="MCI"),
+    3: player(3, "DEF", 6.0),
+    4: player(4, "DEF", 5.0),
+    5: player(5, "DEF", 4.0),
+    6: player(6, "DEF", 3.0),
+    7: player(7, "DEF", 0.5),
+    8: player(8, "MID", 8.0),
+    9: player(9, "MID", 7.0),
+    10: player(10, "MID", 6.0),
+    11: player(11, "MID", 5.0),
+    12: player(12, "MID", 1.0),
+    13: player(13, "FWD", 7.5),
+    14: player(14, "FWD", 2.0),
+    15: player(15, "FWD", 9.0, team="MCI"),
+}
+
+MARKET = {
+    100: player(100, "DEF", 7.0, cost=55, team="LIV"),
+    101: player(101, "MID", 9.5, cost=120, team="LIV"),
+    102: player(102, "FWD", 8.0, cost=200, team="LIV"),
+    103: player(103, "MID", 9.0, cost=60, team="LIV", status="i"),
+}
+
+STARTING_IDS = [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13]
+BENCH_IDS = [2, 12, 14, 15]
+
+
+def _picks() -> list[Pick]:
+    picks = [
+        Pick(element=pid, position=i, multiplier=2 if pid == 8 else 1, is_captain=pid == 8)
+        for i, pid in enumerate(STARTING_IDS, start=1)
+    ]
+    picks += [Pick(element=pid, position=i, multiplier=0) for i, pid in enumerate(BENCH_IDS, start=12)]
+    return picks
+
+
+class FakeFPL:
+    """Stands in for FPLClient."""
+
+    def __init__(
+        self,
+        *,
+        leagues: list[MiniLeague] | None = None,
+        upcoming: int = 5,
+        bank: int = 30,
+        history: list[GameweekResult] | None = None,
+        fixtures: list[Fixture] | None = None,
+        fixtures_error: Exception | None = None,
+        active_chip: str = "",
+        points_on_bench: int = 0,
+        squad: Squad | None = None,
+    ) -> None:
+        self.leagues = (
+            leagues
+            if leagues is not None
+            else [
+                MiniLeague(id=314, name="Overall", rank=340112, rank_count=9000000, is_private=False),
+                MiniLeague(id=900, name="Work League", rank=3, rank_count=12, is_private=True),
+            ]
+        )
+        self.upcoming = upcoming
+        self.squad = squad or Squad(
+            gameweek=upcoming - 1,
+            picks=_picks(),
+            bank=bank,
+            value=1004,
+            points_on_bench=points_on_bench,
+            active_chip=active_chip,
+        )
+        self.history = (
+            history
+            if history is not None
+            else [GameweekResult(event=e, points=50, transfers_made=0, transfers_cost=0) for e in range(1, upcoming)]
+        )
+        self.fixtures = (
+            fixtures
+            if fixtures is not None
+            else [
+                Fixture(event=upcoming, home="ARS", away="LIV", home_difficulty=2, away_difficulty=4),
+            ]
+        )
+        self.fixtures_error = fixtures_error
+        self.squad_requests: list[int] = []
+
+    def upcoming_gameweek(self, now: datetime | None = None) -> Gameweek:
+        return Gameweek(
+            id=self.upcoming,
+            name=f"Gameweek {self.upcoming}",
+            deadline=datetime(2026, 9, 12, tzinfo=timezone.utc),
+            average_score=51,
+        )
+
+    def get_entry(self, entry_id: int) -> Entry:
+        return Entry(
+            entry_id=entry_id,
+            name="Front Office FC",
+            manager="Abhishek Babu",
+            overall_points=412,
+            overall_rank=340112,
+            current_event=self.upcoming - 1,
+            leagues=self.leagues,
+        )
+
+    def get_squad(self, entry_id: int, gameweek: int) -> Squad:
+        self.squad_requests.append(gameweek)
+        return self.squad
+
+    def get_players(self) -> dict[int, Player]:
+        return {**SQUAD_PLAYERS, **MARKET}
+
+    def get_history(self, entry_id: int) -> list[GameweekResult]:
+        return self.history
+
+    def get_fixtures(self, gameweek: int) -> list[Fixture]:
+        if self.fixtures_error:
+            raise self.fixtures_error
+        return self.fixtures
+
+
+def provider(**kwargs: object) -> FPLProvider:
+    return FPLProvider(ENTRY_ID, client=FakeFPL(**kwargs))  # type: ignore[arg-type]
+
+
+# ── configuration ───────────────────────────────────────────────────────
+
+
+def test_an_unset_entry_id_is_reported_before_any_request() -> None:
+    with pytest.raises(LeagueNotFoundError, match="FPL_ENTRY_ID"):
+        FPLProvider(None, client=FakeFPL()).list_leagues()  # type: ignore[arg-type]
+
+
+def test_the_registry_advertises_no_trade_support() -> None:
+    """FPL managers transfer against the market; they do not trade each other."""
+    assert not hasattr(FPLProvider, "build_trade_context")
+
+
+# ── leagues ─────────────────────────────────────────────────────────────
+
+
+def test_only_invitational_leagues_are_listed() -> None:
+    """Everyone is in Overall and in one league per gameweek; nobody competes there."""
+    refs = provider().list_leagues()
+    assert [ref.name for ref in refs] == ["Work League"]
+    assert refs[0].league_id == LEAGUE_ID
+    assert "3 of 12" in refs[0].detail
+
+
+def test_a_manager_in_no_private_league_still_has_something_to_scout() -> None:
+    refs = provider(leagues=[]).list_leagues()
+    assert refs[0].league_id == str(ENTRY_ID)
+    assert "overall rank 340,112" in refs[0].detail
+
+
+# ── the squad ───────────────────────────────────────────────────────────
+
+
+def test_the_squad_read_is_the_last_completed_gameweek() -> None:
+    """Picks are published only once a deadline passes."""
+    client = FakeFPL()
+    FPLProvider(ENTRY_ID, client=client).roster_rows(LEAGUE_ID)  # type: ignore[arg-type]
+    assert client.squad_requests == [4]
+
+
+def test_before_the_season_there_is_no_squad_to_read() -> None:
+    with pytest.raises(FPLAPIError, match="season has not started"):
+        provider(upcoming=1).roster_rows(LEAGUE_ID)
+
+
+def test_roster_rows_mark_the_captain_and_the_bench() -> None:
+    rows = {row["Player"]: row for row in provider().roster_rows(LEAGUE_ID)}
+    assert rows["P8"]["Slot"] == "C"
+    assert rows["P3"]["Slot"] == "XI"
+    assert rows["P15"]["Slot"] == "BN"
+    assert rows["P3"]["Price"] == "£5.0m"
+
+
+def test_roster_rows_report_a_doubt() -> None:
+    squad = Squad(gameweek=4, picks=_picks(), bank=30, value=1004)
+    fake = FakeFPL(squad=squad)
+    fake.get_players = lambda: {  # type: ignore[method-assign]
+        **{k: v for k, v in SQUAD_PLAYERS.items() if k != 3},
+        3: player(3, "DEF", 6.0, status="d", chance_of_playing=50),
+        **MARKET,
+    }
+    rows = {row["Player"]: row for row in FPLProvider(ENTRY_ID, client=fake).roster_rows(LEAGUE_ID)}  # type: ignore[arg-type]
+    assert rows["P3"]["Status"] == "doubtful 50%"
+
+
+# ── the prompt ──────────────────────────────────────────────────────────
+
+
+def test_the_prompt_shows_the_eleven_that_is_set_not_the_best_one() -> None:
+    """Otherwise the changes block recommends starting someone already listed."""
+    prompt = provider().build_context(LEAGUE_ID).prompt
+    eleven = prompt.split("YOUR CURRENT ELEVEN")[1].split("BENCH")[0]
+    assert "- P7 " in eleven
+    assert "- P15 " not in eleven
+
+
+def test_the_prompt_names_the_captain_the_manager_chose() -> None:
+    eleven = provider().build_context(LEAGUE_ID).prompt.split("YOUR CURRENT ELEVEN")[1].split("BENCH")[0]
+    assert "- P8 (C)" in eleven
+
+
+def test_the_bench_keeps_its_substitution_order() -> None:
+    """Auto-subs come on in the order the manager listed, so it is a decision."""
+    bench = provider().build_context(LEAGUE_ID).prompt.split("BENCH (in substitution")[1].split("LINEUP CHANGES")[0]
+    listed = [line.split()[1] for line in bench.splitlines() if line.startswith("- ")]
+    assert listed == ["P2", "P12", "P14", "P15"]
+
+
+def test_the_implied_change_pairs_the_two_players() -> None:
+    prompt = provider().build_context(LEAGUE_ID).prompt
+    changes = prompt.split("LINEUP CHANGES")[1].split("FIXTURES")[0]
+    assert "START P15 (FWD) for P7" in changes
+
+
+def test_the_prompt_states_the_transfer_allowance_and_the_cost_of_exceeding_it() -> None:
+    prompt = provider().build_context(LEAGUE_ID).prompt
+    # Four unused gameweeks, so the allowance has rolled up to its cap.
+    assert "FREE TRANSFERS: 5." in prompt
+    assert "costs 4 points" in prompt
+    assert "at most 5 transfer(s)" in prompt
+
+
+def test_the_prompt_states_the_bank_in_the_games_own_units() -> None:
+    assert "£3.0m in the bank" in provider(bank=30).build_context(LEAGUE_ID).prompt
+
+
+def test_the_prompt_quantifies_what_the_best_shape_would_add() -> None:
+    constraints = provider().build_context(LEAGUE_ID).constraints
+    assert "best legal eleven is a" in constraints
+    assert "more than the current shape" in constraints
+
+
+def test_a_chip_played_last_gameweek_is_flagged() -> None:
+    assert "CHIP PLAYED LAST GAMEWEEK: bboost" in provider(active_chip="bboost").build_context(LEAGUE_ID).prompt
+
+
+def test_points_left_on_the_bench_are_flagged() -> None:
+    assert "7 points were left on the bench" in provider(points_on_bench=7).build_context(LEAGUE_ID).prompt
+
+
+def test_the_mini_league_standing_is_carried() -> None:
+    assert "MINI-LEAGUE: Work League — 3 of 12" in provider().build_context(LEAGUE_ID).prompt
+
+
+# ── fixtures ────────────────────────────────────────────────────────────
+
+
+def test_a_fixture_carries_its_difficulty_and_whether_it_is_at_home() -> None:
+    fixtures = provider().build_context(LEAGUE_ID).prompt.split("FIXTURES THIS GAMEWEEK")[1].split("AFFORDABLE")[0]
+    assert "- ARS: vs LIV (difficulty 2)" in fixtures
+
+
+def test_a_club_with_no_fixture_is_called_a_blank() -> None:
+    """The most important thing the report can be told: those players score zero."""
+    fixtures = provider().build_context(LEAGUE_ID).prompt.split("FIXTURES THIS GAMEWEEK")[1].split("AFFORDABLE")[0]
+    assert "- MCI: no fixture — blank gameweek, every MCI player scores 0." in fixtures
+
+
+def test_two_fixtures_in_one_gameweek_are_called_a_double() -> None:
+    doubled = [
+        Fixture(event=5, home="ARS", away="LIV", home_difficulty=2, away_difficulty=4),
+        Fixture(event=5, home="MCI", away="ARS", home_difficulty=3, away_difficulty=5),
+    ]
+    fixtures = provider(fixtures=doubled).build_context(LEAGUE_ID).prompt.split("FIXTURES THIS GAMEWEEK")[1]
+    assert "double gameweek" in fixtures
+
+
+def test_losing_the_fixtures_shrinks_the_prompt_rather_than_failing() -> None:
+    prompt = provider(fixtures_error=FPLAPIError("down")).build_context(LEAGUE_ID).prompt
+    assert "- (unavailable)" in prompt
+
+
+# ── the market ──────────────────────────────────────────────────────────
+
+
+def test_owned_players_are_not_offered_in_the_market() -> None:
+    market = provider().build_context(LEAGUE_ID).prompt.split("TOP AVAILABLE PLAYERS")[1]
+    assert "- P8 " not in market
+    assert "- P101 " in market
+
+
+def test_an_unavailable_player_is_not_offered() -> None:
+    market = provider().build_context(LEAGUE_ID).prompt.split("TOP AVAILABLE PLAYERS")[1]
+    assert "P103" not in market
+
+
+def test_a_transfer_beyond_the_bank_is_not_offered() -> None:
+    """P102 is £20.0m against a squad's cheapest £5.0m and a £3.0m bank."""
+    transfers = provider().build_context(LEAGUE_ID).prompt.split("AFFORDABLE TRANSFERS")[1].split("TOP AVAILABLE")[0]
+    assert "P100" in transfers
+    assert "P102" not in transfers
+
+
+def test_the_briefing_keeps_the_squad_and_only_the_players_named() -> None:
+    from the_front_office.domain.mocks import MOCK_FPL_REPORT
+
+    context = provider().build_context(LEAGUE_ID)
+    briefing = context.briefing(MOCK_FPL_REPORT)
+    assert "P8" in briefing
+    assert len(briefing) < len(context.prompt)
+    assert "re-run the report" in briefing
+
+
+# ── nothing to say ──────────────────────────────────────────────────────
+
+
+def test_an_optimal_eleven_produces_no_change_recommendations() -> None:
+    """Silence would read as "we did not check", so the absence is stated."""
+    from the_front_office.adapters.outbound.sports.fpl.squad import best_lineup
+
+    best = best_lineup(list(SQUAD_PLAYERS.values()))
+    optimal = [Pick(element=p.id, position=i, multiplier=1) for i, p in enumerate(best.starters, start=1)]
+    optimal += [Pick(element=p.id, position=i, multiplier=0) for i, p in enumerate(best.bench, start=12)]
+    squad = Squad(gameweek=4, picks=optimal, bank=30, value=1004)
+
+    prompt = FPLProvider(ENTRY_ID, client=FakeFPL(squad=squad)).build_context(LEAGUE_ID).prompt  # type: ignore[arg-type]
+    assert "already the best legal shape" in prompt
+
+
+def test_an_empty_bank_with_no_upgrade_says_so() -> None:
+    prompt = provider(bank=0).build_context(LEAGUE_ID).prompt
+    transfers = prompt.split("AFFORDABLE TRANSFERS")[1].split("TOP AVAILABLE")[0]
+    assert "nothing in the bank buys an upgrade" in transfers

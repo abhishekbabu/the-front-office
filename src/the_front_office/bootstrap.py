@@ -46,6 +46,12 @@ def _build_nfl() -> SportProvider:
     return SleeperNFLProvider()
 
 
+def _build_fpl() -> SportProvider:
+    from the_front_office.adapters.outbound.sports.fpl.fpl import FPLProvider
+
+    return FPLProvider()
+
+
 def _build_nba() -> SportProvider:
     """Yahoo needs an authenticated context and a specific league object.
 
@@ -81,6 +87,16 @@ REGISTRY: tuple[SportEntry, ...] = (
         is_configured=lambda: bool(settings.sleeper_username),
         requires="SLEEPER_USERNAME",
         supports_trades=True,
+    ),
+    SportEntry(
+        sport="fpl",
+        label="FPL (Fantasy Premier League)",
+        build=_build_fpl,
+        is_configured=lambda: bool(settings.fpl_entry_id),
+        requires="FPL_ENTRY_ID",
+        # FPL managers do not trade with each other; the equivalent move is a
+        # transfer against the market, which the scouting report already covers.
+        supports_trades=False,
     ),
 )
 

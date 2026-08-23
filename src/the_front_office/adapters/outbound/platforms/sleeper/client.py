@@ -15,10 +15,10 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-import requests
 from tenacity import Retrying
 
 from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
+from the_front_office.adapters.outbound.platforms.http import JsonApiClient
 from the_front_office.adapters.outbound.platforms.retry import build_retry, is_transient
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
     GameProjection,
@@ -78,33 +78,24 @@ class SleeperClient:
     """Read-only access to Sleeper's fantasy and NFL data."""
 
     def __init__(self, cache: JsonDiskCache | None = None, session: Any = None) -> None:
-        self._cache = cache or JsonDiskCache(Path(settings.sleeper_cache_file))
-        self._session = session or requests.Session()
+        self._api = JsonApiClient(
+            name="Sleeper",
+            cache=cache or JsonDiskCache(Path(settings.sleeper_cache_file)),
+            # Read through the module global rather than binding it here, so the
+            # policy stays one thing a test can replace.
+            retry=lambda: _retry(),
+            error=SleeperAPIError,
+            session=session,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
 
     # ── transport ───────────────────────────────────────────────────
 
     def _get(self, url: str, timeout: int = REQUEST_TIMEOUT_SECONDS) -> Any:
-        """One GET, retried on transient failures, raising a domain error otherwise."""
-
-        def _request() -> Any:
-            response = self._session.get(url, timeout=timeout)
-            response.raise_for_status()
-            return response.json()
-
-        try:
-            return _retry()(_request)
-        except Exception as e:
-            logger.error(f"Sleeper request failed ({url}): {e}")
-            raise SleeperAPIError(f"Sleeper request failed: {e}") from e
+        return self._api.get(url, timeout=timeout)
 
     def _cached(self, key: str, url: str, ttl: timedelta, timeout: int = REQUEST_TIMEOUT_SECONDS) -> Any:
-        hit = self._cache.get(key, ttl)
-        if hit is not None:
-            logger.debug(f"Sleeper cache hit: {key}")
-            return hit
-        value = self._get(url, timeout=timeout)
-        self._cache.set(key, value)
-        return value
+        return self._api.cached(key, url, ttl, timeout=timeout)
 
     # ── league state ────────────────────────────────────────────────
 
@@ -213,7 +204,7 @@ class SleeperClient:
         matter here, so the cache stores the trimmed form — the full payload
         would dominate the cache file for no benefit.
         """
-        cached = self._cache.get(f"players_{sport}", PLAYERS_TTL)
+        cached = self._api.cache_get(f"players_{sport}", PLAYERS_TTL)
         if cached is not None:
             return cached
 
@@ -233,7 +224,7 @@ class SleeperClient:
                 depth_chart_order=int(p.get("depth_chart_order") or 0),
                 years_exp=int(p.get("years_exp") or 0),
             )
-        self._cache.set(f"players_{sport}", trimmed)
+        self._api.cache_set(f"players_{sport}", trimmed)
         logger.debug(f"Cached {len(trimmed)} {sport} players from Sleeper")
         return trimmed
 
