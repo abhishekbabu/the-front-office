@@ -21,10 +21,13 @@ from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
 from the_front_office.adapters.outbound.platforms.http import JsonApiClient
 from the_front_office.adapters.outbound.platforms.retry import build_retry, is_transient
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
+    SEASON_STAT_KEYS,
+    SPLIT_KEYS,
     GameProjection,
     PlayerMeta,
     ScoringFormat,
     SeasonState,
+    SeasonStats,
     SleeperLeague,
     SleeperRoster,
     SleeperUser,
@@ -55,6 +58,9 @@ LEAGUE_TTL = timedelta(hours=6)
 ROSTERS_TTL = timedelta(minutes=10)  # changes on every waiver claim
 MATCHUPS_TTL = timedelta(minutes=2)  # live scores during games
 STATE_TTL = timedelta(hours=1)
+# A season's totals move only when a game is played, and a finished season
+# never moves again. This is the slowest-changing thing Sleeper serves.
+SEASON_STATS_TTL = timedelta(hours=12)
 
 RETRY_MAX_ATTEMPTS = 3
 
@@ -232,6 +238,37 @@ class SleeperClient:
         self._api.cache_set(f"players_{sport}", trimmed)
         logger.debug(f"Cached {len(trimmed)} {sport} players from Sleeper")
         return trimmed
+
+    def get_season_stats(self, season: str, sport: str = NFL) -> dict[str, SeasonStats]:
+        """A whole season's production, keyed by player_id.
+
+        Trimmed before caching for the same reason the catalog is: the raw
+        response is ~1.9MB of mostly kicking and defensive splits, and the
+        cache is one file shared with everything else the client reads.
+        """
+        key = f"season_stats_{sport}_{season}"
+        cached = self._api.cache_get(key, SEASON_STATS_TTL)
+        if cached is None:
+            raw = self._get(f"{BASE_URL}/stats/{sport}/regular/{season}", timeout=CATALOG_TIMEOUT_SECONDS)
+            cached = {
+                str(pid): {k: v for k, v in row.items() if k in SEASON_STAT_KEYS}
+                for pid, row in (raw or {}).items()
+                if isinstance(row, dict)
+            }
+            self._api.cache_set(key, cached)
+            logger.debug(f"Cached {len(cached)} {sport} season totals for {season}")
+
+        return {
+            pid: SeasonStats(
+                player_id=pid,
+                season=season,
+                games=int(row.get("gp") or 0),
+                points={fmt: float(row.get(fmt) or 0.0) for fmt in ("pts_ppr", "pts_half_ppr", "pts_std")},
+                position_rank=int(row.get("pos_rank_ppr") or 0),
+                splits={k: float(v) for k, v in row.items() if k in SPLIT_KEYS},
+            )
+            for pid, row in cached.items()
+        }
 
     def get_projections(self, season: str, week: int, scoring: ScoringFormat) -> dict[str, WeeklyProjection]:
         """Weekly projections keyed by player_id.

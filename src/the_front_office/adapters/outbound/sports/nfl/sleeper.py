@@ -106,6 +106,37 @@ SCORING_LABELS = {
     "pts_std": "Standard (no point per reception)",
 }
 
+# Sleeper serves portraits off its own CDN, keyed by the same player_id the
+# rest of the API uses, with no key and no lookup.
+PORTRAIT_URL = "https://sleepercdn.com/content/nfl/players/{player_id}.jpg"
+
+SPLIT_LABELS = (
+    ("pass_yd", "Passing yards"),
+    ("pass_td", "Passing TDs"),
+    ("pass_int", "Interceptions"),
+    ("cmp_pct", "Completion %"),
+    ("rush_yd", "Rushing yards"),
+    ("rush_td", "Rushing TDs"),
+    ("rec", "Receptions"),
+    ("rec_tgt", "Targets"),
+    ("rec_yd", "Receiving yards"),
+    ("rec_td", "Receiving TDs"),
+)
+
+
+def _split_lines(splits: dict[str, float]) -> list[Stat]:
+    """The production behind the total, skipping what a position never does.
+
+    A quarterback with one reception for minus ten yards is noise, and a
+    running back has no completion percentage at all.
+    """
+    return [
+        Stat(label=label, value=f"{splits[key]:.0f}" if key != "cmp_pct" else f"{splits[key]:.1f}%")
+        for key, label in SPLIT_LABELS
+        if splits.get(key)
+    ]
+
+
 AVAILABLE_PLAYER_LIMIT = 25
 TRENDING_LIMIT = 10
 
@@ -227,6 +258,7 @@ class SleeperNFLProvider:
         ]
         if projection and projection.stats:
             groups.append(StatGroup(title="Projected line", stats=_projection_lines(projection.stats)))
+        groups.extend(self._past_seasons(player_id, state))
         groups.append(
             StatGroup(
                 title="Player",
@@ -247,6 +279,7 @@ class SleeperNFLProvider:
             team=str(meta.get("team") or "FA"),
             headline=f"{projection.points:.1f} proj pts" if projection else "no projection",
             note=str(meta.get("injury_notes") or injury),
+            image_url=PORTRAIT_URL.format(player_id=player_id),
             tone="warning" if injury else "neutral",
             groups=groups,
         )
@@ -428,6 +461,57 @@ class SleeperNFLProvider:
             lineup=[self._spot(p, scheduled) for p in projected if p.player_id in starting],
             bench=[self._spot(p, scheduled) for p in projected if p.player_id not in starting],
         )
+
+    def _past_seasons(self, player_id: str, state: _Week) -> list[StatGroup]:
+        """What this player has actually done, most recent season first.
+
+        A projection is a guess; these are the seasons it is a guess about, and
+        a page that shows only the guess gives no way to weigh it. Per game
+        rather than total, because a total mostly measures availability.
+
+        Degrades to nothing: a rookie has no history, and neither does a season
+        Sleeper has not published, which is not a reason to fail the page.
+        """
+        scoring = state.league.scoring_format
+        groups: list[StatGroup] = []
+        for season in self._recent_seasons(state.season):
+            try:
+                stats = self.client.get_season_stats(season).get(player_id)
+            except SleeperAPIError as e:
+                logger.warning(f"Skipping {season} totals: {e}")
+                continue
+            if stats is None or not stats.games:
+                continue
+            groups.append(
+                StatGroup(
+                    title=f"{season} season",
+                    stats=[
+                        Stat(label="Per game", value=f"{stats.per_game(scoring):.1f}"),
+                        Stat(label="Total", value=f"{stats.scored(scoring):.1f}"),
+                        Stat(label="Games", value=str(stats.games)),
+                        *(
+                            [Stat(label="Position rank", value=f"#{stats.position_rank}")]
+                            if stats.position_rank
+                            else []
+                        ),
+                        *_split_lines(stats.splits),
+                    ],
+                )
+            )
+        return groups
+
+    @staticmethod
+    def _recent_seasons(season: str) -> list[str]:
+        """The two seasons before this one, newest first.
+
+        Two rather than a career: three years back is a different team, a
+        different scheme and usually a different player.
+        """
+        try:
+            year = int(season)
+        except ValueError:
+            return []
+        return [str(year - 1), str(year - 2)]
 
     def _lineup_spot(self, slot: LineupSlot, scheduled: bool) -> Spot:
         if slot.player is None:

@@ -124,6 +124,7 @@ export type PlayerDetail = {
   team: string;
   headline: string;
   note: string;
+  image_url: string;
   tone: Tone;
   groups: StatGroup[];
 };

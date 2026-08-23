@@ -52,6 +52,14 @@ from the_front_office.domain.ports import LeagueRef
 
 logger = logging.getLogger(__name__)
 
+# FPL's own player pages show a portrait keyed by Opta's code, not the element
+# id. Public, keyless, and already alongside every other asset the site serves.
+PORTRAIT_URL = "https://resources.premierleague.com/premierleague/photos/players/250x250/p{code}.png"
+
+# Three back is a different club and usually a different role; a fourth row
+# adds scrolling rather than judgement.
+PAST_SEASON_LIMIT = 3
+
 MARKET_LIMIT = 20
 """Top available players shown per report, across all positions."""
 
@@ -163,6 +171,7 @@ class FPLProvider:
             team=player.team,
             headline=f"{player.expected_points:.1f} xPts",
             note=player.news,
+            image_url=PORTRAIT_URL.format(code=player.code) if player.code else "",
             tone="warning" if player.availability else "neutral",
             groups=[
                 StatGroup(
@@ -214,6 +223,7 @@ class FPLProvider:
                     ],
                 ),
                 StatGroup(title="Set pieces", stats=self._set_pieces(player)),
+                *self._past_seasons(player),
                 StatGroup(
                     title="Market",
                     stats=[
@@ -230,6 +240,50 @@ class FPLProvider:
                 ),
             ],
         )
+
+    def _past_seasons(self, player: Player) -> list[StatGroup]:
+        """The seasons behind the price, newest first.
+
+        The catalog carries only the season in progress, which in August is a
+        single gameweek — so the page that is meant to justify a £15m striker
+        shows one match. These are finished seasons and cannot change again.
+
+        Costs one request, made only when someone opens a player, and degrades
+        to nothing rather than failing the page: a promoted club's signing has
+        no FPL history at all.
+        """
+        try:
+            seasons = self.client.get_past_seasons(player.id)
+        except FPLAPIError as e:
+            logger.warning(f"Skipping past seasons for {player.name}: {e}")
+            return []
+
+        keeper_or_defender = player.position in ("GKP", "DEF")
+        return [
+            StatGroup(
+                title=f"{season.season} season",
+                stats=[
+                    Stat(label="Points", value=str(season.total_points)),
+                    Stat(label="Per start", value=f"{season.points_per_game:.1f}"),
+                    Stat(label="Starts", value=str(season.starts)),
+                    Stat(label="Minutes", value=f"{season.minutes:,}"),
+                    Stat(label="Goals", value=str(season.goals)),
+                    Stat(label="Assists", value=str(season.assists)),
+                    *([Stat(label="Clean sheets", value=str(season.clean_sheets))] if keeper_or_defender else []),
+                    Stat(label="Bonus", value=str(season.bonus)),
+                    Stat(label="xG", value=f"{season.expected_goals:.2f}"),
+                    Stat(label="xA", value=f"{season.expected_assists:.2f}"),
+                    # What the market made of that season, which is the closest
+                    # thing FPL has to a verdict on it.
+                    Stat(
+                        label="Price",
+                        value=f"{as_millions(season.start_cost)} → {as_millions(season.end_cost)}",
+                        tone="good" if season.end_cost > season.start_cost else "neutral",
+                    ),
+                ],
+            )
+            for season in reversed(seasons[-PAST_SEASON_LIMIT:])
+        ]
 
     def _fixture_line(self, player: Player, gameweek: int) -> str:
         return self._fixtures_by_club([player], gameweek).get(player.team, "no fixture")

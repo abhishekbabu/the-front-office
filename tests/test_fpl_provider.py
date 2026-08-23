@@ -5,6 +5,7 @@ the prompt has to carry, and a report that omits the captaincy or the transfer
 allowance is wrong however well it renders.
 """
 
+from dataclasses import replace
 from datetime import datetime, timezone
 
 import pytest
@@ -16,6 +17,7 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
     GameweekResult,
     H2HMatch,
     MiniLeague,
+    PastSeason,
     Pick,
     Player,
     Squad,
@@ -86,6 +88,38 @@ def _picks() -> list[Pick]:
     return picks
 
 
+DEFAULT_PAST_SEASONS = [
+    PastSeason(
+        season="2023/24",
+        total_points=180,
+        minutes=2500,
+        starts=28,
+        goals=20,
+        assists=5,
+        clean_sheets=2,
+        bonus=20,
+        expected_goals=18.5,
+        expected_assists=4.1,
+        start_cost=110,
+        end_cost=118,
+    ),
+    PastSeason(
+        season="2024/25",
+        total_points=210,
+        minutes=2900,
+        starts=33,
+        goals=24,
+        assists=7,
+        clean_sheets=3,
+        bonus=28,
+        expected_goals=22.0,
+        expected_assists=5.5,
+        start_cost=118,
+        end_cost=124,
+    ),
+]
+
+
 class FakeFPL:
     """Stands in for FPLClient."""
 
@@ -101,7 +135,11 @@ class FakeFPL:
         active_chip: str = "",
         points_on_bench: int = 0,
         squad: Squad | None = None,
+        past_seasons: list[PastSeason] | None = None,
+        past_seasons_error: Exception | None = None,
     ) -> None:
+        self.past_seasons = past_seasons if past_seasons is not None else list(DEFAULT_PAST_SEASONS)
+        self.past_seasons_error = past_seasons_error
         self.leagues = (
             leagues
             if leagues is not None
@@ -160,6 +198,11 @@ class FakeFPL:
 
     def get_players(self) -> dict[int, Player]:
         return {**SQUAD_PLAYERS, **MARKET}
+
+    def get_past_seasons(self, element_id: int) -> list[PastSeason]:
+        if self.past_seasons_error:
+            raise self.past_seasons_error
+        return self.past_seasons
 
     def get_history(self, entry_id: int) -> list[GameweekResult]:
         return self.history
@@ -527,7 +570,15 @@ def test_a_players_numbers_are_grouped_rather_than_listed() -> None:
     be read without looking for anything."""
     titles = [group.title for group in provider().player(LEAGUE_ID, "8").groups]
 
-    assert titles == ["This week", "Season", "Underlying", "Set pieces", "Market"]
+    assert titles == [
+        "This week",
+        "Season",
+        "Underlying",
+        "Set pieces",
+        "2024/25 season",
+        "2023/24 season",
+        "Market",
+    ]
 
 
 def test_set_pieces_list_only_the_duties_actually_held() -> None:
@@ -559,3 +610,68 @@ def test_a_keeper_gets_the_numbers_only_a_keeper_has() -> None:
 def test_an_attacker_is_not_given_a_keepers_line() -> None:
     labels = {s.label for g in provider().player(LEAGUE_ID, "13").groups for s in g.stats}
     assert "Saves" not in labels
+
+
+# ── the seasons behind the price ────────────────────────────────────────
+
+
+def test_past_seasons_are_listed_newest_first() -> None:
+    """The catalog carries only the season in progress, which in August is one
+    gameweek — so a £15m striker is justified by a single match without these."""
+    titles = [g.title for g in provider().player(LEAGUE_ID, "8").groups if g.title.endswith("season")]
+
+    assert titles == ["2024/25 season", "2023/24 season"]
+
+
+def test_a_past_season_is_scored_per_start_not_per_appearance() -> None:
+    """A substitute cameo and a full ninety are not the same denominator."""
+    groups = {g.title: g for g in provider().player(LEAGUE_ID, "8").groups}
+
+    per_start = next(s for s in groups["2024/25 season"].stats if s.label == "Per start")
+    assert per_start.value == f"{210 / 33:.1f}"
+
+
+def test_a_past_season_carries_the_markets_verdict_on_it() -> None:
+    """What the price did over the season is the closest thing FPL has to one."""
+    groups = {g.title: g for g in provider().player(LEAGUE_ID, "8").groups}
+
+    price = next(s for s in groups["2024/25 season"].stats if s.label == "Price")
+    assert price.value == "£11.8m → £12.4m"
+    assert price.tone == "good"
+
+
+def test_a_player_with_no_history_simply_has_none() -> None:
+    """A promoted club's signing has no FPL record, which is not an error."""
+    groups = provider(past_seasons=[]).player(LEAGUE_ID, "8").groups
+
+    assert not [g for g in groups if g.title.endswith("season")]
+
+
+def test_a_failed_history_lookup_does_not_take_the_player_down() -> None:
+    """Everything else on the page was already fetched and is still true."""
+    detail = provider(past_seasons_error=FPLAPIError("down")).player(LEAGUE_ID, "8")
+
+    assert detail.name
+    assert not [g for g in detail.groups if g.title.endswith("season")]
+
+
+def test_a_player_carries_a_portrait_keyed_by_optas_code() -> None:
+    """Not the element id, which FPL reassigns between seasons."""
+    fake = FakeFPL()
+    catalog = fake.get_players()
+    catalog[8] = replace(catalog[8], code=223094)
+    fake.get_players = lambda: catalog  # type: ignore[method-assign]
+
+    detail = FPLProvider(ENTRY_ID, client=fake).player(LEAGUE_ID, "8")  # type: ignore[arg-type]
+    assert detail.image_url.endswith("/p223094.png")
+
+
+def test_a_player_with_no_photo_code_is_given_no_url() -> None:
+    """An empty string is a missing photo; a URL built from zero is a 404."""
+    fake = FakeFPL()
+    catalog = fake.get_players()
+    catalog[8] = replace(catalog[8], code=0)
+    fake.get_players = lambda: catalog  # type: ignore[method-assign]
+
+    detail = FPLProvider(ENTRY_ID, client=fake).player(LEAGUE_ID, "8")  # type: ignore[arg-type]
+    assert detail.image_url == ""

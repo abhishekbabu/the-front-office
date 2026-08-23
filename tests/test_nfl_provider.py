@@ -7,6 +7,7 @@ import pytest
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
     PlayerMeta,
     SeasonState,
+    SeasonStats,
     SleeperLeague,
     SleeperRoster,
     SleeperUser,
@@ -34,7 +35,11 @@ class FakeSleeper:
         matchups: list[dict[str, Any]] | None = None,
         trending: list[TrendingPlayer] | None = None,
         trending_error: Exception | None = None,
+        season_stats: dict[str, dict[str, SeasonStats]] | None = None,
+        season_stats_error: Exception | None = None,
     ) -> None:
+        self.season_stats = season_stats if season_stats is not None else {}
+        self.season_stats_error = season_stats_error
         self.league = league or SleeperLeague(
             league_id="L1",
             name="Sunday Money",
@@ -63,6 +68,11 @@ class FakeSleeper:
         self.trending = trending or []
         self.trending_error = trending_error
         self.matchup_fetches = 0
+
+    def get_season_stats(self, season: str, sport: str = "nfl") -> dict[str, SeasonStats]:
+        if self.season_stats_error:
+            raise self.season_stats_error
+        return self.season_stats.get(season, {})
 
     def get_state(self, sport: str = "nfl") -> SeasonState:
         return SeasonState(week=3, season="2026", season_type="regular")
@@ -521,3 +531,96 @@ def test_a_projection_is_broken_out_into_the_line_behind_it() -> None:
 def test_a_player_with_no_projection_has_no_line_to_break_out() -> None:
     titles = [g.title for g in _provider(FakeSleeper()).player("L1", "qb1").groups]
     assert "Projected line" not in titles
+
+
+# ── the seasons behind the projection ───────────────────────────────────
+
+
+def _stats(pid: str, season: str, *, games: int, ppr: float, rank: int = 0, **splits: float) -> SeasonStats:
+    return SeasonStats(
+        player_id=pid,
+        season=season,
+        games=games,
+        points={"pts_ppr": ppr, "pts_half_ppr": ppr - 10, "pts_std": ppr - 20},
+        position_rank=rank,
+        splits=splits,
+    )
+
+
+HISTORY = {
+    "2025": {"qb1": _stats("qb1", "2025", games=16, ppr=320.0, rank=4, pass_yd=4200.0, pass_td=30.0)},
+    "2024": {"qb1": _stats("qb1", "2024", games=12, ppr=210.0, rank=14, pass_yd=2800.0, pass_td=18.0)},
+}
+
+
+def test_past_seasons_are_listed_newest_first() -> None:
+    """A projection is a guess; these are the seasons it is a guess about."""
+    client = FakeSleeper(projections=DEFAULT_PROJECTIONS, season_stats=HISTORY)
+
+    titles = [g.title for g in _provider(client).player("L1", "qb1").groups if g.title.endswith("season")]
+
+    assert titles == ["2025 season", "2024 season"]
+
+
+def test_a_past_season_is_scored_per_game_not_only_as_a_total() -> None:
+    """A total mostly measures availability: 12 games is not a worse week."""
+    client = FakeSleeper(projections=DEFAULT_PROJECTIONS, season_stats=HISTORY)
+
+    groups = {g.title: g for g in _provider(client).player("L1", "qb1").groups}
+    stats = {s.label: s.value for s in groups["2024 season"].stats}
+
+    assert stats["Per game"] == f"{210.0 / 12:.1f}"
+    assert stats["Games"] == "12"
+
+
+def test_a_past_season_is_scored_in_the_leagues_own_currency() -> None:
+    """75 receptions is 37.5 points between full PPR and standard."""
+    league = SleeperLeague(
+        league_id="L1",
+        name="Sunday Money",
+        season="2026",
+        total_rosters=12,
+        scoring_format="pts_std",
+        roster_positions=["QB", "RB", "BN"],
+    )
+    client = FakeSleeper(projections=DEFAULT_PROJECTIONS, season_stats=HISTORY, league=league)
+
+    groups = {g.title: g for g in _provider(client).player("L1", "qb1").groups}
+    total = next(s for s in groups["2025 season"].stats if s.label == "Total")
+
+    assert total.value == "300.0"  # pts_std, not pts_ppr
+
+
+def test_a_split_a_position_never_records_is_left_out() -> None:
+    """A running back has no completion percentage at all."""
+    client = FakeSleeper(projections=DEFAULT_PROJECTIONS, season_stats=HISTORY)
+
+    groups = {g.title: g for g in _provider(client).player("L1", "qb1").groups}
+    labels = {s.label for s in groups["2025 season"].stats}
+
+    assert "Passing yards" in labels
+    assert "Receptions" not in labels
+
+
+def test_a_rookie_simply_has_no_history() -> None:
+    client = FakeSleeper(projections=DEFAULT_PROJECTIONS, season_stats={})
+
+    groups = _provider(client).player("L1", "qb1").groups
+
+    assert not [g for g in groups if g.title.endswith("season")]
+
+
+def test_a_failed_history_lookup_does_not_take_the_player_down() -> None:
+    """The week was already fetched and is still true."""
+    client = FakeSleeper(projections=DEFAULT_PROJECTIONS, season_stats_error=SleeperAPIError("down"))
+
+    detail = _provider(client).player("L1", "qb1")
+
+    assert detail.name == "Star QB"
+    assert not [g for g in detail.groups if g.title.endswith("season")]
+
+
+def test_a_player_carries_a_portrait_from_sleepers_own_cdn() -> None:
+    detail = _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).player("L1", "qb1")
+
+    assert detail.image_url.endswith("/qb1.jpg")

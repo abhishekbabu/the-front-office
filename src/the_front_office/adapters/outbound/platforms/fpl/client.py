@@ -31,6 +31,7 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
     GameweekResult,
     H2HMatch,
     MiniLeague,
+    PastSeason,
     Pick,
     Player,
     Squad,
@@ -53,6 +54,9 @@ BOOTSTRAP_TTL = timedelta(hours=6)
 FIXTURES_TTL = timedelta(hours=6)
 ENTRY_TTL = timedelta(minutes=10)
 HISTORY_TTL = timedelta(hours=1)
+# A finished season cannot change, and the current one only moves when a match
+# is played, so this is the slowest-moving thing the client reads.
+PLAYER_HISTORY_TTL = timedelta(hours=12)
 
 # The game returns 429 when a client is hammering it, same as Sleeper.
 RETRYABLE_STATUS = frozenset({429})
@@ -195,6 +199,7 @@ class FPLClient:
             full_name = " ".join(filter(None, [e.get("first_name"), e.get("second_name")]))
             players[element_id] = Player(
                 id=element_id,
+                code=int(e.get("code") or 0),
                 name=str(e.get("web_name") or full_name or element_id),
                 full_name=full_name or str(e.get("web_name") or ""),
                 position=POSITIONS.get(int(e.get("element_type") or 0), ""),
@@ -308,6 +313,35 @@ class FPLClient:
             points_on_bench=int(history.get("points_on_bench") or 0),
             active_chip=str(data.get("active_chip") or ""),
         )
+
+    def get_past_seasons(self, element_id: int) -> list[PastSeason]:
+        """Every finished season this player has a record for, oldest first.
+
+        A separate request per player rather than part of the catalog, which is
+        why it is made only when someone actually opens one.
+        """
+        data = self._api.cached(
+            f"player_history_{element_id}",
+            f"{BASE_URL}/element-summary/{element_id}/",
+            PLAYER_HISTORY_TTL,
+        )
+        return [
+            PastSeason(
+                season=str(row.get("season_name") or ""),
+                total_points=int(row.get("total_points") or 0),
+                minutes=int(row.get("minutes") or 0),
+                starts=int(row.get("starts") or 0),
+                goals=int(row.get("goals_scored") or 0),
+                assists=int(row.get("assists") or 0),
+                clean_sheets=int(row.get("clean_sheets") or 0),
+                bonus=int(row.get("bonus") or 0),
+                expected_goals=_number(row.get("expected_goals")),
+                expected_assists=_number(row.get("expected_assists")),
+                start_cost=int(row.get("start_cost") or 0),
+                end_cost=int(row.get("end_cost") or 0),
+            )
+            for row in data.get("history_past") or []
+        ]
 
     def get_history(self, entry_id: int) -> list[GameweekResult]:
         """Every gameweek this manager has played, in order."""

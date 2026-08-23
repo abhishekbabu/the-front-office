@@ -129,6 +129,13 @@ class PlayerDetail(BaseModel):
     team: str
     headline: str = Field(default="", description="The one number this player is judged on.")
     note: str = Field(default="", description="Injury or availability news, in the platform's words.")
+    image_url: str = Field(
+        default="",
+        description=(
+            "Portrait on the platform's own CDN, or empty where that sport has none. "
+            "A URL rather than bytes: it is the client that has a cache for it."
+        ),
+    )
     tone: Tone = "neutral"
     groups: list[StatGroup] = Field(default_factory=list)
 

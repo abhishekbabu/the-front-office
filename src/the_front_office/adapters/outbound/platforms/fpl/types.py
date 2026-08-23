@@ -131,6 +131,10 @@ class Player:
     expected_goals_conceded: float = 0.0
     ict_index: float = 0.0
 
+    code: int = 0
+    """Opta's own id, which the photo CDN is keyed by. Distinct from `id`, the
+    element number, which is reassigned between seasons."""
+
     @property
     def is_available(self) -> bool:
         return self.status == "a"
@@ -275,3 +279,33 @@ class Fixture:
         if team == self.away:
             return self.home, self.away_difficulty, False
         return None
+
+
+@dataclass(frozen=True)
+class PastSeason:
+    """What a player returned in a season that has finished.
+
+    The season is over, so none of this can change again — which is why it is
+    the one thing here worth caching for a day rather than an hour.
+    """
+
+    season: str
+    """As FPL labels it, e.g. '2025/26'."""
+
+    total_points: int
+    minutes: int
+    starts: int
+    goals: int
+    assists: int
+    clean_sheets: int
+    bonus: int
+    expected_goals: float
+    expected_assists: float
+    start_cost: int
+    end_cost: int
+
+    @property
+    def points_per_game(self) -> float:
+        """Per start rather than per appearance: a substitute cameo and a full
+        ninety are not the same denominator, and starts is what FPL records."""
+        return self.total_points / self.starts if self.starts else 0.0

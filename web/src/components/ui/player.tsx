@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { X } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { fade, list, listItem, slideOver } from "@/lib/motion";
@@ -21,6 +21,31 @@ import { cn } from "@/lib/utils";
  * component would take this AnimatePresence down with it, and an exit
  * animation cannot play from a tree that has already gone.
  */
+/**
+ * A player's face, where the platform has one.
+ *
+ * Removed rather than replaced when it fails to load: the CDNs answer for
+ * most players and 404 for the rest, and a broken-image glyph beside a name
+ * looks like the app is broken rather than like the photo is missing.
+ */
+function Portrait({ src, name }: { src: string; name: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return null;
+  return (
+    <m.img
+      src={src}
+      alt=""
+      aria-hidden
+      variants={fade}
+      initial="hidden"
+      animate="shown"
+      onError={() => setFailed(true)}
+      title={name}
+      className="size-12 shrink-0 rounded-md bg-muted object-cover"
+    />
+  );
+}
+
 export function PlayerPanel({
   sport,
   league,
@@ -66,8 +91,9 @@ export function PlayerPanel({
           onClick={(e) => e.stopPropagation()}
           aria-label="Player detail"
         >
-          <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-border bg-popover px-5 py-4">
-            <div className="min-w-0">
+          <div className="sticky top-0 z-10 flex items-start gap-3 border-b border-border bg-popover px-5 py-4">
+            {player.data && <Portrait src={player.data.image_url} name={player.data.name} />}
+            <div className="min-w-0 flex-1">
               {player.data ? (
                 <>
                   <h2 className="font-display text-xl font-semibold tracking-tight">{player.data.name}</h2>
