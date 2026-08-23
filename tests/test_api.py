@@ -9,9 +9,9 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from reports import MOCK_FPL_REPORT, MOCK_NBA_VERDICT
 
 from the_front_office.adapters.inbound.web import api as web
-from the_front_office.domain.mocks import MOCK_FPL_REPORT, MOCK_NBA_VERDICT
 from the_front_office.domain.models import SportContext
 from the_front_office.domain.ports import LeagueRef
 
@@ -59,7 +59,6 @@ class FakeChat:
 @pytest.fixture(autouse=True)
 def _clear_chats() -> None:
     web._chats.clear()
-    _Engine.seen_mock.clear()
     web._login = web.LoginState(status="idle")
 
 
@@ -67,19 +66,13 @@ def _clear_chats() -> None:
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     """A client whose providers and engines are fakes, so nothing leaves the process."""
     monkeypatch.setattr(web.data, "build_provider", lambda sport: FakeProvider())
-    monkeypatch.setattr(web, "scout_engine", lambda p, mock: _Engine(mock))
-    monkeypatch.setattr(web, "trade_engine", lambda p, mock: _Engine(mock))
+    monkeypatch.setattr(web, "scout_engine", lambda p: _Engine())
+    monkeypatch.setattr(web, "trade_engine", lambda p: _Engine())
     return TestClient(web.create_app())
 
 
 class _Engine:
-    """Records whether it was told to skip the model."""
-
-    seen_mock: list[bool] = []
-
-    def __init__(self, mock: bool) -> None:
-        self.mock = mock
-        _Engine.seen_mock.append(mock)
+    """Stands in for a wired engine."""
 
     def start_analysis(self, league_id: str) -> Any:
         return MOCK_FPL_REPORT, FakeChat()
@@ -152,22 +145,6 @@ def test_a_report_crosses_the_wire_as_the_domain_model(client: TestClient) -> No
     assert body["report"]["situation"] == MOCK_FPL_REPORT.situation
     assert body["report"]["moves"][0]["action"] == "CAPTAIN"
     assert body["chat_id"]
-
-
-def test_whether_the_model_runs_is_read_from_configuration(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Read per request, so a change in Settings applies to the next run.
-
-    A client cannot ask for a canned report: one place decides it, and that
-    place is the same one the sidebar badge reads.
-    """
-    from the_front_office.config.settings import settings
-
-    client.post("/api/fpl/leagues/900/scout")
-    assert _Engine.seen_mock == [False]
-
-    monkeypatch.setattr(settings, "mock_ai", True)
-    client.post("/api/fpl/leagues/900/scout")
-    assert _Engine.seen_mock == [False, True]
 
 
 def test_a_verdict_crosses_the_wire_as_the_domain_model(client: TestClient) -> None:
@@ -260,7 +237,7 @@ def test_each_setting_declares_the_control_it_needs(settings_client: TestClient)
     """A page of text boxes invites a typo the validator then rejects on save."""
     kinds = {s["key"]: s["kind"] for s in settings_client.get("/api/settings").json()}
 
-    assert kinds["MOCK_AI"] == "boolean"
+    assert kinds["LOGFIRE_CAPTURE_PROMPTS"] == "boolean"
     assert kinds["FPL_ENTRY_ID"] == "integer"
     assert kinds["NBA_API_DELAY"] == "number"
     assert kinds["LOG_LEVEL"] == "choice"
@@ -279,8 +256,8 @@ def test_a_boolean_reports_its_effective_value_not_the_file_text(
     otherwise render an unset checkbox for a setting that is genuinely on."""
     from the_front_office.config.settings import settings
 
-    monkeypatch.setattr(settings, "mock_ai", True)
-    entry = next(s for s in settings_client.get("/api/settings").json() if s["key"] == "MOCK_AI")
+    monkeypatch.setattr(settings, "logfire_capture_prompts", True)
+    entry = next(s for s in settings_client.get("/api/settings").json() if s["key"] == "LOGFIRE_CAPTURE_PROMPTS")
 
     assert entry["value"] == "true"
 

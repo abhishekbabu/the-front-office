@@ -1,7 +1,12 @@
-"""Canned reports for `--mock`, so the report path runs without credentials.
+"""Canned reports, as test data.
 
-One per sport: a basketball report returned for a football run would exercise
-the rendering path while saying nothing about the football prompt.
+Stand-ins for what the model returns, so engine and rendering tests can assert
+on a report without one being generated. One per sport, because a basketball
+report returned for a football assertion exercises the shape and says nothing
+about the sport.
+
+Deliberately not in the package: the application has no use for a fabricated
+report, and shipping one invites a code path that returns it.
 """
 
 from the_front_office.domain.models import Move, ScoutReport, TradeVerdict
@@ -137,6 +142,6 @@ MOCK_REPORTS: dict[str, ScoutReport] = {
 }
 
 
-def mock_report_for(sport: str) -> ScoutReport:
+def report_for(sport: str) -> ScoutReport:
     """The canned report for a sport, falling back to the basketball one."""
     return MOCK_REPORTS.get(sport, MOCK_NBA_REPORT)

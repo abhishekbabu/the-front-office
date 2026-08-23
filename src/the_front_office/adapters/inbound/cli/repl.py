@@ -28,8 +28,8 @@ with contextlib.suppress(ImportError):
     import readline  # noqa: F401 — enables up/down arrow history in input()
 
 
-def parse_command(raw: str) -> tuple[str, list[str], bool]:
-    """Split a REPL line into (command, positional args, mock flag).
+def parse_command(raw: str) -> tuple[str, list[str]]:
+    """Split a REPL line into a command and its positional arguments.
 
     The command token is case-insensitive, but positional arguments are not:
     `/trade Give LeBron, Get Tatum` must reach the AI with its casing intact,
@@ -37,13 +37,11 @@ def parse_command(raw: str) -> tuple[str, list[str], bool]:
     """
     parts = raw.split()
     if not parts:
-        return ("", [], False)
+        return ("", [])
 
     cmd = parts[0].lower()
-    rest = parts[1:]
-    mock = "--mock" in rest
-    args = [a for a in rest if not a.startswith("--")]
-    return (cmd, args, mock)
+    args = [a for a in parts[1:] if not a.startswith("--")]
+    return (cmd, args)
 
 
 def _configure_console() -> None:
@@ -72,20 +70,20 @@ class QuitRequested(Exception):
     """Raised by _dispatch when the user asks to exit."""
 
 
-def _dispatch(session: Session, entries: list[SportEntry], cmd: str, args: list[str], mock: bool) -> None:
+def _dispatch(session: Session, entries: list[SportEntry], cmd: str, args: list[str]) -> None:
     """Route one parsed command to its handler.
 
     Raises:
         QuitRequested: the user asked to exit.
     """
     if cmd == "/scout":
-        _cmd_scout(session, entries, args, mock)
+        _cmd_scout(session, entries, args)
     elif cmd in ("/roster", "/rosters", "/my-roster"):
         _cmd_roster(session, entries, args)
     elif cmd == "/leagues":
         _cmd_leagues(session, entries)
     elif cmd == "/trade":
-        _cmd_trade(session, entries, args, mock)
+        _cmd_trade(session, entries, args)
     elif cmd == "/help":
         _print_help(entries)
     elif cmd in ("/quit", "/exit", "/q"):
@@ -139,10 +137,10 @@ def main() -> None:
         if not raw:
             continue
 
-        cmd, args, mock = parse_command(raw)
+        cmd, args = parse_command(raw)
 
         try:
-            _dispatch(session, entries, cmd, args, mock)
+            _dispatch(session, entries, cmd, args)
         except FrontOfficeError as e:
             # Safety net — handlers render their own errors, but a session must
             # never die because one command raised.

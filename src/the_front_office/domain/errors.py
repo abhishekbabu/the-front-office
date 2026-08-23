@@ -118,12 +118,19 @@ class TradeParseError(FrontOfficeError):
 
 
 class AIUnavailableError(FrontOfficeError):
-    """Gemini is not usable — no API key, or the client failed to initialize."""
+    """No model is configured, so there is no analysis to give.
 
-    def __init__(self, detail: str = "GOOGLE_API_KEY is not set") -> None:
+    Not a failure so much as a smaller app: everything read from the platforms
+    still works, and nothing needing a model should have been offered in the
+    first place. A client that reaches this has offered something it should
+    have hidden.
+    """
+
+    code = "ai_unavailable"
+
+    def __init__(self, detail: str = "") -> None:
         super().__init__(
-            f"AI features unavailable: {detail}. "
-            "Turn on Mock AI — `--mock` on the CLI, or MOCK_AI in Settings — to run without credentials."
+            detail or "Analysis is unavailable because no GOOGLE_API_KEY is set. Add one in Settings to turn it on."
         )
 
 

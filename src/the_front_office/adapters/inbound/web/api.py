@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from the_front_office.adapters.inbound.web import data
-from the_front_office.bootstrap import SportEntry, all_sports, scout_engine, trade_engine
+from the_front_office.bootstrap import SportEntry, ai_available, all_sports, scout_engine, trade_engine
 from the_front_office.config import env_file
 from the_front_office.config.logging import setup_logging
 from the_front_office.config.settings import PROJECT_ROOT, settings
@@ -98,6 +98,13 @@ class Setting(BaseModel):
 
 class SettingsUpdate(BaseModel):
     values: dict[str, str]
+
+
+class Capabilities(BaseModel):
+    """What the app can do here, as opposed to what it knows how to do."""
+
+    ai: bool
+    """Whether a model can be called. Everything that needs one hides without it."""
 
 
 class LoginState(BaseModel):
@@ -197,6 +204,16 @@ def _register_routes(app: FastAPI) -> None:
         what to set instead of silently offering less than it could.
         """
         return [_sport(entry) for entry in all_sports()]
+
+    @app.get("/api/capabilities", response_model=Capabilities)
+    def capabilities() -> Capabilities:
+        """What this installation can actually do.
+
+        Read before anything is offered. Without a key there is no analysis to
+        give, so nothing that needs one is shown — rather than shown and then
+        refused, which is a click spent learning the app cannot do it.
+        """
+        return Capabilities(ai=ai_available())
 
     @app.get("/api/settings", response_model=list[Setting])
     def read_settings() -> list[Setting]:
@@ -314,17 +331,15 @@ def _register_routes(app: FastAPI) -> None:
 
     @app.post("/api/{sport}/leagues/{league_id}/scout", response_model=Analysis)
     def scout(sport: str, league_id: str) -> Analysis:
-        """Whether the model is really called is configuration, read per request
-        so a change in Settings applies to the next run without a restart."""
         provider = data.build_provider(sport)
-        report, chat = scout_engine(provider, settings.mock_ai).start_analysis(league_id)
+        report, chat = scout_engine(provider).start_analysis(league_id)
         return Analysis(report=report, chat_id=_remember(chat))
 
     @app.post("/api/{sport}/leagues/{league_id}/trade", response_model=Evaluation)
     def trade(sport: str, league_id: str, request: TradeRequest) -> Evaluation:
         entry = _tradeable(sport)
         provider = data.build_provider(entry.sport)
-        verdict, chat = trade_engine(provider, settings.mock_ai).evaluate(league_id, request.text)
+        verdict, chat = trade_engine(provider).evaluate(league_id, request.text)
         return Evaluation(verdict=verdict, chat_id=_remember(chat))
 
     @app.post("/api/chat/{chat_id}", response_model=Reply)

@@ -4,11 +4,11 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from reports import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
 
 from the_front_office.adapters.outbound.llm.gemini.client import GeminiClient
 from the_front_office.adapters.outbound.llm.gemini.constants import MODEL_FLASH, MODEL_PRO
 from the_front_office.domain.errors import AIResponseError, AIUnavailableError
-from the_front_office.domain.mocks import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
 from the_front_office.domain.models import ScoutReport, TradeVerdict
 
 

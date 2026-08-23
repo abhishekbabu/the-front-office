@@ -8,7 +8,6 @@ the registry, not tested here.
 import logging
 
 from the_front_office.domain.errors import AIResponseError, TradeParseError
-from the_front_office.domain.mocks import MOCK_NBA_VERDICT
 from the_front_office.domain.models import TradeVerdict
 from the_front_office.domain.ports import AnalysisModel, ChatSession, TradeProvider
 
@@ -55,5 +54,5 @@ class TradeEngine:
         if not text:
             raise AIResponseError("The model returned an empty trade evaluation.")
 
-        verdict = self.ai.structure_text(text, TradeVerdict, instruction=STRUCTURE_INSTRUCTION, mock=MOCK_NBA_VERDICT)
+        verdict = self.ai.structure_text(text, TradeVerdict, instruction=STRUCTURE_INSTRUCTION)
         return verdict, chat  # type: ignore[return-value]

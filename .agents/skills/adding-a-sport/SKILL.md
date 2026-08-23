@@ -23,11 +23,8 @@ prompt — no entry point, renderer or UI should learn its name.
      candidate pool
 2. **Prompt template** in `config/constants.py`, rendered by `build_context`.
    Name it `<SPORT>_<REPORT>_PROMPT`.
-3. **Canned mock report** in `domain/mocks.py`, registered in `MOCK_REPORTS`.
-   A basketball mock returned for a football `--mock` run exercises the
-   rendering path and tells you nothing about the prompt.
-4. **Registration** — one `SportEntry` in `bootstrap.py`.
-5. **Tests** — a fake platform client, and assertions on the *prompt content*:
+3. **Registration** — one `SportEntry` in `bootstrap.py`.
+4. **Tests** — a fake platform client, and assertions on the *prompt content*:
    this is where the league rules actually live.
 
 ## Where other platforms go

@@ -7,16 +7,13 @@ written to show. Real data is where the awkward cases live: league names with
 emoji in them, a preseason week where every projection is zero, a squad of
 fifteen rather than a tidy three.
 
-Two differences from `just ui`, both about not disturbing anything:
-
-  * a separate port, so a running `just ui` keeps its own;
-  * Mock AI forced on for this process only, so reports render without a model
-    and without editing .env. League data stays live either way.
+It differs from `just ui` only in the port, so a running `just ui` keeps its
+own. Whether analysis appears depends on GOOGLE_API_KEY, exactly as it does in
+the real thing — which is itself worth being able to look at both ways.
 
 Run with `just preview`.
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -27,18 +24,11 @@ PORT = 8100
 
 
 def main() -> int:
-    # Set before the settings singleton is built. The process environment wins
-    # over .env, so this leaves the file alone.
-    if "--live-ai" not in sys.argv:
-        os.environ["MOCK_AI"] = "true"
-
     import uvicorn
 
     from the_front_office.adapters.inbound.web.api import create_app
 
-    print(f"\n  Preview on http://127.0.0.1:{PORT}")
-    print(f"  Mock AI is {'off — reports will call the model' if '--live-ai' in sys.argv else 'on'}.")
-    print("  League data is live either way.\n")
+    print(f"\n  Preview on http://127.0.0.1:{PORT}\n")
     uvicorn.run(create_app(), host="127.0.0.1", port=PORT, log_level="warning")
     return 0
 

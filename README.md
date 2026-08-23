@@ -107,11 +107,10 @@ catalog.
 |----------|----------|---------|-------|
 | `YAHOO_CLIENT_ID` | yes | — | From your Yahoo developer app |
 | `YAHOO_CLIENT_SECRET` | yes | — | From your Yahoo developer app |
-| `GOOGLE_API_KEY` | for AI features | — | Omit to run `--mock` only |
+| `GOOGLE_API_KEY` | no | — | Omit and the app simply offers no analysis |
 | `SLEEPER_USERNAME` | for football | — | Sleeper needs no key or OAuth — just the username |
 | `FPL_ENTRY_ID` | for FPL | — | The number in the URL of your own points page. FPL has no username lookup |
 | `YAHOO_MAX_WEEKLY_ADDS` | no | `3` | Integer ≥ 0; drives the scout's add budget |
-| `MOCK_AI` | no | `false` | Canned reports instead of model calls; league data stays live |
 | `LOGFIRE_TOKEN` | no | — | A write token from a [Logfire](https://logfire.pydantic.dev) project. Omit and nothing is exported |
 | `LOGFIRE_ENVIRONMENT` | no | `local` | Separates traces from a laptop and a deployed run in one project |
 | `LOGFIRE_CAPTURE_PROMPTS` | no | `false` | Sends prompt and completion **text**. Off deliberately — a prompt carries your roster, leagues and FPL entry id |
@@ -139,7 +138,7 @@ just web    # Vite on :5173, proxying /api to the above
 To look at the finished thing:
 
 ```bash
-just preview   # the real app on :8100 with Mock AI forced on for that process
+just preview   # the real app on its own port, so `just ui` keeps :8000
 just shots     # screenshot every view into web/.shots (starts its own preview)
 ```
 
@@ -195,11 +194,11 @@ reporting success on an inert token.
 | `/trade [sport] <text>` | Evaluate a trade, e.g. `/trade nfl Give Bijan, Get Puka`. The sport is optional when only one supports trades. FPL is excluded — its managers transfer against the market rather than trading each other |
 | `/help` · `/quit` | — |
 
-Add `--mock` to `/scout` or `/trade` to swap Gemini for canned responses and
-exercise the report path without spending tokens. League data stays live. The
-web UI has the same switch as `MOCK_AI` in Settings, and shows a badge in the
-sidebar the whole time it is on — a canned report is otherwise indistinguishable
-from a real one.
+`GOOGLE_API_KEY` is optional. Without it the app has no analysis to offer, so
+nothing that needs a model is shown — no report, no trade evaluation, no
+follow-up chat. Everything read from the platforms works exactly as before.
+Adding a key makes those appear on the next request; nothing explains their
+absence, because from the outside there is nothing missing.
 
 The web UI covers the same ground with a sport picker in the sidebar, plus a
 Settings page for `.env` and a header strip of exact figures — rank, bank,

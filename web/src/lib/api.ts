@@ -69,6 +69,9 @@ export type TradeVerdict = {
 
 export type Analysis = { report: ScoutReport; chat_id: string };
 
+/** What this installation can do, as opposed to what it knows how to do. */
+export type Capabilities = { ai: boolean };
+
 export type Setting = {
   key: string;
   field: string;
@@ -132,6 +135,7 @@ export const api = {
   trade: (sport: string, league: string, text: string) =>
     post<Evaluation>(`/api/${sport}/leagues/${league}/trade`, { text }),
   ask: (chatId: string, message: string) => post<{ answer: string }>(`/api/chat/${chatId}`, { message }),
+  capabilities: () => request<Capabilities>("/api/capabilities"),
   settings: () => request<Setting[]>("/api/settings"),
   yahooLogin: () => post<LoginState>("/api/yahoo/login", {}),
   yahooLoginState: () => request<LoginState>("/api/yahoo/login"),

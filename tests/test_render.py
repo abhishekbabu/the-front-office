@@ -1,7 +1,8 @@
 """Tests for terminal rendering of structured reports."""
 
+from reports import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
+
 from the_front_office.adapters.inbound.cli.render import render_scout_report, render_trade_verdict
-from the_front_office.domain.mocks import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
 from the_front_office.domain.models import Move, ScoutReport
 
 

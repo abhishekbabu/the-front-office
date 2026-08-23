@@ -33,10 +33,8 @@ class ScoutEngine:
             FrontOfficeError: the platform failed, or the model returned an
                 unusable report.
         """
-        from the_front_office.domain.mocks import mock_report_for
-
         context = self.provider.build_context(league_id)
-        report = self.ai.generate_structured(context.prompt, ScoutReport, mock=mock_report_for(self.provider.sport))
+        report = self.ai.generate_structured(context.prompt, ScoutReport)
 
         # The provider read these off the platform; the model was told to leave
         # the field empty but is not trusted to. Overwriting rather than merging

@@ -3,8 +3,8 @@
 import pytest
 from google.genai import types as genai_types
 from pydantic import ValidationError
+from reports import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
 
-from the_front_office.domain.mocks import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
 from the_front_office.domain.models import Move, ScoutReport, TradeProposal, TradeVerdict
 
 # Validated from dicts rather than constructors: the runtime rejection is the

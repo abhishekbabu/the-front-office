@@ -11,7 +11,6 @@ from the_front_office.domain.models import TradeProposal
 from the_front_office.domain.ports import AnalysisModel, ChatSession, HistoryTurn, TModel
 
 from .constants import MODEL_FLASH, MODEL_PRO
-from .types import MockChatSession
 
 logger = logging.getLogger(__name__)
 
@@ -26,17 +25,22 @@ class GeminiClient(AnalysisModel):
     instead of at whichever caller happens to notice first.
     """
 
-    def __init__(self, api_key: str | None = settings.gemini_api_key, mock_mode: bool = False):
-        self.mock_mode = mock_mode
+    @property
+    def is_available(self) -> bool:
+        """Whether a call can be made at all.
 
-        if self.mock_mode:
-            logger.debug("🎭 Mock AI mode enabled - using canned responses")
-            self.client = None
-        elif not api_key:
-            logger.warning("GOOGLE_API_KEY not found. AI features will be disabled.")
-            self.client = None
-        else:
-            self.client = genai.Client(api_key=api_key)
+        Read before offering anything that needs the model: an app that shows a
+        button and then explains it cannot be pressed has wasted the click.
+        """
+        return self.client is not None
+
+    def __init__(self, api_key: str | None = None):
+        # Read at construction rather than bound as a default, so a key saved in
+        # Settings takes effect on the next call instead of the next restart.
+        key = api_key if api_key is not None else settings.gemini_api_key
+        self.client = genai.Client(api_key=key) if key else None
+        if not key:
+            logger.info("No GOOGLE_API_KEY; the model is unavailable and nothing will offer it.")
 
     @staticmethod
     def _log_usage(model: str, response: object, elapsed: float) -> None:
@@ -62,7 +66,7 @@ class GeminiClient(AnalysisModel):
     # pyrefly: ignore[bad-override]  — the port and this method have byte-identical
     # signatures (verified by inspect.signature and isinstance at runtime); pyrefly
     # cannot prove two generic method types equivalent across modules.
-    def generate_structured(self, prompt: str, schema: type[TModel], mock: TModel | None = None) -> TModel:
+    def generate_structured(self, prompt: str, schema: type[TModel]) -> TModel:
         """Generate a response conforming to `schema`.
 
         Uses response-schema mode rather than asking for a format in prose, so a
@@ -76,11 +80,6 @@ class GeminiClient(AnalysisModel):
             AIUnavailableError: no credentials.
             AIResponseError: the call failed, or returned nothing parseable.
         """
-        if self.mock_mode:
-            if mock is None:
-                raise AIResponseError(f"Mock mode has no canned {schema.__name__}.")
-            return mock
-
         if not self.client:
             raise AIUnavailableError()
 
@@ -101,7 +100,7 @@ class GeminiClient(AnalysisModel):
     # pyrefly: ignore[bad-override]  — the port and this method have byte-identical
     # signatures (verified by inspect.signature and isinstance at runtime); pyrefly
     # cannot prove two generic method types equivalent across modules.
-    def structure_text(self, text: str, schema: type[TModel], instruction: str, mock: TModel | None = None) -> TModel:
+    def structure_text(self, text: str, schema: type[TModel], instruction: str) -> TModel:
         """Convert prose the model already produced into `schema`, using Flash.
 
         The trade path needs Google Search for live injury and standings data,
@@ -109,11 +108,6 @@ class GeminiClient(AnalysisModel):
         up one or the other, the search-grounded prose is structured in a second,
         cheap pass — the same Flash-for-parsing split parse_trade_string uses.
         """
-        if self.mock_mode:
-            if mock is None:
-                raise AIResponseError(f"Mock mode has no canned {schema.__name__}.")
-            return mock
-
         if not self.client:
             raise AIUnavailableError()
 
@@ -154,9 +148,6 @@ class GeminiClient(AnalysisModel):
 
     def start_chat(self, initial_history: list[HistoryTurn] | None = None, enable_search: bool = False) -> ChatSession:
         """Start a chat session with the model."""
-        if self.mock_mode:
-            return MockChatSession()
-
         if not self.client:
             raise AIUnavailableError()
 
@@ -178,9 +169,6 @@ class GeminiClient(AnalysisModel):
         Parse a natural language trade string into a structured TradeProposal.
         Uses Gemini Flash for speed and cost efficiency.
         """
-
-        if self.mock_mode:
-            return TradeProposal(giving=["LeBron James"], receiving=["Jayson Tatum"])
 
         if not self.client:
             raise AIUnavailableError()

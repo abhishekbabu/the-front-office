@@ -149,7 +149,7 @@ def find(sport: str) -> SportEntry | None:
 # ── models and engines ──────────────────────────────────────────────────
 
 
-def default_model(mock_mode: bool = False) -> AnalysisModel:
+def default_model() -> AnalysisModel:
     """The configured language model.
 
     The single place the vendor is named. Imported lazily so that merely
@@ -157,14 +157,26 @@ def default_model(mock_mode: bool = False) -> AnalysisModel:
     """
     from the_front_office.adapters.outbound.llm.gemini.client import GeminiClient
 
-    return GeminiClient(mock_mode=mock_mode)
+    return GeminiClient()
 
 
-def scout_engine(provider: SportProvider, mock_ai: bool = False) -> ScoutEngine:
+def ai_available() -> bool:
+    """Whether the model can be called at all.
+
+    Read before offering anything that needs it. Without a key the app has no
+    analysis to give, and the honest response is to not offer it — a button
+    that explains why it cannot work is worse than no button.
+    """
+    from the_front_office.adapters.outbound.llm.gemini.client import GeminiClient
+
+    return GeminiClient().is_available
+
+
+def scout_engine(provider: SportProvider) -> ScoutEngine:
     """A scouting engine wired to the configured model."""
-    return ScoutEngine(provider, ai=default_model(mock_ai))
+    return ScoutEngine(provider, ai=default_model())
 
 
-def trade_engine(provider: TradeProvider, mock_ai: bool = False) -> TradeEngine:
+def trade_engine(provider: TradeProvider) -> TradeEngine:
     """A trade engine wired to the configured model."""
-    return TradeEngine(provider, ai=default_model(mock_ai))
+    return TradeEngine(provider, ai=default_model())

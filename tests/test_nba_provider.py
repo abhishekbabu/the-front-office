@@ -8,11 +8,11 @@ from typing import Any
 
 import pytest
 from conftest import FakeAI, FakeNBA, FakeYahoo, make_player
+from reports import MOCK_NBA_REPORT
 
 from the_front_office.adapters.outbound.sports.nba.yahoo import YahooNBAProvider
 from the_front_office.application.scouting import ScoutEngine
 from the_front_office.domain.errors import TeamNotFoundError
-from the_front_office.domain.mocks import MOCK_NBA_REPORT
 from the_front_office.domain.models import ScoutReport, Stat
 
 

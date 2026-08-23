@@ -1,66 +1,55 @@
-"""Tests for GeminiClient's mock mode — the path `--mock` exercises."""
+"""Tests for the Gemini client's availability, and which model it uses where."""
+
+import inspect
 
 import pytest
 
 from the_front_office.adapters.outbound.llm.gemini.client import GeminiClient
 from the_front_office.adapters.outbound.llm.gemini.constants import MODEL_FLASH, MODEL_PRO
-from the_front_office.adapters.outbound.llm.gemini.types import MockChatSession
-from the_front_office.domain.errors import AIResponseError, AIUnavailableError
-from the_front_office.domain.mocks import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
-from the_front_office.domain.models import ScoutReport, TradeVerdict
+from the_front_office.domain.errors import AIUnavailableError
+from the_front_office.domain.models import ScoutReport
+
+# ── with no key, the app has nothing to offer ───────────────────────────
 
 
-def test_mock_mode_never_constructs_a_real_client() -> None:
-    """--mock must not require GOOGLE_API_KEY or make a network call."""
-    assert GeminiClient(mock_mode=True).client is None
+def test_without_a_key_no_client_is_constructed() -> None:
+    """No network call, and nothing that could half-work."""
+    assert GeminiClient(api_key=None).client is None
 
 
-def test_missing_api_key_raises_a_domain_error_not_a_string() -> None:
-    """Callers must be able to distinguish 'no credentials' from a real report."""
-    c = GeminiClient(api_key=None)
-    assert c.client is None
-    with pytest.raises(AIUnavailableError, match="--mock"):
-        c.start_chat()
+def test_availability_is_readable_before_anything_is_offered() -> None:
+    """A button that explains why it cannot be pressed has wasted the click."""
+    assert GeminiClient(api_key=None).is_available is False
+    assert GeminiClient(api_key="a-key").is_available is True
 
 
-def test_mock_start_chat_returns_a_mock_session() -> None:
-    chat = GeminiClient(mock_mode=True).start_chat()
-    assert isinstance(chat, MockChatSession)
-    assert chat.send_message("why this player?").text is not None
+def test_the_key_is_read_at_construction_not_bound_as_a_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A key saved in Settings must take effect on the next call, not the next
+    restart — a default argument is evaluated once, at import."""
+    from the_front_office.config.settings import settings
+
+    monkeypatch.setattr(settings, "gemini_api_key", "set-after-import")
+
+    assert GeminiClient().is_available
 
 
-def test_mock_structured_generation_returns_the_canned_report() -> None:
-    """--mock must exercise the real report path: a validated ScoutReport."""
-    report = GeminiClient(mock_mode=True).generate_structured("any prompt", ScoutReport, mock=MOCK_NBA_REPORT)
-    assert isinstance(report, ScoutReport)
-    assert len(report.moves) == 3
-    assert report.focus
+def test_every_entry_point_refuses_the_same_way() -> None:
+    """One domain error, so a caller never has to tell them apart."""
+    client = GeminiClient(api_key=None)
+
+    for call in (
+        lambda: client.start_chat(),
+        lambda: client.generate_structured("p", ScoutReport),
+        lambda: client.parse_trade_string("Give A, Get B"),
+    ):
+        with pytest.raises(AIUnavailableError):
+            call()
 
 
-def test_mock_structuring_returns_the_canned_verdict() -> None:
-    verdict = GeminiClient(mock_mode=True).structure_text(
-        "prose", TradeVerdict, instruction="extract", mock=MOCK_NBA_VERDICT
-    )
-    assert isinstance(verdict, TradeVerdict)
-    assert verdict.verdict == "ACCEPT"
+# ── which model does what ───────────────────────────────────────────────
 
 
-def test_mock_without_a_canned_value_raises_rather_than_inventing_one() -> None:
-    with pytest.raises(AIResponseError, match="ScoutReport"):
-        GeminiClient(mock_mode=True).generate_structured("p", ScoutReport)
-
-
-def test_mock_chat_only_answers_follow_ups() -> None:
-    """Reports come from generate_structured now; the chat is follow-ups only."""
-    chat = MockChatSession()
-    assert (chat.send_message("why that player?").text or "").startswith("[MOCK]")
-    assert (chat.send_message("and the next one?").text or "").startswith("[MOCK]")
-
-
-def test_parsing_uses_flash_and_strategy_uses_pro() -> None:
-    """Flash for parsing and structuring, Pro for analysis — per .agent/rules/rules.md."""
-    import inspect
-
+def test_parsing_uses_flash_and_analysis_uses_pro() -> None:
     from the_front_office.adapters.outbound.llm.gemini import client as mod
 
     assert MODEL_FLASH == "gemini-2.5-flash"

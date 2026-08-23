@@ -10,8 +10,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-
-from the_front_office.domain.mocks import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
+from reports import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
 
 
 def make_player(

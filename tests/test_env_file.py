@@ -204,7 +204,6 @@ def test_pydantic_reads_back_exactly_what_was_written(tmp_path: Path, monkeypatc
 @pytest.mark.parametrize(
     ("field", "kind"),
     [
-        ("mock_ai", "boolean"),
         ("logfire_capture_prompts", "boolean"),
         ("fpl_entry_id", "integer"),
         ("yahoo_max_weekly_adds", "integer"),
@@ -225,7 +224,7 @@ def test_optionality_does_not_change_what_kind_a_value_is() -> None:
 
 def test_a_bool_is_not_reported_as_an_integer() -> None:
     """In Python it is one, so the check order actually matters."""
-    assert env_file.field_kind("mock_ai")[0] == "boolean"
+    assert env_file.field_kind("logfire_capture_prompts")[0] == "boolean"
 
 
 def test_a_choice_carries_its_allowed_values() -> None:
@@ -238,5 +237,5 @@ def test_every_declared_field_resolves_to_a_known_control() -> None:
 
 
 def test_a_boolean_writes_the_spelling_dotenv_reads_back(env: Path) -> None:
-    env_file.write_values({"MOCK_AI": "true"})
-    assert "MOCK_AI=true" in env.read_text(encoding="utf-8")
+    env_file.write_values({"LOGFIRE_CAPTURE_PROMPTS": "true"})
+    assert "LOGFIRE_CAPTURE_PROMPTS=true" in env.read_text(encoding="utf-8")

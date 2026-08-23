@@ -345,7 +345,7 @@ def test_a_transfer_beyond_the_bank_is_not_offered() -> None:
 
 
 def test_the_briefing_keeps_the_squad_and_only_the_players_named() -> None:
-    from the_front_office.domain.mocks import MOCK_FPL_REPORT
+    from reports import MOCK_FPL_REPORT
 
     context = provider().build_context(LEAGUE_ID)
     briefing = context.briefing(MOCK_FPL_REPORT)

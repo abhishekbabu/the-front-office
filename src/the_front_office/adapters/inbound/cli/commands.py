@@ -26,8 +26,6 @@ def _print_help(entries: list[SportEntry]) -> None:
     for command, description in rows:
         print(f"  {command.ljust(width)}   {description}")
     print()
-    print("  Add --mock to /scout or /trade to skip the AI call.")
-    print()
 
 
 def _match_sport(entries: list[SportEntry], token: str) -> SportEntry | None:
@@ -61,7 +59,7 @@ def _resolve_sports(args: list[str], entries: list[SportEntry]) -> list[SportEnt
     return []
 
 
-def _cmd_scout(session: Session, entries: list[SportEntry], args: list[str], mock: bool) -> None:
+def _cmd_scout(session: Session, entries: list[SportEntry], args: list[str]) -> None:
     """Run a scouting report for each requested sport and league."""
     for entry in _resolve_sports(args, entries):
         try:
@@ -75,7 +73,7 @@ def _cmd_scout(session: Session, entries: list[SportEntry], args: list[str], moc
             print(f"  ⚠️  No {entry.label} leagues found for this season.")
             continue
 
-        engine = scout_engine(provider, mock)
+        engine = scout_engine(provider)
         for ref in refs:
             _print_header(f"{entry.label} — {ref.name}")
             if ref.detail:
@@ -146,7 +144,7 @@ def _trade_sport(tradeable: list[SportEntry], args: list[str]) -> tuple[SportEnt
     return None, args
 
 
-def _cmd_trade(session: Session, entries: list[SportEntry], args: list[str], mock: bool) -> None:
+def _cmd_trade(session: Session, entries: list[SportEntry], args: list[str]) -> None:
     """Evaluate a trade: `/trade [sport] <description>`."""
     tradeable = [e for e in entries if e.supports_trades]
     if not tradeable:
@@ -164,7 +162,7 @@ def _cmd_trade(session: Session, entries: list[SportEntry], args: list[str], moc
 
     trade_text = " ".join(args)
     provider = session.provider(entry)
-    engine = trade_engine(provider, mock)  # type: ignore[arg-type]
+    engine = trade_engine(provider)  # type: ignore[arg-type]
     for ref in provider.list_leagues():
         _print_header(f"{entry.label} — Trade Evaluation — {ref.name}")
         print("  ⏳ Parsing, enriching and evaluating...")

@@ -54,11 +54,11 @@ class AnalysisModel(Protocol):
     satisfying this and nothing else.
     """
 
-    def generate_structured(self, prompt: str, schema: type[TModel], mock: TModel | None = None) -> TModel:
+    def generate_structured(self, prompt: str, schema: type[TModel]) -> TModel:
         """Return a response validated against `schema`."""
         ...
 
-    def structure_text(self, text: str, schema: type[TModel], instruction: str, mock: TModel | None = None) -> TModel:
+    def structure_text(self, text: str, schema: type[TModel], instruction: str) -> TModel:
         """Convert prose the model already produced into `schema`."""
         ...
 

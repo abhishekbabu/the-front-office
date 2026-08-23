@@ -54,5 +54,5 @@ def test_trade_parse_error_shows_the_expected_form() -> None:
 
 
 def test_ai_unavailable_points_at_the_mock_escape_hatch() -> None:
-    assert "--mock" in str(AIUnavailableError())
+    assert "GOOGLE_API_KEY" in str(AIUnavailableError())
     assert "GOOGLE_API_KEY" in str(AIUnavailableError())

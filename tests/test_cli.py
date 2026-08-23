@@ -11,33 +11,21 @@ def test_command_token_is_case_insensitive() -> None:
 def test_argument_casing_is_preserved() -> None:
     """Player-name lookups depend on casing, so only the command token is
     lowercased."""
-    cmd, args, _ = parse_command("/trade Give LeBron James, Get Jayson Tatum")
+    cmd, args = parse_command("/trade Give LeBron James, Get Jayson Tatum")
     assert cmd == "/trade"
     assert args == ["Give", "LeBron", "James,", "Get", "Jayson", "Tatum"]
-    assert "LeBron" in args
 
 
-def test_mock_flag_is_detected_and_stripped_from_args() -> None:
-    cmd, args, mock = parse_command("/trade --mock Give LeBron, Get Tatum")
+def test_flags_are_stripped_from_arguments() -> None:
+    """A flag is never part of a trade description or a sport name."""
+    cmd, args = parse_command("/trade --verbose Give LeBron")
     assert cmd == "/trade"
-    assert mock is True
-    assert "--mock" not in args
-    assert args[0] == "Give"
-
-
-def test_absent_mock_flag_defaults_false() -> None:
-    assert parse_command("/scout")[2] is False
-
-
-def test_unknown_flags_are_stripped_but_do_not_set_mock() -> None:
-    cmd, args, mock = parse_command("/trade --verbose Give LeBron")
-    assert mock is False
     assert args == ["Give", "LeBron"]
 
 
 def test_empty_input_yields_empty_command() -> None:
-    assert parse_command("") == ("", [], False)
-    assert parse_command("   ") == ("", [], False)
+    assert parse_command("") == ("", [])
+    assert parse_command("   ") == ("", [])
 
 
 # ── sport-aware dispatch ────────────────────────────────────────────────
@@ -148,11 +136,11 @@ def test_a_platform_failure_is_reported_not_raised(capsys: pytest.CaptureFixture
 
 def test_quit_raises_the_sentinel() -> None:
     with pytest.raises(cli.QuitRequested):
-        cli._dispatch(Session(), [], "/quit", [], False)
+        cli._dispatch(Session(), [], "/quit", [])
 
 
 def test_unknown_command_is_reported(capsys: pytest.CaptureFixture[str]) -> None:
-    cli._dispatch(Session(), [], "/nonsense", [], False)
+    cli._dispatch(Session(), [], "/nonsense", [])
     assert "Unknown command" in capsys.readouterr().out
 
 
@@ -174,12 +162,12 @@ def test_an_empty_roster_says_so(capsys: pytest.CaptureFixture[str]) -> None:
 
 def test_trade_reports_when_no_sport_supports_it(capsys: pytest.CaptureFixture[str]) -> None:
     """Football is configured but has no trade path yet."""
-    cmd._cmd_trade(Session(), [fake_entry("nfl")], ["Give A, Get B"], False)
+    cmd._cmd_trade(Session(), [fake_entry("nfl")], ["Give A, Get B"])
     assert "supports trade evaluation" in capsys.readouterr().out
 
 
 def test_trade_usage_is_shown_without_arguments(capsys: pytest.CaptureFixture[str]) -> None:
-    cmd._cmd_trade(Session(), [_tradeable("nfl")], [], False)
+    cmd._cmd_trade(Session(), [_tradeable("nfl")], [])
     assert "Usage: /trade" in capsys.readouterr().out
 
 
@@ -229,8 +217,8 @@ def _entry_with(provider: Any, sport: str = "nfl", trades: bool = False) -> Any:
 def test_scout_renders_a_report(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     from conftest import FakeAI
 
-    monkeypatch.setattr(cmd, "scout_engine", lambda provider, mock: _scout_with(provider, FakeAI()))
-    cmd._cmd_scout(Session(), [_entry_with(RecordingProvider())], [], True)
+    monkeypatch.setattr(cmd, "scout_engine", lambda provider: _scout_with(provider, FakeAI()))
+    cmd._cmd_scout(Session(), [_entry_with(RecordingProvider())], [])
     out = capsys.readouterr().out
     assert "My League" in out
     assert "SITUATION" in out  # the rendered report
@@ -246,7 +234,7 @@ def test_scout_reports_a_platform_failure(capsys: pytest.CaptureFixture[str]) ->
     from the_front_office.domain.errors import TeamNotFoundError
 
     entry = _entry_with(RecordingProvider(error=TeamNotFoundError("Some League")))
-    cmd._cmd_scout(Session(), [entry], [], True)
+    cmd._cmd_scout(Session(), [entry], [])
     assert "Some League" in capsys.readouterr().out
 
 
@@ -255,7 +243,7 @@ def test_scout_warns_when_a_sport_has_no_leagues(capsys: pytest.CaptureFixture[s
         def list_leagues(self) -> Any:
             return []
 
-    cmd._cmd_scout(Session(), [_entry_with(NoLeagues())], [], True)
+    cmd._cmd_scout(Session(), [_entry_with(NoLeagues())], [])
     assert "No NFL (Sleeper) leagues" in capsys.readouterr().out
 
 
@@ -265,8 +253,8 @@ def test_trade_renders_a_verdict(monkeypatch: pytest.MonkeyPatch, capsys: pytest
     from the_front_office.application.trading import TradeEngine
 
     provider = RecordingProvider()
-    monkeypatch.setattr(cmd, "trade_engine", lambda p, mock: TradeEngine(p, ai=FakeAI()))
-    cmd._cmd_trade(Session(), [_entry_with(provider, trades=True)], ["Give", "A,", "Get", "B"], True)
+    monkeypatch.setattr(cmd, "trade_engine", lambda p: TradeEngine(p, ai=FakeAI()))
+    cmd._cmd_trade(Session(), [_entry_with(provider, trades=True)], ["Give", "A,", "Get", "B"])
     out = capsys.readouterr().out
     assert "VERDICT" in out
 
@@ -278,8 +266,8 @@ def test_trade_reports_a_domain_error(monkeypatch: pytest.MonkeyPatch, capsys: p
     from the_front_office.domain.errors import PlayerNotFoundError
 
     provider = RecordingProvider(error=PlayerNotFoundError(["Ghost"]))
-    monkeypatch.setattr(cmd, "trade_engine", lambda p, mock: TradeEngine(p, ai=FakeAI()))
-    cmd._cmd_trade(Session(), [_entry_with(provider, trades=True)], ["x"], True)
+    monkeypatch.setattr(cmd, "trade_engine", lambda p: TradeEngine(p, ai=FakeAI()))
+    cmd._cmd_trade(Session(), [_entry_with(provider, trades=True)], ["x"])
     assert "Ghost" in capsys.readouterr().out
 
 
@@ -346,12 +334,12 @@ def test_an_unconfigured_trading_sport_says_what_to_set(capsys: pytest.CaptureFi
 
 
 def test_no_trading_sport_says_so(capsys: pytest.CaptureFixture[str]) -> None:
-    cmd._cmd_trade(Session(), [fake_entry("nfl")], ["Give A, Get B"], False)
+    cmd._cmd_trade(Session(), [fake_entry("nfl")], ["Give A, Get B"])
     assert "supports trade evaluation" in capsys.readouterr().out
 
 
 def test_usage_is_shown_when_only_a_sport_is_given(capsys: pytest.CaptureFixture[str]) -> None:
-    cmd._cmd_trade(Session(), [_tradeable("nfl")], ["nfl"], True)
+    cmd._cmd_trade(Session(), [_tradeable("nfl")], ["nfl"])
     assert "Usage: /trade" in capsys.readouterr().out
 
 

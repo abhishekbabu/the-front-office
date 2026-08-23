@@ -7,7 +7,7 @@ import { StatStrip } from "@/components/ui/stat";
 import { LineupCard } from "@/components/ui/lineup";
 import { Chat, Chips, ErrorNote, MoveRow, PageHeader } from "@/panels/shared";
 
-export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) {
+export function ScoutPanel({ sport, league, ai }: { sport: Sport; league: League; ai: boolean }) {
   // Loaded on arrival rather than with the report: every figure in it is
   // already known, and a page that shows nothing until a model has answered is
   // blank for as long as that takes.
@@ -26,10 +26,12 @@ export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) 
 
   return (
     <>
-      <PageHeader title={`${league.name} report`} meta={league.detail}>
-        <Button variant="primary" onClick={() => run.mutate()} disabled={run.isPending}>
-          {run.isPending ? "Building…" : run.data ? "Run again" : "Run report"}
-        </Button>
+      <PageHeader title={league.name} meta={league.detail}>
+        {ai && (
+          <Button variant="primary" onClick={() => run.mutate()} disabled={run.isPending}>
+            {run.isPending ? "Building…" : run.data ? "Run again" : "Run report"}
+          </Button>
+        )}
       </PageHeader>
 
       <StatStrip stats={headline} />
@@ -87,7 +89,7 @@ export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) 
             bench={standing.data.bench}
             swaps={standing.data.swaps}
           />
-          {!run.data && !run.isError && (
+          {ai && !run.data && !run.isError && (
             <p className="max-w-[70ch] text-[13.5px] leading-relaxed text-muted-foreground">
               Everything above is read or computed from league state. Running a report adds the
               judgement — which projections to believe, which matchups to discount, what to do.

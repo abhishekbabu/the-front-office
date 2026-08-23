@@ -61,8 +61,8 @@ escape as a 500 unless passed through `yahoo.translate`. Never trigger the OAuth
 flow implicitly — it blocks on a browser click, so non-interactive callers use
 `ensure_authorized`.
 
-**Chat history is resent every turn.** Seed follow-up chats with a briefing, not
-the generation prompt, and say explicitly what was left out.
+**Chat history is resent every turn.** Seed follow-ups with a briefing, not the
+generation prompt, and say what was left out.
 
 **FPL.** The only platform that is also its own stats provider — one
 `bootstrap-static` call carries prices, `ep_next` and expected goals — so it
@@ -107,9 +107,10 @@ singleton in place; rebinding would strand every module that imported it.
 **UI.** The API returns the domain models themselves — never a parallel response
 type for something `domain/models.py` already models, or the two drift. Provider
 access lives in `data.py`, free of any web framework, so it is testable with no
-server running. Whether the model is really called is configuration (`MOCK_AI`),
-read per request, not a flag a client sets — and since a canned report is
-indistinguishable from a real one, anything running mocked must show it.
+server running. The model is optional: without `GOOGLE_API_KEY` nothing that
+needs one is offered, rather than offered and refused. Never ship a canned
+report in the package — a fabricated one the app can return is a path that
+eventually returns it for real.
 
 In `web/`, color comes only from semantic tokens (`bg-card`,
 `text-muted-foreground`) — never a raw Tailwind palette utility, which cannot
@@ -138,7 +139,7 @@ Sleeper and FPL are both plain public JSON and share `JsonApiClient` — held as
 collaborator, given its own retry policy and domain error, not inherited.
 
 **Telemetry.** All of it lives in `config/telemetry.py`, called once per process
-by each entry point. Never open a span by hand or import `logfire` elsewhere —
+by each entry point. Never open a span by hand or import `logfire` elsewhere:
 the libraries carrying the latency are auto-instrumented, which keeps tracing out
 of `domain/`, `application/` and the ports. It stays inert without a token
 (`send_to_logfire="if-token-present"`), so the suite and CI need no secret.
@@ -147,9 +148,9 @@ the user's roster, leagues and entry id. Each `logfire.instrument_*` needs its
 matching extra on the dependency, or it imports fine and raises at call time.
 
 **Headline figures.** `ScoutReport.headline` is filled by the engine from the
-provider's `SportContext`, never by the model — the field's description tells it
-to leave the field empty and the engine overwrites regardless. A hallucinated
-rank would sit in the header looking exactly as authoritative as a real one.
+provider's `SportContext`, never by the model, which is told to leave it empty
+and overwritten regardless — a hallucinated rank sits in the header looking
+exactly as authoritative as a real one.
 
 **Layering.** Dependencies point inward only: `domain` imports nothing else in
 the package; `application` imports only `domain`; adapters implement ports;
@@ -158,12 +159,12 @@ Never import an adapter from `domain/` or `application/` — if an engine needs 
 capability, add a port and let `bootstrap` wire it. Engines take their
 collaborators as required arguments rather than constructing defaults.
 
-**Adding a sport.** See the `adding-a-sport` skill. In short: a provider under
-`adapters/outbound/sports/`, a prompt template, a canned mock, one `SportEntry`
-in `bootstrap.py`. Never name a provider in an entry point, and never put sport
-specifics in `domain/`, `application/` or the inbound adapters. If a sport needs
-a field the shared models lack, widen them — and name it in the league's own
-vocabulary, `gains` rather than `categories_gained`.
+**Adding a sport.** See the `adding-a-sport` skill: a provider under
+`adapters/outbound/sports/`, a prompt template, one `SportEntry` in
+`bootstrap.py`. Never name a provider in an entry point, nor put sport specifics
+in `domain/`, `application/` or the inbound adapters. If a sport needs a field
+the shared models lack, widen them — in the league's own vocabulary, `gains`
+rather than `categories_gained`.
 
 ## Testing
 
@@ -177,9 +178,8 @@ New code needs tests in the same commit. Coverage is gated at 95%.
 ## CI
 
 CI runs the same `just` recipes you run locally on Linux, macOS and Windows, so
-adding a gate to the `justfile` extends CI too. The UI is a separate `web` job:
-`just check-web` locally, `pnpm install --frozen-lockfile` there, so a
-`package.json` change that skipped a lockfile update cannot land. `.python-version` pins 3.10 —
+adding a gate to the `justfile` extends CI too. The UI is a separate `web` job —
+`just check-web` locally, `--frozen-lockfile` there. `.python-version` pins 3.10 —
 the floor in `requires-python`, and what pyrefly and ruff target — with one
 extra leg on 3.13 for forward compatibility.
 

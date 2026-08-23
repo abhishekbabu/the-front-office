@@ -26,8 +26,11 @@ export default function App() {
   const [leagueId, setLeagueId] = useState<string | null>(null);
 
   const sports = useQuery({ queryKey: ["sports"], queryFn: api.sports });
-  const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
-  const mockOn = (settings.data ?? []).some((s) => s.key === "MOCK_AI" && s.value === "true");
+  // Without a model there is no analysis to give, so the views that produce one
+  // are not offered at all. Adding a key makes them appear; nothing explains
+  // their absence, because from the outside there is nothing missing.
+  const capabilities = useQuery({ queryKey: ["capabilities"], queryFn: api.capabilities });
+  const ai = capabilities.data?.ai ?? false;
   // Ready, not merely configured: credentials being set says nothing about
   // whether a platform will actually answer.
   const usable = useMemo(() => (sports.data ?? []).filter((s) => s.ready), [sports.data]);
@@ -44,7 +47,7 @@ export default function App() {
 
   // A sport that cannot trade must not leave the tab selected behind it.
   const panelKey = `${active?.sport}:${league?.league_id}`;
-  const views: SportView[] = active?.supports_trades ? ["scout", "team", "trade"] : ["scout", "team"];
+  const views: SportView[] = ["scout", "team", ...(ai && active?.supports_trades ? ["trade" as const] : [])];
   const current: SportView = views.find((v) => v === view) ?? "scout";
 
   return (
@@ -114,14 +117,6 @@ export default function App() {
         )}
 
         <div className="mt-auto flex flex-col gap-2">
-          {/* Mock mode is invisible once it leaves the sidebar, and a canned
-              report reads exactly like a real one — so say so, always. */}
-          {mockOn && (
-            <Badge variant="warn" appearance="status" className="mx-1" title="Reports are canned; league data is live">
-              Mock AI
-            </Badge>
-          )}
-
           <div className="flex items-center gap-1">
             <RailItem className="flex-1" active={view === "settings"} onClick={() => setView("settings")}>
               <span className="flex items-center gap-2">
@@ -167,7 +162,7 @@ export default function App() {
           // analysis renders under the new league's name — a stale FPL report
           // headed "Huge Euge RR FF", with FPL's figures in the strip.
           current === "scout" ? (
-            <ScoutPanel key={panelKey} sport={active} league={league} />
+            <ScoutPanel key={panelKey} sport={active} league={league} ai={ai} />
           ) : current === "team" ? (
             <TeamPanel key={panelKey} sport={active} league={league} />
           ) : (
