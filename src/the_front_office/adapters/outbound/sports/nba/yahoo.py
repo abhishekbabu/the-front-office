@@ -54,6 +54,11 @@ AVAILABLE_BROWSE_LIMIT = 100
 """What a nine-category league is actually scored on, in the order it is read."""
 
 
+NO_FIGURE = "—"
+"""What a table cell shows where there is no number. A zero would read as a
+bad line rather than an absent one."""
+
+
 def _recent(stats: object, key: str) -> str:
     """One recent-form figure, or a dash when nba_stats has nothing.
 
@@ -62,7 +67,7 @@ def _recent(stats: object, key: str) -> str:
     """
     line = getattr(stats, "last_15", None) if stats is not None else None
     value = (line or {}).get(key) if isinstance(line, dict) else None
-    return f"{value:.1f}" if isinstance(value, int | float) else "—"
+    return f"{value:.1f}" if isinstance(value, int | float) else NO_FIGURE
 
 
 class YahooNBAProvider:
@@ -335,7 +340,10 @@ class YahooNBAProvider:
             name=name,
             position=str(player.display_position),
             team=str(player.editorial_team_abbr),
-            headline=f"{_recent(stats, 'PTS')} pts over the last 15",
+            headline=_recent(stats, "PTS").replace(NO_FIGURE, ""),
+            headline_label=(
+                "points a game over the last 15" if _recent(stats, "PTS") != NO_FIGURE else "No recent form on record"
+            ),
             note=status,
             tone="warning" if status else "neutral",
             groups=[

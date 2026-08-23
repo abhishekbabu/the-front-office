@@ -179,14 +179,30 @@ export function PlayerPanel({
           {player.data && (
             <m.div variants={list} initial="hidden" animate="shown" className="flex flex-col gap-5 px-5 py-4">
               <m.div variants={listItem}>
-                <div
-                  className={cn(
-                    "font-display text-3xl font-semibold tracking-tight tabular-nums",
-                    player.data.tone === "warning" && "text-warn",
-                  )}
-                >
-                  {player.data.headline}
-                </div>
+                {/* A figure gets display type; the absence of one gets a
+                    sentence. Setting "no projection" at 3xl renders a missing
+                    number as though it were the number. */}
+                {player.data.headline ? (
+                  <div className="flex items-baseline gap-2">
+                    <span
+                      className={cn(
+                        "font-display text-3xl font-semibold tracking-tight tabular-nums",
+                        player.data.tone === "warning" && "text-warn",
+                      )}
+                    >
+                      {player.data.headline}
+                    </span>
+                    {player.data.headline_label && (
+                      <span className="font-mono text-[11px] text-muted-foreground">
+                        {player.data.headline_label}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  player.data.headline_label && (
+                    <p className="text-[13px] text-muted-foreground">{player.data.headline_label}</p>
+                  )
+                )}
                 {player.data.note && (
                   <Badge variant="warn" appearance="status" className="mt-2">
                     {player.data.note}
