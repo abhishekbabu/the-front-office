@@ -43,10 +43,12 @@ class FakeSession:
         return FakeResponse(self.payload)
 
 
-def _client(tmp_path: Path, session: FakeSession, error: type = SleeperAPIError) -> JsonApiClient:
+def _client(
+    tmp_path: Path, session: FakeSession, error: type = SleeperAPIError, cache: JsonDiskCache | None = None
+) -> JsonApiClient:
     return JsonApiClient(
         name="Test",
-        cache=JsonDiskCache(tmp_path / "c.json"),
+        cache=cache or JsonDiskCache(tmp_path / "c.json"),
         # No real backoff; the hermetic suite must not spend seconds sleeping.
         retry=lambda: build_retry(attempts=2, multiplier=1, min_wait=0, max_wait=0, predicate=is_transient).copy(
             wait=lambda _: 0
@@ -99,11 +101,18 @@ def test_a_cached_value_is_served_without_a_second_request(tmp_path: Path) -> No
 
 
 def test_an_expired_entry_is_refetched(tmp_path: Path) -> None:
-    session = FakeSession({"n": 1})
-    client = _client(tmp_path, session)
-    client.cached("k", "https://example.test/a", timedelta(0))
-    client.cached("k", "https://example.test/a", timedelta(0))
-    assert len(session.requests) == 2
+    """The entry is aged explicitly rather than by writing it with a zero TTL.
+
+    A zero TTL only expires once the clock has advanced, and Windows ticks at
+    about 15ms — so a write and the read after it land on the same instant and
+    the entry is served rather than refetched.
+    """
+    cache = JsonDiskCache(tmp_path / "c.json")
+    cache.set("k", {"n": 1}, now=datetime.now(timezone.utc) - timedelta(hours=2))
+
+    session = FakeSession({"n": 2})
+    assert _client(tmp_path, session, cache=cache).cached("k", "https://example.test/a", TTL) == {"n": 2}
+    assert len(session.requests) == 1
 
 
 def test_a_caller_can_transform_before_storing(tmp_path: Path) -> None:
