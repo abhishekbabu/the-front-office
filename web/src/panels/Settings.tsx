@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ArrowLeft, Check, Save } from "lucide-react";
 import { ErrorNote, PageHeader } from "@/panels/shared";
 import { useTheme } from "@/lib/useTheme";
 import { PALETTES } from "@/themes/registry";
@@ -29,13 +30,13 @@ const GROUPS: { title: string; note: string; keys: string[] }[] = [
   },
   {
     title: "NBA on Yahoo",
-    note: "From a Yahoo developer app with Fantasy Sports read permission and redirect URI https://localhost:8080. The first report opens a browser to authorize.",
+    note: "From a Yahoo developer app with Fantasy Sports read permission and redirect URI https://localhost:8080. Yahoo also reviews each application before granting API access. Authorizing is a button on the sport itself, once.",
     keys: ["YAHOO_CLIENT_ID", "YAHOO_CLIENT_SECRET", "YAHOO_REDIRECT_URI", "YAHOO_MAX_WEEKLY_ADDS"],
   },
   {
     title: "AI",
-    note: "With Mock AI on, reports come back canned and no model is called — the league data stays live either way. Useful without a key, and for exercising a report without spending tokens.",
-    keys: ["GOOGLE_API_KEY", "MOCK_AI"],
+    note: "Optional. Without a key the app offers no analysis at all — no report, no trade evaluation, no follow-up questions — and everything read from the platforms works exactly as it does now. Add one and those appear.",
+    keys: ["GOOGLE_API_KEY", "DEFAULT_MODEL"],
   },
   {
     title: "Tracing",
@@ -44,12 +45,12 @@ const GROUPS: { title: string; note: string; keys: string[] }[] = [
   },
   {
     title: "Advanced",
-    note: "Rarely worth changing; each already has the shown value as its default.",
+    note: "Rarely worth changing. Each field shows the value already in force; typing replaces it.",
     keys: ["LOG_LEVEL", "NBA_API_DELAY", "NBA_CACHE_FILE", "SLEEPER_CACHE_FILE", "FPL_CACHE_FILE", "YAHOO_TOKEN_FILE"],
   },
 ];
 
-export function SettingsPanel() {
+export function SettingsPanel({ onBack }: { onBack: () => void }) {
   const queryClient = useQueryClient();
   const settings = useQuery<Setting[], Error>({ queryKey: ["settings"], queryFn: api.settings });
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -78,9 +79,24 @@ export function SettingsPanel() {
   return (
     <>
       <PageHeader title="Settings" meta="Written to .env and applied immediately">
-        <Button variant="primary" disabled={!pending || save.isPending} onClick={() => save.mutate(drafts)}>
-          {save.isPending ? "Saving…" : pending ? `Save ${pending}` : "Saved"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" onClick={onBack}>
+            <ArrowLeft />
+            Back
+          </Button>
+          <Button
+            variant="primary"
+            disabled={!pending || save.isPending}
+            onClick={() => save.mutate(drafts)}
+            // The count belongs on the rows that changed, not on the control:
+            // the button does one thing whether it is saving one field or six.
+            aria-label={pending ? `Save ${pending} changes` : "Saved"}
+            title={pending ? `Save ${pending} change${pending === 1 ? "" : "s"}` : "Nothing to save"}
+          >
+            {pending ? <Save /> : <Check />}
+            {save.isPending ? "Saving…" : "Save"}
+          </Button>
+        </div>
       </PageHeader>
 
       {settings.isError && <ErrorNote error={settings.error} />}
@@ -177,6 +193,11 @@ function Row({
     <label className="grid grid-cols-1 items-baseline gap-1.5 border-b border-border/45 py-2.5 last:border-b-0 sm:grid-cols-[16rem_minmax(0,1fr)] sm:gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <code className="font-mono text-[12px] text-foreground">{setting.key}</code>
+        {draft !== undefined && (
+          <Badge variant="info" appearance="status">
+            unsaved
+          </Badge>
+        )}
         {setting.secret && (
           <Badge variant={setting.present ? "ok" : "muted"} appearance="status">
             {setting.present ? "set" : "not set"}
@@ -245,7 +266,13 @@ function Control({
       onChange={(e) => onChange(e.target.value)}
       // A secret's characters never reach the client, so there is nothing to
       // show as a current value — only whether one exists.
-      placeholder={setting.secret ? (setting.present ? "•••••••• — type to replace" : "not set") : "not set"}
+      placeholder={
+        setting.secret
+          ? setting.present
+            ? "•••••••• — type to replace"
+            : "not set"
+          : setting.effective || "not set"
+      }
       className={FIELD}
     />
   );

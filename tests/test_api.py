@@ -477,3 +477,25 @@ class _SummaryProvider(FakeProvider):
 
     def summary(self, league_id: str) -> Any:
         return self._summary
+
+
+def test_a_setting_with_a_default_is_not_reported_as_unset(settings_client: TestClient) -> None:
+    """An empty field with a default behind it is in force, and showing it as
+    unset invites someone to type the value it already has."""
+    entry = next(s for s in settings_client.get("/api/settings").json() if s["key"] == "LOG_LEVEL")
+
+    assert entry["value"] == ""  # nothing in .env
+    assert entry["effective"] == "INFO"  # but this is what runs
+
+
+def test_a_secrets_effective_value_is_withheld_too(
+    settings_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Otherwise the placeholder would print the key the field exists to hide."""
+    from the_front_office.config.settings import settings
+
+    monkeypatch.setattr(settings, "gemini_api_key", "super-secret-value")
+    entry = next(s for s in settings_client.get("/api/settings").json() if s["key"] == "GOOGLE_API_KEY")
+
+    assert entry["effective"] == ""
+    assert entry["present"] is True

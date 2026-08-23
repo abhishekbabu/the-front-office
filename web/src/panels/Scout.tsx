@@ -21,8 +21,8 @@ export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) 
   const [open, setOpen] = useState<string | null>(null);
 
   const week = useQuery<Summary, Error>({
-    queryKey: ["summary", sport.sport, league.league_id],
-    queryFn: () => api.summary(sport.sport, league.league_id),
+    queryKey: ["summary", sport.key, league.league_id],
+    queryFn: () => api.summary(sport.key, league.league_id),
   });
 
   return (
@@ -106,7 +106,7 @@ export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) 
 
       {open && (
         <PlayerPanel
-          sport={sport.sport}
+          sport={sport.key}
           league={league.league_id}
           playerId={open}
           onClose={() => setOpen(null)}

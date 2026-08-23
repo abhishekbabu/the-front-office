@@ -22,9 +22,20 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class SportEntry:
-    """One registered sport."""
+    """One sport on one platform.
+
+    Keyed by the pair, not by the sport: the same sport runs on more than one
+    platform — basketball on Yahoo and on Sleeper — and those are separate
+    accounts, separate credentials and separate leagues. A registry keyed by
+    sport alone can hold only one of them, and quietly loses the rest.
+    """
 
     sport: str
+    """Short key for the game itself: 'nba', 'nfl', 'fpl'."""
+
+    platform: str
+    """Where these leagues live: 'yahoo', 'sleeper', 'fpl'."""
+
     label: str
     build: Callable[[], SportProvider]
     is_configured: Callable[[], bool]
@@ -47,6 +58,15 @@ class SportEntry:
     adding trade support to a sport is a flag rather than a hunt through the CLI
     and the UI.
     """
+
+    @property
+    def key(self) -> str:
+        """What identifies this entry everywhere outside the registry.
+
+        A sport alone is ambiguous once two platforms carry it, so every route,
+        picker and stored preference uses the pair.
+        """
+        return f"{self.sport}-{self.platform}"
 
 
 def _build_nfl() -> SportProvider:
@@ -99,6 +119,7 @@ def _build_nba() -> SportProvider:
 REGISTRY: tuple[SportEntry, ...] = (
     SportEntry(
         sport="nba",
+        platform="yahoo",
         label="NBA (Yahoo)",
         build=_build_nba,
         is_configured=lambda: bool(settings.yahoo_client_id and settings.yahoo_client_secret),
@@ -108,6 +129,7 @@ REGISTRY: tuple[SportEntry, ...] = (
     ),
     SportEntry(
         sport="nfl",
+        platform="sleeper",
         label="NFL (Sleeper)",
         build=_build_nfl,
         is_configured=lambda: bool(settings.sleeper_username),
@@ -116,6 +138,7 @@ REGISTRY: tuple[SportEntry, ...] = (
     ),
     SportEntry(
         sport="fpl",
+        platform="fpl",
         label="FPL (Fantasy Premier League)",
         build=_build_fpl,
         is_configured=lambda: bool(settings.fpl_entry_id),
@@ -141,9 +164,18 @@ def requirements_summary() -> str:
     return "; ".join(f"{e.label}: {e.requires}" for e in REGISTRY)
 
 
-def find(sport: str) -> SportEntry | None:
-    key = sport.lower().lstrip("/")
-    return next((e for e in REGISTRY if e.sport == key), None)
+def find(key: str) -> SportEntry | None:
+    """The entry a token names, by pair or by sport alone.
+
+    Typing "nba" stays meaningful while only one platform carries it, and
+    becomes the first of them once two do — which is why anything that has to
+    be unambiguous, like a route, uses the pair.
+    """
+    token = key.lower().lstrip("/")
+    return next(
+        (e for e in REGISTRY if e.key == token),
+        next((e for e in REGISTRY if e.sport == token), None),
+    )
 
 
 # ── models and engines ──────────────────────────────────────────────────

@@ -19,15 +19,15 @@ def available_sports() -> list[SportEntry]:
     return configured_sports()
 
 
-def build_provider(sport: str) -> Any:
-    """Construct the provider for `sport`, or raise if it is not configured.
+def build_provider(key: str) -> Any:
+    """Construct the provider for a registry key, or raise if unavailable.
 
     Deferred until a sport is actually chosen: constructing the NBA provider
     opens a Yahoo OAuth flow, which a football-only user must never sit through.
     """
-    entry = find(sport)
+    entry = find(key)
     if entry is None:
-        raise LeagueNotFoundError(f"unknown sport {sport!r}")
+        raise LeagueNotFoundError(f"unknown sport {key!r}")
     if not entry.is_configured():
         raise LeagueNotFoundError(f"{entry.label} is not configured — set {entry.requires} in .env")
     return entry.build()

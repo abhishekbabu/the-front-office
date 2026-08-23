@@ -32,22 +32,29 @@ export default function App() {
   // their absence, because from the outside there is nothing missing.
   const capabilities = useQuery({ queryKey: ["capabilities"], queryFn: api.capabilities });
   const ai = capabilities.data?.ai ?? false;
+
+  // How many platforms carry each sport, so the rail shows the platform only
+  // where it distinguishes something.
+  const sportCounts = (sports.data ?? []).reduce<Record<string, number>>((counts, s) => {
+    counts[s.sport] = (counts[s.sport] ?? 0) + 1;
+    return counts;
+  }, {});
   // Ready, not merely configured: credentials being set says nothing about
   // whether a platform will actually answer.
   const usable = useMemo(() => (sports.data ?? []).filter((s) => s.ready), [sports.data]);
   // No fallback to the first configured sport: until one is chosen the landing
   // page is what shows, and choosing for the user is what it exists to avoid.
-  const active: Sport | undefined = usable.find((s) => s.sport === sport);
+  const active: Sport | undefined = usable.find((s) => s.key === sport);
 
   const leagues = useQuery({
-    queryKey: ["leagues", active?.sport],
-    queryFn: () => api.leagues(active!.sport),
+    queryKey: ["leagues", active?.key],
+    queryFn: () => api.leagues(active!.key),
     enabled: Boolean(active),
   });
   const league: League | undefined = (leagues.data ?? []).find((l) => l.league_id === leagueId) ?? leagues.data?.[0];
 
   // A sport that cannot trade must not leave the tab selected behind it.
-  const panelKey = `${active?.sport}:${league?.league_id}`;
+  const panelKey = `${active?.key}:${league?.league_id}`;
   const views: SportView[] = [
     "scout",
     "team",
@@ -75,8 +82,8 @@ export default function App() {
           {sports.isLoading && <Skeleton className="mx-2 h-7" />}
           {(sports.data ?? []).map((s) => (
             <RailItem
-              key={s.sport}
-              active={s.sport === active?.sport}
+              key={s.key}
+              active={s.key === active?.key}
               disabled={!s.ready}
               title={
                 s.ready
@@ -86,12 +93,13 @@ export default function App() {
                     : `Not configured — set ${s.requires} in .env`
               }
               onClick={() => {
-                setSport(s.sport);
+                setSport(s.key);
                 setLeagueId(null);
                 if (view === "home") setView("scout");
               }}
             >
-              {s.label.replace(/\s*\(.*\)$/, "")}
+              {/* Two platforms under one sport need telling apart; one does not. */}
+              {(sportCounts[s.sport] ?? 0) > 1 ? s.label : s.label.replace(/\s*\(.*\)$/, "")}
               {!s.ready && (
                 <span className="font-mono text-[10px] opacity-60">{s.configured ? "blocked" : "off"}</span>
               )}
@@ -145,7 +153,7 @@ export default function App() {
 
       <main className="min-w-0">
         {view === "settings" ? (
-          <SettingsPanel />
+          <SettingsPanel onBack={() => setView(sport ? "scout" : "home")} />
         ) : sports.isSuccess && usable.length === 0 ? (
           <Empty sports={sports.data} />
         ) : view === "home" ? (
@@ -153,7 +161,7 @@ export default function App() {
             <Landing
               sports={sports.data}
               onPick={(picked, picked_league) => {
-                setSport(picked.sport);
+                setSport(picked.key);
                 setLeagueId(picked_league.league_id);
                 setView("scout");
               }}

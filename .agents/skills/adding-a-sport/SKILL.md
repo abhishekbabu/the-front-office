@@ -71,6 +71,24 @@ projections out of season, a matchup that has not started) should reduce the
 prompt and say so, not raise. Reserve exceptions for things that make the answer
 wrong: no team in the league, an unresolvable player in a trade.
 
+## What each platform already taught us
+
+**FPL.** The only platform that is also its own stats provider: one
+`bootstrap-static` call carries prices, `ep_next` and expected goals, so it joins
+no names and needs no second source. Money stays in tenths of a million until
+displayed — transfer affordability is exact arithmetic. `my-team/{id}` is the one
+authenticated endpoint and is deliberately unused; everything in it derives from
+the public history (`free_transfers`). Head-to-head leagues live in their own
+list, so read both. No trade path: managers transfer against the market.
+
+**Sleeper.** Public and keyless, and used by two sports. Out of season it
+publishes no fixtures at all, so a warning that fires on every player is about
+the calendar rather than the team — only flag a missing game when others have one.
+
+**Yahoo.** Reviews each application before granting Fantasy API access, and an
+unapproved one gets a valid token every endpoint refuses. Never trigger its
+OAuth flow implicitly; it blocks on a browser click.
+
 ## Joining players across platforms
 
 Fantasy platforms and stats providers rarely share identifiers. When joining by

@@ -42,9 +42,15 @@ DIST = PROJECT_ROOT / "web" / "dist"
 
 
 class Sport(BaseModel):
-    """One entry in the sport picker."""
+    """One sport on one platform, as the picker sees it."""
+
+    key: str
+    """Identifies this entry in every route and picker: 'nba-yahoo'."""
 
     sport: str
+    """The game itself, so the client can group two platforms under one heading."""
+
+    platform: str
     label: str
     supports_trades: bool
     configured: bool
@@ -94,6 +100,12 @@ class Setting(BaseModel):
 
     shadowed: bool = False
     """A shell variable is overriding .env, so an edit here will not take effect."""
+
+    effective: str = ""
+    """What is actually in force, including a default nothing has overridden.
+
+    An empty field with a default behind it is not unset, and showing it as
+    such invites someone to type the value it already has."""
 
 
 class SettingsUpdate(BaseModel):
@@ -238,6 +250,7 @@ def _register_routes(app: FastAPI) -> None:
             # A boolean's stored form can be absent while its value is False, so
             # the effective value is shown rather than the raw file text.
             value="" if secret else (_as_text(current) if kind == "boolean" else str(stored)),
+            effective="" if secret else _as_text(current),
             kind=kind,
             choices=choices,
             shadowed=env_file.is_shadowed(key),
@@ -274,7 +287,9 @@ def _register_routes(app: FastAPI) -> None:
             except FrontOfficeError as e:
                 reason, code = str(e), e.code
         return Sport(
+            key=entry.key,
             sport=entry.sport,
+            platform=entry.platform,
             label=entry.label,
             supports_trades=entry.supports_trades,
             configured=configured,

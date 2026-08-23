@@ -7,7 +7,11 @@
  */
 
 export type Sport = {
+  /** Identifies this entry in every route and picker: "nba-yahoo". */
+  key: string;
+  /** The game itself, so two platforms can group under one heading. */
   sport: string;
+  platform: string;
   label: string;
   supports_trades: boolean;
   /** Whether the credentials this sport needs are set. */
@@ -102,6 +106,9 @@ export type Setting = {
   /** Which control to render: text, boolean, integer, number or choice. */
   kind: "text" | "boolean" | "integer" | "number" | "choice";
   choices: string[];
+  /** What is in force, including a default. Shown so an empty field is not
+   *  mistaken for an unset one. */
+  effective: string;
 };
 export type Evaluation = { verdict: TradeVerdict; chat_id: string };
 /** A player as a table row: the sport's own columns, plus what a column cannot be. */

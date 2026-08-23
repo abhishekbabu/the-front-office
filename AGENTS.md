@@ -25,15 +25,13 @@ no `"❌ ..."` string, none of which a caller can tell from a real result. Raise
 Only inbound adapters render errors. `raise ... from e`, and log before raising
 through a module-level `logger = logging.getLogger(__name__)`.
 
-**Dates and times.** Never use naive `datetime.now()` or `date.today()` for
-anything persisted or compared — store aware UTC, convert at the comparison.
-NBA-schedule logic is anchored to `PACIFIC` in the nba_stats client, because
-the league schedules by Pacific and a local clock shifts the boundaries by the
-machine's offset. `datetime.fromisoformat` cannot parse a trailing `Z` on
-Python 3.10; every NBA and FPL timestamp has one, so parse via
-`_parse_timestamp` / `_parse_deadline` rather than directly.
-Keep `GameRecord["date"]` (a game-date label, for window tests) distinct from
-`GameRecord["tipoff_utc"]` (a real instant, for has-it-started tests).
+**Dates and times.** Never naive `datetime.now()` or `date.today()` for anything
+persisted or compared — store aware UTC, convert at the comparison. NBA schedule
+logic anchors to `PACIFIC`, because the league schedules by Pacific and a local
+clock shifts the boundaries. `datetime.fromisoformat` rejects a trailing `Z` on
+3.10 and every NBA and FPL timestamp has one, so parse via `_parse_timestamp` /
+`_parse_deadline`. Keep `GameRecord["date"]` (a label, for window tests) distinct
+from `GameRecord["tipoff_utc"]` (an instant, for has-it-started tests).
 
 **Naming.** `<Platform>Client` for API clients, `<Platform><Sport>Provider` for
 providers, `<Verb>Engine` for use cases, `<What>Error` for domain errors.
@@ -64,15 +62,6 @@ flow implicitly — it blocks on a browser click, so non-interactive callers use
 **Chat history is resent every turn.** Seed follow-ups with a briefing, not the
 generation prompt, and say what was left out.
 
-**FPL.** The only platform that is also its own stats provider — one
-`bootstrap-static` call carries prices, `ep_next` and expected goals — so it
-joins no names and needs no second source. Money stays in the API's tenths of a
-million until it is displayed, because transfer affordability is exact
-arithmetic. `my-team/{id}` is the one authenticated endpoint and is deliberately
-unused: everything in it is derivable from the public history, and the free
-transfer allowance is computed in `free_transfers`. There is no trade path;
-managers transfer against the market, not each other.
-
 **Player identity across platforms.** Yahoo and Sleeper share no identifier, so
 the NBA projection join is by normalized name (`adapters/outbound/sports/nba/
 projections.py`).
@@ -98,11 +87,10 @@ scripts in `scripts/` instead.
 
 **Secrets.** Never commit `.env`, `.yahoofantasy`, or any `.*_cache.json`. Read
 config through the `settings` singleton, never `os.getenv` at a call site.
-`config/env_file.py` is the only writer: it accepts just the keys `AppSettings`
-declares, so a typo is refused rather than written as a line nothing reads, and
-it edits line by line so comments survive. A secret's value must never leave the
-process — report presence, never contents. `reload_settings` mutates the
-singleton in place; rebinding would strand every module that imported it.
+`config/env_file.py` is the only writer: it accepts only keys `AppSettings`
+declares, and edits line by line so comments survive. A secret's value must never
+leave the process — report presence, never contents. `reload_settings` mutates
+the singleton in place; rebinding strands every module that imported it.
 
 **UI.** The API returns the domain models themselves — never a parallel response
 type for something `domain/models.py` already models, or the two drift. Provider
@@ -139,13 +127,13 @@ Sleeper and FPL are both plain public JSON and share `JsonApiClient` — held as
 collaborator, given its own retry policy and domain error, not inherited.
 
 **Telemetry.** All of it lives in `config/telemetry.py`, called once per process
-by each entry point. Never open a span by hand or import `logfire` elsewhere:
-the libraries carrying the latency are auto-instrumented, which keeps tracing out
-of `domain/`, `application/` and the ports. It stays inert without a token
-(`send_to_logfire="if-token-present"`), so the suite and CI need no secret.
-Prompt text is exported only under `LOGFIRE_CAPTURE_PROMPTS`: a prompt carries
-the user's roster, leagues and entry id. Each `logfire.instrument_*` needs its
-matching extra on the dependency, or it imports fine and raises at call time.
+by each entry point. Never open a span by hand or import `logfire` elsewhere: the
+libraries carrying the latency are auto-instrumented, which keeps tracing out of
+`domain/`, `application/` and the ports. It stays inert without a token
+(`send_to_logfire="if-token-present"`), so the suite and CI need no secret. Prompt
+text is exported only under `LOGFIRE_CAPTURE_PROMPTS` — a prompt carries the
+user's roster and leagues. Each `instrument_*` needs its matching dependency
+extra, or it imports fine and raises at call time.
 
 **Headline figures.** `ScoutReport.headline` is filled by the engine from the
 provider's `SportContext`, never by the model, which is told to leave it empty
@@ -158,6 +146,11 @@ the package; `application` imports only `domain`; adapters implement ports;
 Never import an adapter from `domain/` or `application/` — if an engine needs a
 capability, add a port and let `bootstrap` wire it. Engines take their
 collaborators as required arguments rather than constructing defaults.
+
+**Sports and platforms.** The registry is keyed by the pair, not the sport: the
+same sport runs on more than one platform, with separate credentials and
+separate leagues. Address entries by `entry.key` everywhere outside the
+registry; `find` accepts a bare sport only while one platform carries it.
 
 **Adding a sport.** See the `adding-a-sport` skill: a provider under
 `adapters/outbound/sports/`, a prompt template, one `SportEntry` in

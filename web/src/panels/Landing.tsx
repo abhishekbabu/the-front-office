@@ -29,8 +29,8 @@ export function Landing({
   // is already known.
   const results = useQueries({
     queries: configured.map((sport) => ({
-      queryKey: ["leagues", sport.sport],
-      queryFn: () => api.leagues(sport.sport),
+      queryKey: ["leagues", sport.key],
+      queryFn: () => api.leagues(sport.key),
       enabled: sport.ready,
     })),
   });
@@ -51,7 +51,7 @@ export function Landing({
         {configured.map((sport, i) => {
           const result = results[i];
           return (
-            <Card key={sport.sport}>
+            <Card key={sport.key}>
               <CardHeader>
                 <span>{sport.label}</span>
                 {sport.ready && result?.isSuccess && (

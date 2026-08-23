@@ -70,6 +70,7 @@ def fake_entry(
 
     return SportEntry(
         sport=sport,
+        platform=sport,
         label=label,
         build=build or _build,
         is_configured=lambda: True,
@@ -207,6 +208,7 @@ def _entry_with(provider: Any, sport: str = "nfl", trades: bool = False) -> Any:
 
     return SportEntry(
         sport=sport,
+        platform=sport,
         label="NFL (Sleeper)",
         build=lambda: provider,
         is_configured=lambda: True,
@@ -283,6 +285,7 @@ def _tradeable(sport: str) -> Any:
 
     return SportEntry(
         sport=sport,
+        platform=sport,
         label=f"{sport.upper()} label",
         build=_build,
         is_configured=lambda: True,

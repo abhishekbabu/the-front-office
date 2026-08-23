@@ -12,7 +12,7 @@ export function TradePanel({ sport, league }: { sport: Sport; league: League }) 
   const [text, setText] = useState("");
 
   const run = useMutation<Evaluation, Error, string>({
-    mutationFn: (description) => api.trade(sport.sport, league.league_id, description),
+    mutationFn: (description) => api.trade(sport.key, league.league_id, description),
   });
 
   return (

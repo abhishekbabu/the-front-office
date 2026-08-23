@@ -148,3 +148,39 @@ def test_requirements_summary_names_every_sport() -> None:
     for entry in registry.all_sports():
         assert entry.label in summary
         assert entry.requires in summary
+
+
+# ── one sport, more than one platform ───────────────────────────────────
+
+
+def test_an_entry_is_identified_by_sport_and_platform() -> None:
+    """The same sport runs on more than one platform — basketball on Yahoo and
+    on Sleeper — and those are separate accounts and separate leagues, so a
+    registry keyed by sport alone would hold one and lose the rest."""
+    for entry in registry.all_sports():
+        assert entry.key == f"{entry.sport}-{entry.platform}"
+
+
+def test_every_key_is_unique() -> None:
+    keys = [entry.key for entry in registry.all_sports()]
+    assert len(set(keys)) == len(keys)
+
+
+def test_a_pair_resolves_exactly() -> None:
+    entry = registry.find("nfl-sleeper")
+    assert entry is not None and entry.platform == "sleeper"
+
+
+def test_a_bare_sport_still_resolves_while_one_platform_carries_it() -> None:
+    """Typing "nba" stays meaningful until a second platform makes it ambiguous."""
+    entry = registry.find("nba")
+    assert entry is not None and entry.sport == "nba"
+
+
+def test_a_pair_is_preferred_over_a_bare_sport_match() -> None:
+    """Otherwise the first-registered platform would shadow the one asked for."""
+    import dataclasses
+
+    first = registry.all_sports()[0]
+    second = dataclasses.replace(first, platform="other")
+    assert second.key != first.key

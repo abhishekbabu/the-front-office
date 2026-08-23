@@ -33,8 +33,8 @@ export function TeamPanel({ sport, league }: { sport: Sport; league: League }) {
   const [open, setOpen] = useState<string | null>(null);
 
   const roster = useQuery<PlayerCard[], Error>({
-    queryKey: ["roster", sport.sport, league.league_id],
-    queryFn: () => api.roster(sport.sport, league.league_id),
+    queryKey: ["roster", sport.key, league.league_id],
+    queryFn: () => api.roster(sport.key, league.league_id),
   });
 
   // The columns are the sport's own vocabulary, read off the data rather than
@@ -104,7 +104,7 @@ export function TeamPanel({ sport, league }: { sport: Sport; league: League }) {
 
       {open && (
         <PlayerPanel
-          sport={sport.sport}
+          sport={sport.key}
           league={league.league_id}
           playerId={open}
           onClose={() => setOpen(null)}

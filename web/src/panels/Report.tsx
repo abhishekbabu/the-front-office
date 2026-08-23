@@ -14,7 +14,7 @@ import { Chat, Chips, ErrorNote, MoveRow, PageHeader } from "@/panels/shared";
  */
 export function ReportPanel({ sport, league }: { sport: Sport; league: League }) {
   const run = useMutation<Analysis, Error>({
-    mutationFn: () => api.scout(sport.sport, league.league_id),
+    mutationFn: () => api.scout(sport.key, league.league_id),
   });
 
   return (
