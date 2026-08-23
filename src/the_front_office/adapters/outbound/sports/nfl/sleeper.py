@@ -9,6 +9,7 @@ is the only configuration.
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from typing import Any
@@ -17,6 +18,7 @@ from the_front_office.adapters.outbound.platforms.sleeper.client import NFL, Sle
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
     PlayerMeta,
     ScheduledGame,
+    SeasonStats,
     SleeperLeague,
     SleeperRoster,
     Transaction,
@@ -49,6 +51,8 @@ from the_front_office.domain.models import (
     StandingRow,
     Stat,
     StatGroup,
+    StatRow,
+    StatTable,
     Summary,
     Swap,
     TeamRef,
@@ -139,6 +143,10 @@ class _Week:
     best_points: float
     on_bench: float
 
+    is_regular_season: bool = False
+    """Whether the season has actually begun. In preseason every season total
+    is a nought that has not been earned yet."""
+
 
 SCORING_LABELS = {
     "pts_ppr": "Full PPR (1 point per reception)",
@@ -164,17 +172,11 @@ SPLIT_LABELS = (
 )
 
 
-def _split_lines(splits: dict[str, float]) -> list[Stat]:
-    """The production behind the total, skipping what a position never does.
-
-    A quarterback with one reception for minus ten yards is noise, and a
-    running back has no completion percentage at all.
-    """
-    return [
-        Stat(label=label, value=f"{splits[key]:.0f}" if key != "cmp_pct" else f"{splits[key]:.1f}%")
-        for key, label in SPLIT_LABELS
-        if splits.get(key)
-    ]
+def _split_value(key: str, value: float | None) -> str:
+    """A production figure, or nothing where that position never records one."""
+    if not value:
+        return NOT_APPLICABLE
+    return f"{value:.1f}%" if key == "cmp_pct" else f"{value:.0f}"
 
 
 def _date(iso: str) -> date | None:
@@ -230,6 +232,9 @@ FANTASY_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K", "DEF"})
 # Enough to find somebody, few enough to read. Past this the projections are
 # indistinguishable from zero anyway.
 FREE_AGENT_LIMIT = 100
+
+# A period with no answer at all, distinct from a nought, which is an answer.
+NOT_APPLICABLE = "N/A"
 
 REGULAR_SEASON_WEEKS = 18
 # "What did I miss", not the season's whole transaction log.
@@ -421,7 +426,6 @@ class SleeperNFLProvider:
         ]
         if projection and projection.stats:
             groups.append(StatGroup(title="Projected line", stats=_projection_lines(projection.stats)))
-        groups.extend(self._past_seasons(player_id, state))
         groups.append(
             StatGroup(
                 title="Player",
@@ -443,6 +447,7 @@ class SleeperNFLProvider:
             headline=f"{projection.points:.1f} proj pts" if projection else "no projection",
             note=str(meta.get("injury_notes") or injury),
             image_url=PORTRAIT_URL.format(player_id=player_id),
+            tables=[table] if (table := self._season_table(player_id, state)) else [],
             tone="warning" if injury else "neutral",
             groups=groups,
         )
@@ -453,7 +458,8 @@ class SleeperNFLProvider:
         """Price both sides of a trade against the current roster."""
         league = self._league(league_id)
         roster = self._my_roster(league_id)
-        week, season = self._current_week(), self.client.get_state(NFL).season
+        state = self.client.get_state(NFL)
+        week, season = self._current_week(), state.season
 
         projections = self.client.get_projections(season, week, league.scoring_format)
         players = self.client.get_players()
@@ -513,7 +519,8 @@ class SleeperNFLProvider:
         """
         league = self._league(league_id)
         roster = self._my_roster(league_id)
-        week, season = self._current_week(), self.client.get_state(NFL).season
+        state = self.client.get_state(NFL)
+        week, season = self._current_week(), state.season
 
         projections = self.client.get_projections(season, week, league.scoring_format)
         players = self.client.get_players()
@@ -526,6 +533,7 @@ class SleeperNFLProvider:
         best_points = round(lineup_points(best), 1)
 
         return _Week(
+            is_regular_season=state.is_regular_season,
             league=league,
             roster=roster,
             week=week,
@@ -869,43 +877,61 @@ class SleeperNFLProvider:
             bench=[self._spot(p, scheduled, live=live) for p in projected if p.player_id not in starting],
         )
 
-    def _past_seasons(self, player_id: str, state: _Week) -> list[StatGroup]:
-        """What this player has actually done, most recent season first.
+    def _season_table(self, player_id: str, state: _Week) -> StatTable | None:
+        """This season beside the two before it, read across rather than down.
 
         A projection is a guess; these are the seasons it is a guess about, and
-        a page that shows only the guess gives no way to weigh it. Per game
-        rather than total, because a total mostly measures availability.
+        a page showing only the guess gives no way to weigh it. Stacked groups
+        make you hold last year's yards in your head while scrolling to this
+        year's; a row puts them side by side.
 
-        Degrades to nothing: a rookie has no history, and neither does a season
-        Sleeper has not published, which is not a reason to fail the page.
+        Per game as well as total, because a total mostly measures availability
+        — twelve games is not a worse week.
+
+        Degrades to nothing rather than failing the page: a rookie has no
+        history, and neither does a season Sleeper has not published.
         """
         scoring = state.league.scoring_format
-        groups: list[StatGroup] = []
-        for season in self._recent_seasons(state.season):
+        columns = [state.season, *self._recent_seasons(state.season)]
+        by_season: dict[str, SeasonStats | None] = {}
+        for season in columns:
             try:
-                stats = self.client.get_season_stats(season).get(player_id)
+                by_season[season] = self.client.get_season_stats(season).get(player_id)
             except SleeperAPIError as e:
                 logger.warning(f"Skipping {season} totals: {e}")
-                continue
-            if stats is None or not stats.games:
-                continue
-            groups.append(
-                StatGroup(
-                    title=f"{season} season",
-                    stats=[
-                        Stat(label="Per game", value=f"{stats.per_game(scoring):.1f}"),
-                        Stat(label="Total", value=f"{stats.scored(scoring):.1f}"),
-                        Stat(label="Games", value=str(stats.games)),
-                        *(
-                            [Stat(label="Position rank", value=f"#{stats.position_rank}")]
-                            if stats.position_rank
-                            else []
-                        ),
-                        *_split_lines(stats.splits),
-                    ],
-                )
+                by_season[season] = None
+
+        # A season nobody has played yet has no answers, and a column of
+        # noughts claims it does.
+        if not state.is_regular_season:
+            by_season[state.season] = None
+        if not any(stats and stats.games for stats in by_season.values()):
+            return None
+
+        def played(season: str) -> SeasonStats | None:
+            """The season's totals, or nothing where it was never played."""
+            stats = by_season.get(season)
+            return stats if stats and stats.games else None
+
+        def row(label: str, of: Callable[[SeasonStats], str]) -> StatRow:
+            return StatRow(
+                label=label,
+                values=[of(stats) if (stats := played(c)) else NOT_APPLICABLE for c in columns],
             )
-        return groups
+
+        rows = [
+            row("Per game", lambda st: f"{st.per_game(scoring):.1f}"),
+            row("Total", lambda st: f"{st.scored(scoring):.1f}"),
+            row("Games", lambda st: str(st.games)),
+            row("Position rank", lambda st: f"#{st.position_rank}" if st.position_rank else NOT_APPLICABLE),
+        ]
+        # Only the splits somebody actually records: a running back has no
+        # completion percentage, and a whole row of N/A is a row of nothing.
+        for key, label in SPLIT_LABELS:
+            if any(stats and stats.splits.get(key) for stats in by_season.values()):
+                rows.append(row(label, lambda st, k=key: _split_value(k, st.splits.get(k))))
+
+        return StatTable(title="By season", columns=columns, rows=rows)
 
     @staticmethod
     def _recent_seasons(season: str) -> list[str]:

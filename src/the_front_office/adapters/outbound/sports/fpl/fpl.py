@@ -14,6 +14,7 @@ report already recommends.
 """
 
 import logging
+from collections.abc import Callable
 from datetime import datetime
 
 from the_front_office.adapters.outbound.platforms.fpl.client import FPLClient, free_transfers
@@ -24,6 +25,7 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
     H2HMatch,
     LiveStat,
     MiniLeague,
+    PastSeason,
     Player,
     Squad,
     as_millions,
@@ -59,6 +61,8 @@ from the_front_office.domain.models import (
     StandingRow,
     Stat,
     StatGroup,
+    StatRow,
+    StatTable,
     Summary,
     Swap,
     TeamRef,
@@ -74,7 +78,12 @@ PORTRAIT_URL = "https://resources.premierleague.com/premierleague/photos/players
 
 # Three back is a different club and usually a different role; a fourth row
 # adds scrolling rather than judgement.
-PAST_SEASON_LIMIT = 3
+# Two back plus the one in progress is three columns, which fits a drawer and
+# is as far as a player's form is still the same player.
+PAST_SEASON_LIMIT = 2
+
+# A period with no answer at all, distinct from a nought, which is an answer.
+NOT_APPLICABLE = "N/A"
 
 # FPL's own scale runs 1-5; 4 is where its UI starts calling a run hard.
 HARD_FIXTURE = 4
@@ -190,7 +199,6 @@ class FPLProvider:
             raise PlayerNotFoundError([player_id])
 
         upcoming = self.client.upcoming_gameweek()
-        keeper_or_defender = player.position in ("GKP", "DEF")
 
         return PlayerDetail(
             player_id=str(player.id),
@@ -216,31 +224,6 @@ class FPLProvider:
                     ],
                 ),
                 StatGroup(
-                    title="Season",
-                    stats=[
-                        Stat(label="Points", value=str(player.total_points)),
-                        Stat(label="Per game", value=f"{player.points_per_game:.1f}"),
-                        Stat(label="Starts", value=f"{player.starts}"),
-                        Stat(label="Minutes", value=f"{player.minutes:,}"),
-                        Stat(label="Goals", value=str(player.goals)),
-                        Stat(label="Assists", value=str(player.assists)),
-                        *(
-                            [
-                                Stat(label="Clean sheets", value=str(player.clean_sheets)),
-                                Stat(label="Conceded", value=str(player.goals_conceded)),
-                            ]
-                            if keeper_or_defender
-                            else []
-                        ),
-                        *([Stat(label="Saves", value=str(player.saves))] if player.position == "GKP" else []),
-                        Stat(label="Bonus", value=str(player.bonus)),
-                        # The raw score bonus is awarded from, and the better
-                        # signal — bonus itself is capped at three a match.
-                        Stat(label="BPS", value=str(player.bonus_points)),
-                        Stat(label="Cards", value=f"{player.yellow_cards}Y / {player.red_cards}R"),
-                    ],
-                ),
-                StatGroup(
                     title="Underlying",
                     stats=[
                         Stat(label="xG", value=f"{player.expected_goals:.2f}"),
@@ -251,7 +234,6 @@ class FPLProvider:
                     ],
                 ),
                 StatGroup(title="Set pieces", stats=self._set_pieces(player)),
-                *self._past_seasons(player),
                 StatGroup(
                     title="Market",
                     stats=[
@@ -267,51 +249,98 @@ class FPLProvider:
                     ],
                 ),
             ],
+            tables=[table] if (table := self._season_table(player)) else [],
         )
 
-    def _past_seasons(self, player: Player) -> list[StatGroup]:
-        """The seasons behind the price, newest first.
+    def _season_table(self, player: Player) -> StatTable | None:
+        """This season beside the two before it, read across rather than down.
 
         The catalog carries only the season in progress, which in August is a
-        single gameweek — so the page that is meant to justify a £15m striker
-        shows one match. These are finished seasons and cannot change again.
+        single gameweek — so a page meant to justify a £15m striker shows one
+        match, and the question anybody actually has is whether he did it last
+        year. Stacked groups make you hold last year's goals in your head while
+        scrolling to this year's; a row puts them side by side.
 
-        Costs one request, made only when someone opens a player, and degrades
-        to nothing rather than failing the page: a promoted club's signing has
-        no FPL history at all.
+        Costs one request, made only when somebody opens a player, and degrades
+        to the current season alone rather than failing: a promoted club's
+        signing has no FPL history at all.
         """
         try:
-            seasons = self.client.get_past_seasons(player.id)
+            past = self.client.get_past_seasons(player.id)
         except FPLAPIError as e:
             logger.warning(f"Skipping past seasons for {player.name}: {e}")
-            return []
+            past = []
 
+        seasons = list(reversed(past[-PAST_SEASON_LIMIT:]))
+        columns = [self._season_label(seasons)] + [s.season for s in seasons]
+
+        # A season nobody has kicked a ball in has no answers, and a column of
+        # noughts claims it does.
+        started = self._season_started()
         keeper_or_defender = player.position in ("GKP", "DEF")
-        return [
-            StatGroup(
-                title=f"{season.season} season",
-                stats=[
-                    Stat(label="Points", value=str(season.total_points)),
-                    Stat(label="Per start", value=f"{season.points_per_game:.1f}"),
-                    Stat(label="Starts", value=str(season.starts)),
-                    Stat(label="Minutes", value=f"{season.minutes:,}"),
-                    Stat(label="Goals", value=str(season.goals)),
-                    Stat(label="Assists", value=str(season.assists)),
-                    *([Stat(label="Clean sheets", value=str(season.clean_sheets))] if keeper_or_defender else []),
-                    Stat(label="Bonus", value=str(season.bonus)),
-                    Stat(label="xG", value=f"{season.expected_goals:.2f}"),
-                    Stat(label="xA", value=f"{season.expected_assists:.2f}"),
-                    # What the market made of that season, which is the closest
-                    # thing FPL has to a verdict on it.
-                    Stat(
-                        label="Price",
-                        value=f"{as_millions(season.start_cost)} → {as_millions(season.end_cost)}",
-                        tone="good" if season.end_cost > season.start_cost else "neutral",
-                    ),
-                ],
+
+        def row(label: str, current: str, of_past: Callable[[PastSeason], str], tone: Tone = "neutral") -> StatRow:
+            return StatRow(
+                label=label,
+                values=[current if started else NOT_APPLICABLE] + [of_past(s) for s in seasons],
+                tone=tone,
             )
-            for season in reversed(seasons[-PAST_SEASON_LIMIT:])
+
+        rows = [
+            row("Points", str(player.total_points), lambda s: str(s.total_points)),
+            row("Per start", f"{player.points_per_game:.1f}", lambda s: f"{s.points_per_game:.1f}"),
+            row("Starts", str(player.starts), lambda s: str(s.starts)),
+            row("Minutes", f"{player.minutes:,}", lambda s: f"{s.minutes:,}"),
+            row("Goals", str(player.goals), lambda s: str(s.goals)),
+            row("Assists", str(player.assists), lambda s: str(s.assists)),
+            *(
+                [
+                    row("Clean sheets", str(player.clean_sheets), lambda s: str(s.clean_sheets)),
+                    row("Conceded", str(player.goals_conceded), lambda s: str(s.goals_conceded)),
+                ]
+                if keeper_or_defender
+                else []
+            ),
+            *([row("Saves", str(player.saves), lambda s: str(s.saves))] if player.position == "GKP" else []),
+            row("Bonus", str(player.bonus), lambda s: str(s.bonus)),
+            row("xG", f"{player.expected_goals:.2f}", lambda s: f"{s.expected_goals:.2f}"),
+            row("xA", f"{player.expected_assists:.2f}", lambda s: f"{s.expected_assists:.2f}"),
+            # The market's own verdict on a season: what the price did over it.
+            StatRow(
+                label="Price",
+                values=[as_millions(player.cost)]
+                + [f"{as_millions(s.start_cost)} → {as_millions(s.end_cost)}" for s in seasons],
+            ),
         ]
+        return StatTable(title="By season", columns=columns, rows=rows)
+
+    def _season_started(self) -> bool:
+        """Whether this season has produced anything to report yet.
+
+        A gameweek in progress is not a gameweek with totals in it — the
+        catalog is still all noughts until one finishes.
+        """
+        try:
+            return any(gw.finished for gw in self.client.get_gameweeks())
+        except FPLAPIError as e:
+            logger.warning(f"Assuming the season is under way: {e}")
+            return True
+
+    @staticmethod
+    def _season_label(past: list[PastSeason]) -> str:
+        """This season's name, which FPL only ever states about finished ones.
+
+        Derived from the most recent finished season rather than from a clock:
+        a football season spans two calendar years and the changeover is not on
+        a date anybody could hardcode.
+        """
+        if not past:
+            return "This season"
+        try:
+            start, end = past[0].season.split("/")
+            return f"{int(start) + 1}/{int(end) + 1:02d}"
+        except (ValueError, IndexError):
+            return "This season"
 
     def _fixture_line(self, player: Player, gameweek: int) -> str:
         return self._fixtures_by_club([player], gameweek).get(player.team, "no fixture")

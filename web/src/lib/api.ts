@@ -171,6 +171,19 @@ export type LeagueSchedule = {
   activity: ActivityRow[];
 };
 
+export type StatRow = {
+  label: string;
+  /** One per column, in the same order. "N/A" where that column has no answer. */
+  values: string[];
+  tone: Tone;
+};
+
+export type StatTable = {
+  title: string;
+  columns: string[];
+  rows: StatRow[];
+};
+
 export type PlayerDetail = {
   player_id: string;
   name: string;
@@ -181,6 +194,7 @@ export type PlayerDetail = {
   image_url: string;
   tone: Tone;
   groups: StatGroup[];
+  tables: StatTable[];
 };
 
 /**

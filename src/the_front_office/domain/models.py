@@ -115,6 +115,32 @@ class StatGroup(BaseModel):
     stats: list[Stat] = Field(default_factory=list)
 
 
+class StatRow(BaseModel):
+    """One measure, across every column of a table."""
+
+    label: str
+    values: list[str] = Field(
+        description=(
+            "One per column, in the same order. 'N/A' where that column has no answer — "
+            "distinct from '0', which is an answer."
+        )
+    )
+    tone: Tone = "neutral"
+
+
+class StatTable(BaseModel):
+    """The same measures across several periods, so they can be read across.
+
+    A stack of per-season groups makes you hold last year's goals in your head
+    while you scroll to this year's. A table puts them on one line, which is
+    the whole reason anybody looks at more than one season.
+    """
+
+    title: str
+    columns: list[str] = Field(description="Period labels, newest first: ['2026/27', '2025/26', '2024/25'].")
+    rows: list[StatRow] = Field(default_factory=list)
+
+
 class PlayerDetail(BaseModel):
     """Everything worth knowing about one player, on demand.
 
@@ -138,6 +164,10 @@ class PlayerDetail(BaseModel):
     )
     tone: Tone = "neutral"
     groups: list[StatGroup] = Field(default_factory=list)
+    tables: list[StatTable] = Field(
+        default_factory=list,
+        description="Comparisons across periods, which a list of groups cannot show.",
+    )
 
 
 class Swap(BaseModel):

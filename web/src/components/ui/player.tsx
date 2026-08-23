@@ -5,7 +5,7 @@ import { AnimatePresence, m } from "motion/react";
 import { fade, list, listItem, slideOver } from "@/lib/motion";
 import { IconButton } from "@/components/ui/icon-button";
 import { Loading } from "@/components/ui/state";
-import { api, type PlayerDetail } from "@/lib/api";
+import { api, type PlayerDetail, type StatTable } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,69 @@ import { cn } from "@/lib/utils";
  * component would take this AnimatePresence down with it, and an exit
  * animation cannot play from a tree that has already gone.
  */
+/**
+ * The same measures across several seasons, read across.
+ *
+ * The figures are the point, so they are right-aligned and tabular and the
+ * column headings sit above them; the label column is the only thing on the
+ * left. Scrolls inside itself rather than widening the drawer — three seasons
+ * fit, and a fourth would not.
+ */
+function SeasonTable({ table }: { table: StatTable }) {
+  return (
+    <div className="overflow-x-auto rounded-md border border-border">
+      <table className="w-full border-collapse text-[13px]">
+        <thead>
+          <tr className="border-b border-border">
+            <th className="px-3 py-2 text-left font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              {/* The row labels need no heading; the seasons do. */}
+            </th>
+            {table.columns.map((column, i) => (
+              <th
+                key={column}
+                className={cn(
+                  "px-3 py-2 text-right font-mono text-[11px] font-semibold tabular-nums",
+                  // The season in progress is the one being compared against,
+                  // so it reads as the subject rather than another column.
+                  i === 0 ? "text-foreground" : "text-muted-foreground",
+                )}
+              >
+                {column}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((row) => (
+            <tr key={row.label} className="border-b border-border/45 last:border-b-0">
+              <th
+                scope="row"
+                className="whitespace-nowrap px-3 py-1.5 text-left text-[13px] font-normal text-muted-foreground"
+              >
+                {row.label}
+              </th>
+              {row.values.map((value, i) => (
+                <td
+                  key={`${row.label}-${i}`}
+                  className={cn(
+                    "whitespace-nowrap px-3 py-1.5 text-right font-mono text-[12.5px] tabular-nums",
+                    // Nothing to report reads as absence, not as a figure.
+                    value === "N/A" && "text-muted-foreground/50",
+                    row.tone === "good" && "text-ok",
+                    row.tone === "warning" && "text-warn",
+                  )}
+                >
+                  {value}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /**
  * A player's face, where the platform has one.
  *
@@ -130,6 +193,15 @@ export function PlayerPanel({
                   </Badge>
                 )}
               </m.div>
+
+              {player.data.tables.map((table) => (
+                <m.section key={table.title} variants={listItem}>
+                  <h3 className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    {table.title}
+                  </h3>
+                  <SeasonTable table={table} />
+                </m.section>
+              ))}
 
               {player.data.groups.map((group) => (
                 <m.section key={group.title} variants={listItem}>

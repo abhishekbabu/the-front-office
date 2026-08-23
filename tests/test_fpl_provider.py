@@ -120,6 +120,8 @@ DEFAULT_PAST_SEASONS = [
         goals=20,
         assists=5,
         clean_sheets=2,
+        goals_conceded=30,
+        saves=0,
         bonus=20,
         expected_goals=18.5,
         expected_assists=4.1,
@@ -134,6 +136,8 @@ DEFAULT_PAST_SEASONS = [
         goals=24,
         assists=7,
         clean_sheets=3,
+        goals_conceded=26,
+        saves=0,
         bonus=28,
         expected_goals=22.0,
         expected_assists=5.5,
@@ -637,15 +641,7 @@ def test_a_players_numbers_are_grouped_rather_than_listed() -> None:
     be read without looking for anything."""
     titles = [group.title for group in provider().player(LEAGUE_ID, "8").groups]
 
-    assert titles == [
-        "This week",
-        "Season",
-        "Underlying",
-        "Set pieces",
-        "2024/25 season",
-        "2023/24 season",
-        "Market",
-    ]
+    assert titles == ["This week", "Underlying", "Set pieces", "Market"]
 
 
 def test_set_pieces_list_only_the_duties_actually_held() -> None:
@@ -670,48 +666,67 @@ def test_a_player_on_no_set_pieces_says_so_once() -> None:
 
 def test_a_keeper_gets_the_numbers_only_a_keeper_has() -> None:
     """Saves on an attacker is a zero nobody asked for."""
-    labels = {s.label for g in provider().player(LEAGUE_ID, "1").groups for s in g.stats}
+    labels = {row.label for row in provider().player(LEAGUE_ID, "1").tables[0].rows}
     assert {"Saves", "Clean sheets", "Conceded"} <= labels
 
 
 def test_an_attacker_is_not_given_a_keepers_line() -> None:
-    labels = {s.label for g in provider().player(LEAGUE_ID, "13").groups for s in g.stats}
+    labels = {row.label for row in provider().player(LEAGUE_ID, "13").tables[0].rows}
     assert "Saves" not in labels
 
 
 # ── the seasons behind the price ────────────────────────────────────────
 
 
-def test_past_seasons_are_listed_newest_first() -> None:
-    """The catalog carries only the season in progress, which in August is one
-    gameweek — so a £15m striker is justified by a single match without these."""
-    titles = [g.title for g in provider().player(LEAGUE_ID, "8").groups if g.title.endswith("season")]
+def _season_table(**kwargs: object) -> dict[str, list[str]]:
+    """The by-season table as {row label: values}, columns newest first."""
+    detail = provider(**kwargs).player(LEAGUE_ID, "8")
+    table = detail.tables[0]
+    return {"__columns__": table.columns, **{row.label: row.values for row in table.rows}}
 
-    assert titles == ["2024/25 season", "2023/24 season"]
+
+def test_the_seasons_are_columns_so_they_can_be_read_across() -> None:
+    """A stack makes you hold last year's goals in your head while scrolling
+    to this year's."""
+    table = _season_table()
+
+    assert table["__columns__"] == ["2025/26", "2024/25", "2023/24"]
 
 
-def test_a_past_season_is_scored_per_start_not_per_appearance() -> None:
+def test_the_current_season_leads_the_table() -> None:
+    """It is the one the others are being compared against."""
+    assert _season_table()["__columns__"][0] == "2025/26"
+
+
+def test_a_season_nobody_has_played_yet_reports_nothing() -> None:
+    """A column of noughts claims the season has answers it does not have."""
+    table = _season_table()
+
+    assert table["Points"][0] == "N/A"
+    assert table["Goals"][0] == "N/A"
+
+
+def test_a_finished_season_is_scored_per_start_not_per_appearance() -> None:
     """A substitute cameo and a full ninety are not the same denominator."""
-    groups = {g.title: g for g in provider().player(LEAGUE_ID, "8").groups}
-
-    per_start = next(s for s in groups["2024/25 season"].stats if s.label == "Per start")
-    assert per_start.value == f"{210 / 33:.1f}"
+    assert _season_table()["Per start"][1] == f"{210 / 33:.1f}"
 
 
-def test_a_past_season_carries_the_markets_verdict_on_it() -> None:
-    """What the price did over the season is the closest thing FPL has to one."""
-    groups = {g.title: g for g in provider().player(LEAGUE_ID, "8").groups}
-
-    price = next(s for s in groups["2024/25 season"].stats if s.label == "Price")
-    assert price.value == "£11.8m → £12.4m"
-    assert price.tone == "good"
+def test_a_finished_season_carries_the_markets_verdict_on_it() -> None:
+    """What the price did over it is the closest thing FPL has to one."""
+    assert _season_table()["Price"][1] == "£11.8m → £12.4m"
 
 
-def test_a_player_with_no_history_simply_has_none() -> None:
+def test_a_price_is_known_whether_or_not_the_season_has_started() -> None:
+    """Unlike a total, it is a fact about today rather than an accumulation —
+    N/A against a number the market view shows would be wrong."""
+    assert _season_table()["Price"][0] == "£5.0m"
+
+
+def test_a_player_with_no_history_still_gets_a_column_for_this_season() -> None:
     """A promoted club's signing has no FPL record, which is not an error."""
-    groups = provider(past_seasons=[]).player(LEAGUE_ID, "8").groups
+    table = _season_table(past_seasons=[])
 
-    assert not [g for g in groups if g.title.endswith("season")]
+    assert table["__columns__"] == ["This season"]
 
 
 def test_a_failed_history_lookup_does_not_take_the_player_down() -> None:
@@ -719,7 +734,7 @@ def test_a_failed_history_lookup_does_not_take_the_player_down() -> None:
     detail = provider(past_seasons_error=FPLAPIError("down")).player(LEAGUE_ID, "8")
 
     assert detail.name
-    assert not [g for g in detail.groups if g.title.endswith("season")]
+    assert detail.tables[0].columns == ["This season"]
 
 
 def test_a_player_carries_a_portrait_keyed_by_optas_code() -> None:

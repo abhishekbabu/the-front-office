@@ -582,27 +582,40 @@ HISTORY = {
 }
 
 
-def test_past_seasons_are_listed_newest_first() -> None:
-    """A projection is a guess; these are the seasons it is a guess about."""
+def _table(client: FakeSleeper, player_id: str = "qb1") -> dict[str, Any]:
+    """The by-season table as {row label: values}, columns newest first."""
+    table = _provider(client).player("L1", player_id).tables[0]
+    return {"__columns__": table.columns, **{row.label: row.values for row in table.rows}}
+
+
+def test_the_seasons_are_columns_so_they_can_be_read_across() -> None:
+    """A stack makes you hold last year's yards in your head while scrolling
+    to this year's."""
     client = FakeSleeper(projections=DEFAULT_PROJECTIONS, season_stats=HISTORY)
 
-    titles = [g.title for g in _provider(client).player("L1", "qb1").groups if g.title.endswith("season")]
-
-    assert titles == ["2025 season", "2024 season"]
+    assert _table(client)["__columns__"] == ["2026", "2025", "2024"]
 
 
-def test_a_past_season_is_scored_per_game_not_only_as_a_total() -> None:
+def test_a_season_nobody_has_played_yet_reports_nothing() -> None:
+    """The fake sits in the regular season but has no 2026 totals, which is
+    every August: a column of noughts claims answers it does not have."""
+    client = FakeSleeper(projections=DEFAULT_PROJECTIONS, season_stats=HISTORY)
+
+    table = _table(client)
+    assert table["Total"][0] == "N/A"
+    assert table["Games"][0] == "N/A"
+
+
+def test_a_finished_season_is_scored_per_game_not_only_as_a_total() -> None:
     """A total mostly measures availability: 12 games is not a worse week."""
     client = FakeSleeper(projections=DEFAULT_PROJECTIONS, season_stats=HISTORY)
 
-    groups = {g.title: g for g in _provider(client).player("L1", "qb1").groups}
-    stats = {s.label: s.value for s in groups["2024 season"].stats}
-
-    assert stats["Per game"] == f"{210.0 / 12:.1f}"
-    assert stats["Games"] == "12"
+    table = _table(client)
+    assert table["Per game"][2] == f"{210.0 / 12:.1f}"
+    assert table["Games"][2] == "12"
 
 
-def test_a_past_season_is_scored_in_the_leagues_own_currency() -> None:
+def test_a_season_is_scored_in_the_leagues_own_currency() -> None:
     """75 receptions is 37.5 points between full PPR and standard."""
     league = SleeperLeague(
         league_id="L1",
@@ -614,29 +627,23 @@ def test_a_past_season_is_scored_in_the_leagues_own_currency() -> None:
     )
     client = FakeSleeper(projections=DEFAULT_PROJECTIONS, season_stats=HISTORY, league=league)
 
-    groups = {g.title: g for g in _provider(client).player("L1", "qb1").groups}
-    total = next(s for s in groups["2025 season"].stats if s.label == "Total")
-
-    assert total.value == "300.0"  # pts_std, not pts_ppr
+    assert _table(client)["Total"][1] == "300.0"  # pts_std, not pts_ppr
 
 
-def test_a_split_a_position_never_records_is_left_out() -> None:
-    """A running back has no completion percentage at all."""
+def test_a_split_a_position_never_records_has_no_row_at_all() -> None:
+    """A running back has no completion percentage, and a whole row of N/A is
+    a row of nothing."""
     client = FakeSleeper(projections=DEFAULT_PROJECTIONS, season_stats=HISTORY)
 
-    groups = {g.title: g for g in _provider(client).player("L1", "qb1").groups}
-    labels = {s.label for s in groups["2025 season"].stats}
-
-    assert "Passing yards" in labels
-    assert "Receptions" not in labels
+    table = _table(client)
+    assert "Passing yards" in table
+    assert "Receptions" not in table
 
 
-def test_a_rookie_simply_has_no_history() -> None:
+def test_a_rookie_gets_no_table_rather_than_a_table_of_nothing() -> None:
     client = FakeSleeper(projections=DEFAULT_PROJECTIONS, season_stats={})
 
-    groups = _provider(client).player("L1", "qb1").groups
-
-    assert not [g for g in groups if g.title.endswith("season")]
+    assert _provider(client).player("L1", "qb1").tables == []
 
 
 def test_a_failed_history_lookup_does_not_take_the_player_down() -> None:
@@ -646,7 +653,7 @@ def test_a_failed_history_lookup_does_not_take_the_player_down() -> None:
     detail = _provider(client).player("L1", "qb1")
 
     assert detail.name == "Star QB"
-    assert not [g for g in detail.groups if g.title.endswith("season")]
+    assert detail.tables == []
 
 
 def test_a_player_carries_a_portrait_from_sleepers_own_cdn() -> None:
