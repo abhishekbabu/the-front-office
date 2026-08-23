@@ -146,10 +146,13 @@ It is separate because the handshake blocks on a browser click, which a web
 request handler cannot do — so every non-interactive path reports a missing
 token instead of trying to obtain one.
 
-Your Yahoo app must have **API Permissions → Fantasy Sports → Read**. Without
-it every endpoint returns 403 with only "this application is not authorized",
-which reads like a bad token; changing the permission also requires deleting
-`.yahoofantasy` and logging in again, since the old token keeps the old scopes.
+Your Yahoo app must have **API Permissions → Fantasy Sports → Read**, *saved*.
+Yahoo fixes a token's grant at the moment you authorise, from whatever
+permissions were saved then — so a token minted before that is accepted and
+permitted nothing, answering 403 (not 401) on every endpoint including ones
+needing no permission at all. A refresh cannot widen a grant, so the only fix is
+`just yahoo-login --force`. The login verifies itself and says so rather than
+reporting success on an inert token.
 
 | Command | Description |
 |---------|-------------|

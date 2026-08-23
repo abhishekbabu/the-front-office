@@ -36,10 +36,12 @@ class YahooAuthError(FrontOfficeError):
 
     def __init__(self) -> None:
         super().__init__(
-            "Yahoo refused the request: this application is not authorised for Fantasy Sports. "
-            "At https://developer.yahoo.com/apps/ open your app, set API Permissions → "
-            "Fantasy Sports → Read, then delete .yahoofantasy and run `just yahoo-login` — "
-            "the existing token was granted under the old permissions and keeps them."
+            "Yahoo accepted the token and granted it nothing: every endpoint returns 403, "
+            "including ones that need no permission at all. The grant is fixed when you "
+            "authorise, from whatever API permissions the app had saved at that moment, and "
+            "a refresh cannot widen it. Confirm API Permissions → Fantasy Sports → Read is "
+            "saved at https://developer.yahoo.com/apps/ (the Update button, not just the "
+            "checkbox), then run `just yahoo-login --force` to obtain a new grant."
         )
 
 

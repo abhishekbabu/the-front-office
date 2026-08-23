@@ -1,11 +1,15 @@
 """Authorise this machine with Yahoo, once.
 
 The OAuth2 handshake opens a browser and waits for a click, so it cannot run
-inside the web server or anywhere else non-interactive — those paths report that
-a token is missing and point here. The token lands in `.yahoofantasy` and is
-reused until it is deleted.
+inside the web server or anywhere else non-interactive — those paths report a
+missing token and point here. The token is cached in `.yahoofantasy`.
 
-Run with `just yahoo-login`.
+The login is verified before reporting success. Yahoo will hand back a token
+that authenticates and yet permits nothing, if the developer app had no API
+permissions saved at the moment you authorised; announcing "logged in" and
+letting the first report fail is how an afternoon disappears.
+
+Run with `just yahoo-login`, or `just yahoo-login --force` to replace a token.
 """
 
 import sys
@@ -16,24 +20,41 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient  # noqa: E402
 from the_front_office.config.logging import setup_logging  # noqa: E402
+from the_front_office.config.settings import settings  # noqa: E402
 from the_front_office.domain.errors import FrontOfficeError  # noqa: E402
 
 
 def main() -> int:
     setup_logging()
     force = "--force" in sys.argv
+    token = Path(settings.yahoo_token_file)
 
-    if YahooClient._token_exists() and not force:
-        print("  Already authorised. Pass --force to replace the cached token.")
-        return 0
+    if token.exists() and not force:
+        print("  Already authorised. Checking the token still works…")
+        return _verify()
+
+    if token.exists():
+        # Discarded rather than overwritten: a re-authorisation exists to obtain
+        # a *new* grant, and leaving the old one in place invites reusing it.
+        token.unlink()
+        print(f"  Removed {token}.")
 
     print("  A browser window will open — authorise the app there.")
     try:
-        YahooClient.login(force=force)
+        YahooClient.login(force=True)
     except FrontOfficeError as e:
         print(f"  ❌ {e}")
         return 1
-    print("  ✅ Authorised. The token is cached in .yahoofantasy.")
+    return _verify()
+
+
+def _verify() -> int:
+    try:
+        YahooClient.verify()
+    except FrontOfficeError as e:
+        print(f"  ❌ {e}")
+        return 1
+    print("  ✅ Authorised, and Yahoo accepted a Fantasy Sports read.")
     return 0
 
 

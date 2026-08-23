@@ -47,6 +47,8 @@ def translate(error: Exception) -> FrontOfficeError:
     the problem.
     """
     response = getattr(error, "response", None)
+    # 403 rather than 401 is the tell: Yahoo authenticated the token and then
+    # refused it, which means the grant is empty rather than the token bad.
     if response is not None and getattr(response, "status_code", None) == 403:
         return YahooAuthError()
     return YahooAPIError(f"Yahoo request failed: {error}")
@@ -118,10 +120,38 @@ class YahooClient:
 
     @classmethod
     def get_context(cls) -> Context:
-        """Return an authenticated yahoofantasy Context."""
-        if not cls._token_exists():
-            cls.login()
+        """Return an authorised yahoofantasy Context.
+
+        Reports a missing token rather than starting the browser handshake: this
+        runs inside a request handler as often as from a terminal.
+        """
+        cls.ensure_authorised()
         return Context()
+
+    @classmethod
+    def verify(cls) -> None:
+        """Confirm the cached token can actually read Fantasy Sports.
+
+        A Yahoo authorisation can succeed and still grant nothing: the library
+        requests no scope, so Yahoo derives it from whatever API permissions the
+        app had *at that moment*. The resulting token authenticates — Yahoo
+        answers 403 rather than 401 — and is refused by every endpoint. A
+        refresh cannot repair it either, because a refresh token carries the
+        grant it was issued with.
+
+        Cheap enough to run after every login, which is the only way to tell
+        someone their fresh token is inert before they go looking elsewhere.
+
+        Raises:
+            YahooAuthError: the token carries no Fantasy Sports permission.
+            YahooAPIError: Yahoo could not be reached.
+        """
+        context = cls.get_context()
+        try:
+            context.make_request("users;use_login=1/games")
+        except Exception as e:
+            logger.error(f"Yahoo token verification failed: {e}")
+            raise translate(e) from e
 
     def __init__(self, league: League):
         self.league = league

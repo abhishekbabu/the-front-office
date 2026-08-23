@@ -425,8 +425,8 @@ def test_a_403_names_the_permission_that_is_actually_missing() -> None:
     error = translate(_http(403))
 
     assert isinstance(error, YahooAuthError)
-    assert "Fantasy Sports" in str(error)
-    assert "delete .yahoofantasy" in str(error)
+    assert "granted it nothing" in str(error)
+    assert "yahoo-login --force" in str(error)
 
 
 def test_any_other_failure_stays_a_generic_api_error() -> None:
@@ -485,3 +485,81 @@ def test_login_without_credentials_raises_rather_than_exiting(monkeypatch: pytes
 
     with pytest.raises(YahooAPIError, match="must be set"):
         YahooClient.login()
+
+
+# ── verifying a token really grants something ───────────────────────────
+
+
+def test_verify_passes_when_yahoo_answers(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
+    from the_front_office.config.settings import settings
+
+    token = tmp_path / ".yahoofantasy"
+    token.write_text("cached", encoding="utf-8")
+    monkeypatch.setattr(settings, "yahoo_token_file", str(token))
+    monkeypatch.setattr(
+        YahooClient, "get_context", classmethod(lambda cls: SimpleNamespace(make_request=lambda url: "<games/>"))
+    )
+
+    YahooClient.verify()  # does not raise
+    assert mod  # the module under test, imported for the monkeypatch target
+
+
+def test_a_token_that_authenticates_but_grants_nothing_is_caught(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The failure this exists for.
+
+    Yahoo answers 403 rather than 401, so the token is genuinely authenticated —
+    it simply carries no scope, because the app had no API permissions saved
+    when it was issued. Nothing downstream can tell that apart from a
+    permissions problem, so it has to be caught at the login.
+    """
+    from the_front_office.config.settings import settings
+    from the_front_office.domain.errors import YahooAuthError
+
+    token = tmp_path / ".yahoofantasy"
+    token.write_text("cached", encoding="utf-8")
+    monkeypatch.setattr(settings, "yahoo_token_file", str(token))
+
+    def _refuse(url: str) -> str:
+        raise _http(403)
+
+    monkeypatch.setattr(YahooClient, "get_context", classmethod(lambda cls: SimpleNamespace(make_request=_refuse)))
+
+    with pytest.raises(YahooAuthError, match="granted it nothing"):
+        YahooClient.verify()
+
+
+def test_an_unreachable_yahoo_is_not_reported_as_a_permission_problem(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from the_front_office.config.settings import settings
+    from the_front_office.domain.errors import YahooAPIError, YahooAuthError
+
+    token = tmp_path / ".yahoofantasy"
+    token.write_text("cached", encoding="utf-8")
+    monkeypatch.setattr(settings, "yahoo_token_file", str(token))
+
+    def _down(url: str) -> str:
+        raise requests.exceptions.ConnectionError("no route")
+
+    monkeypatch.setattr(YahooClient, "get_context", classmethod(lambda cls: SimpleNamespace(make_request=_down)))
+
+    with pytest.raises(YahooAPIError) as caught:
+        YahooClient.verify()
+    assert not isinstance(caught.value, YahooAuthError)
+
+
+def test_get_context_never_starts_the_browser_handshake(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """It runs inside a request handler as often as from a terminal."""
+    from the_front_office.config.settings import settings
+    from the_front_office.domain.errors import YahooLoginRequiredError
+
+    monkeypatch.setattr(settings, "yahoo_token_file", str(tmp_path / "absent"))
+    monkeypatch.setattr(
+        YahooClient, "login", classmethod(lambda cls, force=False: pytest.fail("login must not be called"))
+    )
+
+    with pytest.raises(YahooLoginRequiredError):
+        YahooClient.get_context()
