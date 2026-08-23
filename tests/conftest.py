@@ -187,6 +187,17 @@ def _isolate_from_local_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     # that wants an authorized client says so by pointing this somewhere real.
     monkeypatch.setattr(settings, "yahoo_token_file", str(tmp_path / "no-token"))
 
+    # Every disk cache lands under tmp_path too. The suite must not read a cache
+    # this machine happens to have warmed, nor leave one behind that the next
+    # run reads as a hit.
+    for field, name in (
+        ("yahoo_cache_file", "yahoo.json"),
+        ("sleeper_cache_file", "sleeper.json"),
+        ("fpl_cache_file", "fpl.json"),
+        ("nba_cache_file", "nba.json"),
+    ):
+        monkeypatch.setattr(settings, field, str(tmp_path / name))
+
 
 @pytest.fixture
 def fake_ai() -> FakeAI:

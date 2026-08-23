@@ -2,12 +2,14 @@
 
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 from yahoofantasy import Context, League, Player, Team, Week
 from yahoofantasy.api.parse import as_list, from_response_object, parse_response
 
+from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
 from the_front_office.adapters.outbound.platforms.yahoo import oauth
 from the_front_office.adapters.outbound.platforms.yahoo.constants import SCOUT_CATEGORIES, STAT_CATEGORIES
 from the_front_office.adapters.outbound.platforms.yahoo.types import (
@@ -31,6 +33,12 @@ logger = logging.getLogger(__name__)
 # scoreboard drives the "which categories are close" analysis and goes stale
 # within a game night.
 SCOREBOARD_TTL_SECONDS = 120
+
+# TTLs from how fast each answer actually goes stale. Waiver leaders move as
+# the league claims players; a name search resolves to the same player for as
+# long as anyone is looking.
+LEADERS_TTL = timedelta(minutes=30)
+SEARCH_TTL = timedelta(hours=6)
 
 # The eight category queries are independent; Yahoo tolerates this easily and it
 # is the dominant latency in a scout run.
@@ -126,8 +134,14 @@ class YahooClient:
             logger.error(f"Yahoo token verification failed: {e}")
             raise translate(e) from e
 
-    def __init__(self, league: League):
+    def __init__(self, league: League, cache: JsonDiskCache | None = None):
         self.league = league
+        # Our own store rather than the SDK's. Two reasons beyond consistency:
+        # the vendor persists into one shared pickle by read-modify-write, so
+        # concurrent writes clobber each other, and its `_load` takes no expiry
+        # at all — waiver leaders cached once stayed cached until the file was
+        # deleted, which is exactly the data that goes stale fastest.
+        self._cache = cache or JsonDiskCache(Path(settings.yahoo_cache_file))
 
     def _player_query(
         self,
@@ -176,11 +190,10 @@ class YahooClient:
             for stat, stat_name in SCOUT_CATEGORIES.items()
         }
 
-        ctx = self.league.ctx
         cached: dict[str, Any] = {}
         misses: dict[str, tuple[str, str]] = {}
         for stat_name, (query, cache_key) in specs.items():
-            raw = ctx._load(cache_key, default=None)
+            raw = self._cache.get(cache_key, LEADERS_TTL)
             if raw is None:
                 misses[stat_name] = (query, cache_key)
             else:
@@ -202,13 +215,13 @@ class YahooClient:
         return results
 
     def _fetch_raw_parallel(self, misses: dict[str, tuple[str, str]]) -> dict[str, Any]:
-        """Fetch several player queries concurrently, then persist them serially.
+        """Fetch several player queries concurrently, then store them serially.
 
-        Only the HTTP calls are parallel. yahoofantasy's persistence layer does a
-        read-modify-write of one shared pickle file, so concurrent saves would
-        clobber each other — the writes stay on this thread. A token refresh
-        racing across threads is harmless (both get a valid token), but it is
-        forced once up front rather than N times.
+        Only the HTTP calls are parallel; `make_request` is the one part of the
+        SDK that parallelises safely. The writes stay on this thread because the
+        cache file is read-modify-written whole, same as the pickle was. A token
+        refresh racing across threads is harmless (both get a valid token), but
+        it is forced once up front rather than N times.
         """
         ctx = self.league.ctx
         # Refresh the token on this thread first. make_request would do it
@@ -226,13 +239,13 @@ class YahooClient:
             for stat_name, raw in pool.map(_fetch, misses.items()):
                 raw_by_stat[stat_name] = raw
 
-        # Serial: one writer, so the shared pickle cannot be clobbered.
+        # Serial: one writer, so the cache file cannot be clobbered.
         for stat_name, raw in raw_by_stat.items():
             try:
-                parse_response(raw)  # only persist what parses, as _load_or_fetch does
-                ctx._save(misses[stat_name][1], raw)
+                parse_response(raw)  # store only what parses, rather than caching a failure
+                self._cache.set(misses[stat_name][1], raw)
             except Exception as e:
-                logger.warning(f"Not persisting unparseable {stat_name} response: {e}")
+                logger.warning(f"Not storing unparseable {stat_name} response: {e}")
         return raw_by_stat
 
     def get_user_team(self) -> Team:
@@ -342,7 +355,11 @@ class YahooClient:
 
             logger.debug(f"Searching players in league: {query_str}")
 
-            data = self.league.ctx._load_or_fetch(cache_key, query_str)
+            data = self._cache.cached(
+                cache_key,
+                SEARCH_TTL,
+                lambda: self.league.ctx.make_request(query_str, league=self.league.id),
+            )
 
             try:
                 base = data["fantasy_content"]["league"]

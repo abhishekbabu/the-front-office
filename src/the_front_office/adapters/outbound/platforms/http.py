@@ -21,7 +21,7 @@ from typing import Any
 import requests
 from tenacity import Retrying
 
-from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
+from the_front_office.adapters.outbound.platforms.cache import Freshness, JsonDiskCache
 from the_front_office.domain.errors import FrontOfficeError
 
 logger = logging.getLogger(__name__)
@@ -69,19 +69,13 @@ class JsonApiClient:
             logger.error(f"{self._name} request failed ({url}): {e}")
             raise self._error(f"{self._name} request failed: {e}") from e
 
-    def cached(self, key: str, url: str, ttl: timedelta, timeout: int | None = None) -> Any:
+    def cached(self, key: str, url: str, freshness: timedelta | Freshness, timeout: int | None = None) -> Any:
         """The cached value for `key`, fetching and storing it when stale or absent."""
-        hit = self._cache.get(key, ttl)
-        if hit is not None:
-            logger.debug(f"{self._name} cache hit: {key}")
-            return hit
-        value = self.get(url, timeout=timeout)
-        self._cache.set(key, value)
-        return value
+        return self._cache.cached(key, freshness, lambda: self.get(url, timeout=timeout))
 
-    def cache_get(self, key: str, ttl: timedelta) -> Any:
+    def cache_get(self, key: str, freshness: timedelta | Freshness) -> Any:
         """A cache read without a fetch, for a caller that transforms before storing."""
-        return self._cache.get(key, ttl)
+        return self._cache.get(key, freshness)
 
     def cache_set(self, key: str, value: Any) -> None:
         self._cache.set(key, value)

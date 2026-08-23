@@ -1,29 +1,45 @@
 """Tests for the pure logic in NBAStatsClient — no network, no cache file on disk."""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
 
+from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
 from the_front_office.adapters.outbound.platforms.nba_stats.client import (
+    GAMELOG_KEY,
     PACIFIC,
+    SCHEDULE_KEY,
+    SCHEDULE_TTL,
     NBAStatsClient,
     _parse_timestamp,
-    _utc_now,
 )
 from the_front_office.adapters.outbound.platforms.nba_stats.stats import extract_nine_cat
 from the_front_office.adapters.outbound.platforms.nba_stats.types import GameLogRecord
 
 
+class MemoryCache(JsonDiskCache):
+    """The real cache with its disk I/O removed.
+
+    The store's own expiry is what a freshness rule means, so the tests below
+    exercise it rather than a stand-in that could disagree with it.
+    """
+
+    def __init__(self) -> None:
+        self._path = Path("unused")
+        self._data = {}
+
+    def _load(self) -> None:
+        return None
+
+    def _save(self) -> None:
+        return None
+
+
 def _client() -> NBAStatsClient:
-    """An NBAStatsClient with the cache pre-seeded, bypassing __init__'s disk read."""
-    c = NBAStatsClient.__new__(NBAStatsClient)
-    c._last_call_time = 0.0
-    c._cache_data = {
-        "league_gamelog": {"games": {}, "updated_at": ""},
-        "schedule": {"teams": {}, "updated_at": ""},
-    }
-    return c
+    """An NBAStatsClient whose cache never touches disk."""
+    return NBAStatsClient(cache=MemoryCache())
 
 
 def _game(**overrides: float | str) -> GameLogRecord:
@@ -85,40 +101,47 @@ def _pt(y: int, m: int, d: int, hour: int, minute: int = 0) -> datetime:
     return datetime(y, m, d, hour, minute, tzinfo=PACIFIC)
 
 
-def _with_updated_at(ts: datetime | str) -> NBAStatsClient:
+def _stored(ts: datetime) -> NBAStatsClient:
+    """A client whose gamelog was cached at `ts`."""
     c = _client()
-    c._cache_data["league_gamelog"]["updated_at"] = ts if isinstance(ts, str) else ts.isoformat()
+    c._cache.set(GAMELOG_KEY, {"A B": []}, now=ts)
     return c
 
 
-def test_empty_cache_is_stale() -> None:
-    assert _client()._is_league_gamelog_stale() is True
+def _fresh(c: NBAStatsClient, now: datetime) -> bool:
+    """Whether the cache would answer, which is the rule under test."""
+    return c._cache.get(GAMELOG_KEY, c._gamelog_is_fresh, now=now) is not None
 
 
-def test_unparseable_timestamp_is_stale() -> None:
-    assert _with_updated_at("not-a-timestamp")._is_league_gamelog_stale() is True
+def test_an_empty_cache_has_nothing_to_answer_with() -> None:
+    assert _fresh(_client(), _pt(2026, 2, 9, 10)) is False
 
 
-def test_legacy_naive_timestamp_is_stale() -> None:
-    """Pre-fix caches stored a local-clock reading with no zone, so it cannot be
-    placed on a timeline. One refetch on upgrade, then self-healing."""
-    c = _with_updated_at("2026-02-09T14:00:00")
-    assert c._is_league_gamelog_stale(now=_pt(2026, 2, 9, 14, 5)) is True
+def test_an_undateable_entry_is_stale() -> None:
+    """A value with no readable timestamp cannot be placed on a timeline, so it
+    cannot be shown to be fresh. One refetch, then self-healing."""
+    c = _client()
+    c._cache._data[GAMELOG_KEY] = {"stored_at": "not-a-timestamp", "value": {}}
+    assert _fresh(c, _pt(2026, 2, 9, 14, 5)) is False
 
 
-def test_previous_pacific_day_is_stale() -> None:
-    c = _with_updated_at(_pt(2026, 2, 8, 20))
-    assert c._is_league_gamelog_stale(now=_pt(2026, 2, 9, 10)) is True
+def test_a_legacy_naive_timestamp_is_stale() -> None:
+    """Pre-fix caches stored a local-clock reading with no zone."""
+    c = _client()
+    c._cache._data[GAMELOG_KEY] = {"stored_at": "2026-02-09T14:00:00", "value": {}}
+    assert _fresh(c, _pt(2026, 2, 9, 14, 5)) is False
+
+
+def test_a_previous_pacific_day_is_stale() -> None:
+    assert _fresh(_stored(_pt(2026, 2, 8, 20)), _pt(2026, 2, 9, 10)) is False
 
 
 def test_crossing_the_3pm_pacific_boundary_invalidates() -> None:
-    c = _with_updated_at(_pt(2026, 2, 9, 14))
-    assert c._is_league_gamelog_stale(now=_pt(2026, 2, 9, 15, 30)) is True
+    assert _fresh(_stored(_pt(2026, 2, 9, 14)), _pt(2026, 2, 9, 15, 30)) is False
 
 
 def test_same_side_of_a_boundary_stays_fresh() -> None:
-    c = _with_updated_at(_pt(2026, 2, 9, 16))
-    assert c._is_league_gamelog_stale(now=_pt(2026, 2, 9, 17)) is False
+    assert _fresh(_stored(_pt(2026, 2, 9, 16)), _pt(2026, 2, 9, 17)) is True
 
 
 def test_boundaries_are_pacific_regardless_of_local_zone() -> None:
@@ -131,33 +154,29 @@ def test_boundaries_are_pacific_regardless_of_local_zone() -> None:
     written_pt = _pt(2026, 2, 9, 14)
     checked_pt = _pt(2026, 2, 9, 14, 30)
 
-    c = _with_updated_at(written_pt.astimezone(eastern))
-    assert c._is_league_gamelog_stale(now=checked_pt.astimezone(eastern)) is False
+    c = _stored(written_pt.astimezone(eastern))
+    assert _fresh(c, checked_pt.astimezone(eastern)) is True
     # And identical to the PT-expressed answer.
-    assert c._is_league_gamelog_stale(now=checked_pt) is False
+    assert _fresh(c, checked_pt) is True
 
 
-def test_utc_stored_timestamp_is_interpreted_in_pacific() -> None:
+def test_a_utc_stored_timestamp_is_interpreted_in_pacific() -> None:
     """Timestamps are written as UTC; the boundary check must convert."""
     # 2026-02-09 22:00 UTC == 14:00 PST. Checking at 23:30 UTC == 15:30 PST
     # crosses the 15:00 PT boundary.
-    c = _with_updated_at(datetime(2026, 2, 9, 22, 0, tzinfo=timezone.utc))
+    c = _stored(datetime(2026, 2, 9, 22, 0, tzinfo=timezone.utc))
     now = datetime(2026, 2, 9, 23, 30, tzinfo=timezone.utc)
-    assert c._is_league_gamelog_stale(now=now) is True
+    assert _fresh(c, now) is False
 
 
-def test_schedule_age_is_computed_across_zones() -> None:
+def test_the_schedule_expires_on_a_plain_ttl() -> None:
+    """Unlike the gamelog: a season's fixture list has no moment it turns."""
     c = _client()
-    c._cache_data["schedule"]["updated_at"] = datetime(2026, 2, 9, 12, 0, tzinfo=timezone.utc).isoformat()
-    now = datetime(2026, 2, 10, 12, 0, tzinfo=timezone.utc)
-    assert c._get_schedule_age_hours(now=now) == pytest.approx(24.0)
+    stored = datetime(2026, 2, 9, 12, 0, tzinfo=timezone.utc)
+    c._cache.set(SCHEDULE_KEY, {"LAL": []}, now=stored)
 
-
-def test_undateable_schedule_reports_max_age() -> None:
-    assert _client()._get_schedule_age_hours() == 999.0
-    c = _client()
-    c._cache_data["schedule"]["updated_at"] = "2026-02-09T12:00:00"  # naive, legacy
-    assert c._get_schedule_age_hours() == 999.0
+    assert c._cache.get(SCHEDULE_KEY, SCHEDULE_TTL, now=stored + timedelta(hours=23)) is not None
+    assert c._cache.get(SCHEDULE_KEY, SCHEDULE_TTL, now=stored + timedelta(hours=25)) is None
 
 
 # ── get_remaining_games ─────────────────────────────────────────────────
@@ -169,10 +188,7 @@ def _sched_game(day: str, tipoff_utc: str, status: int = 1) -> dict[str, object]
 
 def _schedule_client(games: list[dict[str, object]]) -> NBAStatsClient:
     c = _client()
-    c._cache_data["schedule"] = {
-        "teams": {"LAL": games},  # type: ignore[typeddict-item]
-        "updated_at": _utc_now().isoformat(),
-    }
+    c._schedule = {"LAL": games}  # type: ignore[assignment]
     c._ensure_schedule_loaded = lambda: None  # type: ignore[method-assign]
     return c
 
@@ -274,9 +290,7 @@ def test_unparseable_tipoff_is_skipped_not_counted() -> None:
 def test_bulk_uses_one_instant_for_every_team() -> None:
     now = datetime(2026, 2, 10, 20, 0, tzinfo=timezone.utc)
     c = _schedule_client([_sched_game("2026-02-12", "2026-02-13T03:00:00Z")])
-    c._cache_data["schedule"]["teams"]["BOS"] = [  # type: ignore[typeddict-item]
-        _sched_game("2026-02-12", "2026-02-13T03:00:00Z")
-    ]
+    c._schedule["BOS"] = [_sched_game("2026-02-12", "2026-02-13T03:00:00Z")]  # type: ignore[list-item]
     assert c.get_remaining_games_bulk(["LAL", "bos"], WINDOW_START, WINDOW_END, now=now) == {
         "LAL": 1,
         "BOS": 1,
@@ -287,18 +301,16 @@ def test_bulk_uses_one_instant_for_every_team() -> None:
 
 
 def test_schedule_written_before_tipoff_field_is_refetched() -> None:
-    c = _client()
-    c._cache_data["schedule"] = {
-        "teams": {"LAL": [{"date": "2026-02-10", "status": 1, "home": "LAL", "away": "BOS"}]},  # type: ignore[typeddict-item]
-        "updated_at": _utc_now().isoformat(),
-    }
-    assert c._schedule_predates_tipoff_field() is True
+    """Age is not the only way an entry stops being usable: one written by an
+    older version of this code is fresh and still unreadable."""
+    teams = {"LAL": [{"date": "2026-02-10", "status": 1, "home": "LAL", "away": "BOS"}]}
+    assert NBAStatsClient._predates_tipoff_field(teams) is True  # type: ignore[arg-type]
 
 
 def test_current_shape_is_not_refetched() -> None:
-    c = _schedule_client([_sched_game("2026-02-12", "2026-02-13T03:00:00Z")])
-    assert c._schedule_predates_tipoff_field() is False
+    teams = {"LAL": [_sched_game("2026-02-12", "2026-02-13T03:00:00Z")]}
+    assert NBAStatsClient._predates_tipoff_field(teams) is False  # type: ignore[arg-type]
 
 
 def test_empty_schedule_is_not_treated_as_outdated_shape() -> None:
-    assert _client()._schedule_predates_tipoff_field() is False
+    assert NBAStatsClient._predates_tipoff_field({}) is False

@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 import requests
 
+from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
 from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
 from the_front_office.adapters.outbound.platforms.yahoo.constants import SCOUT_CATEGORIES
 from the_front_office.domain.errors import (
@@ -44,9 +45,10 @@ def _response(players: Any) -> dict[str, Any]:
 class FakeContext:
     """Stands in for yahoofantasy's Context.
 
-    Models both paths the client uses: `_load_or_fetch` for single queries, and
-    the `_load` / `make_request` / `_save` split the parallel category fetch
-    drives so it can keep the persistence writes on one thread.
+    `make_request` is the only fetch the client still makes through the SDK —
+    it caches every response itself now. `_load_or_fetch` survives for the
+    scoreboard alone, where `Week.sync` reads the SDK's own store internally
+    and pre-warming that key is the only way to force a refresh.
     """
 
     def __init__(self, response: Any = None, error: Exception | None = None) -> None:
@@ -66,9 +68,6 @@ class FakeContext:
             raise self.error
         return self.response
 
-    def _load(self, persist_path: str, default: Any = None, ttl: int = 3600) -> Any:
-        return self.persisted.get(persist_path, default)
-
     def make_request(self, query: str, **kwargs: Any) -> Any:
         import threading
         import time
@@ -80,18 +79,40 @@ class FakeContext:
         time.sleep(0.02)  # long enough that serial execution is distinguishable
         return self.response
 
-    def _save(self, persist_path: str, value: Any) -> None:
+
+class RecordingCache(JsonDiskCache):
+    """The real cache, kept off disk, recording which thread each write is on.
+
+    Subclassed rather than faked: the client's correctness here is about how it
+    uses the store, and the store's own expiry is what the TTLs mean.
+    """
+
+    def __init__(self) -> None:
+        self._path = Path("unused")
+        self._data = {}
+        self.write_threads: set[str] = set()
+        self.written: list[str] = []
+
+    def _load(self) -> None:  # never touch disk
+        return None
+
+    def _save(self) -> None:  # never touch disk
+        return None
+
+    def set(self, key: str, value: Any, now: Any = None) -> None:
         import threading
 
-        self.save_threads.add(threading.current_thread().name)
-        self.saved.append(persist_path)
-        self.persisted[persist_path] = value
+        self.write_threads.add(threading.current_thread().name)
+        self.written.append(key)
+        super().set(key, value, now=now)
 
 
-def _client(response: Any = None, error: Exception | None = None) -> tuple[YahooClient, FakeContext]:
+def _client(
+    response: Any = None, error: Exception | None = None, cache: RecordingCache | None = None
+) -> tuple[YahooClient, FakeContext]:
     ctx = FakeContext(response, error)
     league = SimpleNamespace(id="123", league_key="nba.l.123", name="My League", ctx=ctx, teams=lambda: [])
-    return YahooClient(league), ctx  # type: ignore[arg-type]
+    return YahooClient(league, cache=cache or RecordingCache()), ctx  # type: ignore[arg-type]
 
 
 # ── fetch_players ───────────────────────────────────────────────────────
@@ -115,13 +136,14 @@ def test_category_requests_run_concurrently() -> None:
     assert len(ctx.request_threads) > 1, "requests ran on a single thread"
 
 
-def test_persistence_writes_stay_on_one_thread() -> None:
-    """yahoofantasy persists to one shared pickle with a read-modify-write, so
-    concurrent saves would clobber each other."""
-    client, ctx = _client(_response({"player": [_player_payload("A B")]}))
+def test_cache_writes_stay_on_one_thread() -> None:
+    """The cache file is read-modify-written whole, so concurrent writes would
+    clobber each other. Only the requests are allowed to fan out."""
+    cache = RecordingCache()
+    client, _ = _client(_response({"player": [_player_payload("A B")]}), cache=cache)
     client.fetch_top_by_stat(per_stat=4)
-    assert len(ctx.save_threads) == 1
-    assert len(ctx.saved) == len(SCOUT_CATEGORIES)
+    assert len(cache.write_threads) == 1
+    assert len(cache.written) == len(SCOUT_CATEGORIES)
 
 
 def test_cached_categories_are_not_refetched() -> None:
@@ -250,7 +272,7 @@ def test_owning_no_team_raises_with_the_league_name() -> None:
 def test_search_builds_a_league_scoped_query() -> None:
     client, ctx = _client(_response({"player": [_player_payload("LeBron James")]}))
     results = client.search_players("LeBron James")
-    assert "league/nba.l.123/players;search=LeBron James" in ctx.queries[0]
+    assert "league/nba.l.123/players;search=LeBron James" in ctx.raw_requests[0]
     assert [p.name.full for p in results] == ["LeBron James"]
 
 

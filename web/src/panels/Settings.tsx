@@ -46,7 +46,15 @@ const GROUPS: { title: string; note: string; keys: string[] }[] = [
   {
     title: "Advanced",
     note: "Rarely worth changing. Each field shows the value already in force; typing replaces it.",
-    keys: ["LOG_LEVEL", "NBA_API_DELAY", "NBA_CACHE_FILE", "SLEEPER_CACHE_FILE", "FPL_CACHE_FILE", "YAHOO_TOKEN_FILE"],
+    keys: [
+      "LOG_LEVEL",
+      "NBA_API_DELAY",
+      "NBA_CACHE_FILE",
+      "SLEEPER_CACHE_FILE",
+      "FPL_CACHE_FILE",
+      "YAHOO_CACHE_FILE",
+      "YAHOO_TOKEN_FILE",
+    ],
   },
 ];
 

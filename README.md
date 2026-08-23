@@ -34,7 +34,7 @@ second representation of a report to keep in step. It also serves the built UI f
 `web/dist`, so one process on one port covers both.
 
 **Outbound adapters** (`src/the_front_office/adapters/outbound/`)
-- **Yahoo Fantasy** via `yahoofantasy` — OAuth2, rosters, matchups, and hand-built player queries that sort free agents by an individual stat category
+- **Yahoo Fantasy** via `yahoofantasy` — OAuth2, rosters, matchups, and hand-built player queries that sort free agents by an individual stat category. Responses are cached in `.yahoo_cache.json` rather than the SDK's own store
 - **NBA.com** via `nba_api` — one full-season `LeagueGameLog` call bucketed by player for recent form (L5/L10/L15), cached in `.nba_cache.json`, with `tenacity` retries classified by error type
 - **Sleeper** — public and auth-free, and used by both sports: football leagues, rosters, matchups and weekly projections; NBA per-game projections summed into category totals for the matchup period. Cached in `.sleeper_cache.json`
 - **Fantasy Premier League** — public and auth-free, and the only platform here that is also its own stats provider: one `bootstrap-static` call carries the squad, the prices, the game's own `ep_next` projection and Opta expected goals. Cached in `.fpl_cache.json`
@@ -101,9 +101,9 @@ or absent without echoing a secret, and flags keys nothing will pick up —
 
 Do **not** copy `.yahoofantasy`: refresh-token rotation means two machines
 sharing one token can invalidate each other, and re-authenticating is a single
-browser flow. Do not copy `.nba_cache.json`, `.sleeper_cache.json` or
-`.fpl_cache.json` either — they are derived, TTL'd, and one holds a ~14MB player
-catalog.
+browser flow. Do not copy `.nba_cache.json`, `.sleeper_cache.json`,
+`.fpl_cache.json` or `.yahoo_cache.json` either — they are derived, expiring,
+and one holds a ~14MB player catalog.
 
 ### Environment
 
