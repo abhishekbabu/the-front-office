@@ -19,6 +19,7 @@ from the_front_office.adapters.outbound.platforms.sleeper.types import (
     SleeperRoster,
     WeeklyProjection,
 )
+from the_front_office.adapters.outbound.sports import paging
 from the_front_office.adapters.outbound.sports.names import NameIndex
 from the_front_office.adapters.outbound.sports.nfl import league, prompt
 from the_front_office.adapters.outbound.sports.nfl.lineup import (
@@ -46,6 +47,8 @@ from the_front_office.domain.models import (
     LeagueSchedule,
     PlayerCard,
     PlayerDetail,
+    PlayerPage,
+    PlayerQuery,
     Side,
     SportContext,
     Spot,
@@ -135,10 +138,6 @@ BLANK_POINTS = 5.0
 # squad body in the league, and none of them are a waiver decision.
 FANTASY_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K", "DEF"})
 
-# Enough to find somebody, few enough to read. Past this the projections are
-# indistinguishable from zero anyway.
-FREE_AGENT_LIMIT = 100
-
 
 class SleeperNFLProvider:
     """SportProvider for Sleeper points-league football."""
@@ -217,13 +216,13 @@ class SleeperNFLProvider:
             raise TeamNotFoundError(f"roster {team_id}")
         return self._cards(state, roster.player_ids, set(roster.starter_ids))
 
-    def free_agents(self, league_id: str) -> list[PlayerCard]:
+    def free_agents(self, league_id: str, query: PlayerQuery) -> PlayerPage:
         """Everyone nobody in the league holds, best projection first.
 
         The catalog is twelve thousand players and all but a couple of hundred
-        of them are free, so the list is only useful once it is cut down: no
-        practice-squad depth, nobody a fantasy league scores, and capped at
-        what somebody will actually read.
+        are free, so the pool is cut to the positions a fantasy league actually
+        scores — the rest is practice-squad depth nobody is deciding about.
+        That still leaves four thousand, which is why this is a page.
         """
         state = self._week(league_id)
         owned = {pid for r in self.client.get_rosters(league_id) for pid in r.player_ids}
@@ -231,15 +230,28 @@ class SleeperNFLProvider:
         available = [
             (state.projections.get(pid), pid, meta)
             for pid, meta in state.players.items()
-            if pid not in owned and str(meta.get("position") or "") in FANTASY_POSITIONS
+            if pid not in owned and self._is_signing(meta)
         ]
         # Ranked on the projection, and among the unprojected on depth chart —
         # a starter with no projection yet is worth more than a fourth-stringer.
         available.sort(
             key=lambda row: (-(row[0].points if row[0] else 0.0), int(row[2].get("depth_chart_order") or 99))
         )
-        ranked = [pid for _, pid, _ in available[:FREE_AGENT_LIMIT]]
-        return self._cards(state, ranked, starters=set(), owned_column=False)
+        ranked = self._cards(state, [pid for _, pid, _ in available], starters=set(), owned_column=False)
+        return paging.page(ranked, query)
+
+    @staticmethod
+    def _is_signing(meta: PlayerMeta) -> bool:
+        """Whether adding this player could do anything.
+
+        Two cuts, both about what the wire is for. The catalog carries every
+        position the sport has, and a fantasy league scores six of them. It
+        also never forgets anybody: Reggie Wayne retired in 2014 and is still
+        in it, unsigned, which the default ranking hid because he has no
+        projection — and sorting by experience put him on the first page.
+        A player on no NFL roster cannot score for yours.
+        """
+        return str(meta.get("position") or "") in FANTASY_POSITIONS and str(meta.get("team") or "FA") != "FA"
 
     def _cards(
         self,
@@ -263,6 +275,11 @@ class SleeperNFLProvider:
                 PlayerCard(
                     player_id=player_id,
                     tone="warning" if injury else "neutral",
+                    values={
+                        "Proj": projection.points if projection else 0.0,
+                        "Depth": float(depth) if depth else 0.0,
+                        "Exp": float(meta.get("years_exp") or 0),
+                    },
                     columns={
                         "Player": str(meta.get("name") or player_id),
                         "Pos": str(meta.get("position") or ""),

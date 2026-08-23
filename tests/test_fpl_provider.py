@@ -28,6 +28,7 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
 )
 from the_front_office.adapters.outbound.sports.fpl.fpl import FPLProvider
 from the_front_office.domain.errors import FPLAPIError, LeagueNotFoundError, PlayerNotFoundError, TeamNotFoundError
+from the_front_office.domain.models import PlayerQuery
 
 ENTRY_ID = 77
 LEAGUE_ID = "900"
@@ -991,21 +992,21 @@ def test_the_market_excludes_what_you_already_own() -> None:
     not who is free but who is worth the money."""
     owned = {int(card.player_id) for card in provider().roster(H2H_LEAGUE)}
 
-    market = {int(card.player_id) for card in provider().free_agents(H2H_LEAGUE)}
+    market = {int(card.player_id) for card in provider().free_agents(H2H_LEAGUE, PlayerQuery()).players}
 
     assert not (owned & market)
 
 
 def test_the_market_is_ranked_on_the_games_own_projection() -> None:
     """Which is what a transfer is actually decided on."""
-    values = [float(card.columns["xPts"]) for card in provider().free_agents(H2H_LEAGUE)]
+    values = [float(card.columns["xPts"]) for card in provider().free_agents(H2H_LEAGUE, PlayerQuery()).players]
 
     assert values == sorted(values, reverse=True)
 
 
 def test_the_market_has_no_lineup_column() -> None:
     """A player you do not own is not in a lineup of yours."""
-    assert "Slot" not in provider().free_agents(H2H_LEAGUE)[0].columns
+    assert "Slot" not in provider().free_agents(H2H_LEAGUE, PlayerQuery()).players[0].columns
 
 
 # ── the way across to the platform ──────────────────────────────────────

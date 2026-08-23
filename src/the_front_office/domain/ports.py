@@ -15,6 +15,8 @@ from the_front_office.domain.models import (
     LeagueSchedule,
     PlayerCard,
     PlayerDetail,
+    PlayerPage,
+    PlayerQuery,
     SportContext,
     Summary,
     TeamRef,
@@ -141,13 +143,17 @@ class SportProvider(Protocol):
         """
         ...
 
-    def free_agents(self, league_id: str) -> list[PlayerCard]:
-        """Players nobody in this league has, best first.
+    def free_agents(self, league_id: str, query: PlayerQuery) -> PlayerPage:
+        """One window onto the players nobody in this league has, best first.
 
         The other half of a roster: what you hold is only half the question,
         and the half that changes is what is still out there. Columns are the
         sport's own, exactly as `roster` returns them, so one table renders
         both.
+
+        A page rather than a list because a football pool is four thousand
+        players — which also means the ordering has to happen here, where the
+        whole list is, rather than in a client holding fifty rows of it.
 
         Raises:
             FrontOfficeError: the league or the user's team within it is missing.

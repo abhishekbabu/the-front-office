@@ -14,7 +14,7 @@ from reports import MOCK_NBA_REPORT
 from the_front_office.adapters.outbound.sports.nba.yahoo import YahooNBAProvider
 from the_front_office.application.scouting import ScoutEngine
 from the_front_office.domain.errors import TeamNotFoundError
-from the_front_office.domain.models import ScoutReport, Stat
+from the_front_office.domain.models import PlayerQuery, ScoutReport, Stat
 
 
 def _scout(yahoo: FakeYahoo, ai: FakeAI | None = None, nba: FakeNBA | None = None) -> ScoutEngine:
@@ -459,11 +459,11 @@ def test_an_unknown_team_is_refused() -> None:
 
 def test_available_players_have_no_lineup_column() -> None:
     """Somebody on the wire is not in a lineup of yours."""
-    assert "Slot" not in _provider(FakeYahoo()).free_agents("")[0].columns
+    assert "Slot" not in _provider(FakeYahoo()).free_agents("", PlayerQuery()).players[0].columns
 
 
 def test_available_players_carry_the_same_form_columns_as_a_roster() -> None:
-    agents = _provider(FakeYahoo()).free_agents("")
+    agents = _provider(FakeYahoo()).free_agents("", PlayerQuery()).players
 
     assert {"Player", "Pos", "Team", "PTS", "REB", "AST", "Status"} <= set(agents[0].columns)
 

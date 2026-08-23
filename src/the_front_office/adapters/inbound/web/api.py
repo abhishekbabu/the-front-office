@@ -16,7 +16,7 @@ import threading
 import uuid
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -32,6 +32,8 @@ from the_front_office.domain.models import (
     LeagueSchedule,
     PlayerCard,
     PlayerDetail,
+    PlayerPage,
+    PlayerQuery,
     ScoutReport,
     Summary,
     TeamRef,
@@ -359,10 +361,27 @@ def _register_routes(app: FastAPI) -> None:
         """
         return data.build_provider(sport).summary(league_id)
 
-    @app.get("/api/{sport}/leagues/{league_id}/free-agents", response_model=list[PlayerCard])
-    def free_agents(sport: str, league_id: str) -> list[PlayerCard]:
-        """Who is still out there, best first."""
-        return data.build_provider(sport).free_agents(league_id)
+    @app.get("/api/{sport}/leagues/{league_id}/free-agents", response_model=PlayerPage)
+    def free_agents(
+        sport: str,
+        league_id: str,
+        offset: int = Query(default=0, ge=0),
+        limit: int = Query(default=50, ge=1, le=200),
+        sort: str = "",
+        descending: bool = True,
+        position: str = "",
+        search: str = "",
+    ) -> PlayerPage:
+        """One page of who is still out there, best first.
+
+        Ordering happens here rather than in the client because a football pool
+        is four thousand players: a client holding fifty of them can only
+        reorder those fifty, which is a worse answer than none.
+        """
+        query = PlayerQuery(
+            offset=offset, limit=limit, sort=sort, descending=descending, position=position, search=search
+        )
+        return data.build_provider(sport).free_agents(league_id, query)
 
     @app.get("/api/{sport}/leagues/{league_id}/teams", response_model=list[TeamRef])
     def teams(sport: str, league_id: str) -> list[TeamRef]:
