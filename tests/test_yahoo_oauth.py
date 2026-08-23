@@ -252,3 +252,22 @@ def test_the_socket_is_closed_even_when_the_code_arrives(monkeypatch: pytest.Mon
     oauth._capture_code("http://localhost:9999", "id", "fspt-r")
 
     assert server.closed
+
+
+def test_a_rejected_scope_points_at_the_app_not_the_user(monkeypatch: pytest.MonkeyPatch, quiet_browser: None) -> None:
+    """Yahoo declines to issue a permission the app was never configured for.
+
+    Every other refusal at this point is about the person or the request; this
+    one is about a checkbox, so it must not read as "authorisation failed".
+    """
+    _serve(monkeypatch, [(None, "invalid scope")])
+
+    with pytest.raises(YahooLoginRequiredError, match="does not have Fantasy Sports enabled"):
+        oauth._capture_code("http://localhost:9999", "id", "fspt-r")
+
+
+def test_the_rejected_scope_is_quoted_back(monkeypatch: pytest.MonkeyPatch, quiet_browser: None) -> None:
+    _serve(monkeypatch, [(None, "invalid scope")])
+
+    with pytest.raises(YahooLoginRequiredError, match="'fspt-r'"):
+        oauth._capture_code("http://localhost:9999", "id", "fspt-r")

@@ -136,6 +136,17 @@ def _capture_code(redirect_uri: str, client_id: str, scope: str) -> str:
     server.server_close()
 
     if _Callback.error:
+        # "invalid scope" is Yahoo declining to issue the permission at all,
+        # which it only does when the app is not configured for it. Worth
+        # separating: every other refusal here is about the user or the request,
+        # and this one is about a checkbox on the app.
+        if "invalid scope" in _Callback.error.lower():
+            raise YahooLoginRequiredError(
+                f"Yahoo rejected the {scope!r} scope, which means this application does not have "
+                "Fantasy Sports enabled. At https://developer.yahoo.com/apps/ open the app, tick "
+                "API Permissions → Fantasy Sports → Read, press Update, then reload the page and "
+                "confirm it is still ticked before running this again."
+            )
         raise YahooLoginRequiredError(f"Yahoo refused the authorisation: {_Callback.error}")
     if not _Callback.code:
         raise YahooLoginRequiredError(
