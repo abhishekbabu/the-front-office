@@ -30,6 +30,7 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
     Gameweek,
     GameweekResult,
     H2HMatch,
+    LiveStat,
     MiniLeague,
     PastSeason,
     Pick,
@@ -55,6 +56,8 @@ BOOTSTRAP_TTL = timedelta(hours=6)
 FIXTURES_TTL = timedelta(hours=6)
 ENTRY_TTL = timedelta(minutes=10)
 HISTORY_TTL = timedelta(hours=1)
+# The only figure here that moves while somebody is watching it.
+LIVE_TTL = timedelta(minutes=2)
 # A finished season cannot change, and the current one only moves when a match
 # is played, so this is the slowest-moving thing the client reads.
 PLAYER_HISTORY_TTL = timedelta(hours=12)
@@ -190,6 +193,38 @@ class FPLClient:
         if future:
             return min(future, key=lambda gw: gw.deadline)
         return max(gameweeks, key=lambda gw: gw.id)
+
+    def current_gameweek(self) -> Gameweek | None:
+        """The gameweek being played, as the game itself marks it.
+
+        Distinct from `upcoming_gameweek`, and the distinction matters: on a
+        Saturday in August the gameweek you can still act on is next week's,
+        while the one being *played* — where points are landing right now — is
+        this one. A week view that shows the next deadline is a week view
+        showing a week nobody is watching.
+
+        None before the season opens, when no gameweek is current yet.
+        """
+        return next((gw for gw in self.get_gameweeks() if gw.is_current), None)
+
+    def get_live(self, gameweek: int) -> dict[int, LiveStat]:
+        """What every player has done in the gameweek being played.
+
+        Updated as matches are played, so it is the one thing on the page that
+        moves on its own. Not from the catalog: `total_points` there is a season
+        total, which is a different question from "how is my team doing".
+        """
+        data = self._api.cached(f"live_{gameweek}", f"{BASE_URL}/event/{gameweek}/live/", LIVE_TTL)
+        live: dict[int, LiveStat] = {}
+        for element in (data or {}).get("elements") or []:
+            if element.get("id") is None:
+                continue
+            stats = element.get("stats") or {}
+            live[int(element["id"])] = LiveStat(
+                points=int(stats.get("total_points") or 0),
+                minutes=int(stats.get("minutes") or 0),
+            )
+        return live
 
     def get_players(self) -> dict[int, Player]:
         """Every player in the game, keyed by element id."""

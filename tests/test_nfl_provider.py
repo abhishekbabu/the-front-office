@@ -17,7 +17,7 @@ from the_front_office.adapters.outbound.platforms.sleeper.types import (
     WeeklyProjection,
 )
 from the_front_office.adapters.outbound.sports.nfl.sleeper import SleeperNFLProvider
-from the_front_office.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError
+from the_front_office.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError, TeamNotFoundError
 
 MY_ID = "user-1"
 
@@ -47,6 +47,8 @@ class FakeSleeper:
         self.season_stats = season_stats if season_stats is not None else {}
         self.season_stats_error = season_stats_error
         self.season_schedule = season_schedule if season_schedule is not None else []
+        self.matchups_error: Exception | None = None
+        self.players_catalog: dict[str, PlayerMeta] | None = None
         self.schedule_error = schedule_error
         self.transactions = transactions if transactions is not None else {}
         self.transactions_error = transactions_error
@@ -117,9 +119,13 @@ class FakeSleeper:
 
     def get_matchups(self, league_id: str, week: int) -> list[dict[str, Any]]:
         self.matchup_fetches += 1
+        if self.matchups_error:
+            raise self.matchups_error
         return self.matchups
 
     def get_players(self) -> dict[str, PlayerMeta]:
+        if self.players_catalog is not None:
+            return self.players_catalog
         return {
             "qb1": PlayerMeta(player_id="qb1", name="Star QB", position="QB", team="BUF"),
             "rb1": PlayerMeta(player_id="rb1", name="Good RB", position="RB", team="BUF"),
@@ -874,3 +880,137 @@ def test_a_flex_still_says_which_position_is_filling_it() -> None:
 
     flex = next(spot for spot in summary.mine.lineup if spot.slot == "FLEX")
     assert flex.detail.startswith("WR")
+
+
+# ── the week as it is actually going ────────────────────────────────────
+# Not reachable with live data outside the season, so the shape of a week in
+# progress is only ever exercised here.
+
+KICKED_OFF = [
+    ScheduledGame(week=3, date="2026-09-24", home="BUF", away="MIA", status="complete"),
+    ScheduledGame(week=3, date="2026-09-28", home="KC", away="DEN", status="pre_game"),
+]
+
+
+def _live_client(points: dict[str, float]) -> FakeSleeper:
+    return FakeSleeper(
+        projections=DEFAULT_PROJECTIONS,
+        season_schedule=KICKED_OFF,
+        rosters=[
+            SleeperRoster(roster_id=1, owner_id=MY_ID, player_ids=["qb1", "rb1", "rb2"], starter_ids=["qb1", "rb2"])
+        ],
+        matchups=[{"roster_id": 1, "matchup_id": 4, "players_points": points}],
+    )
+
+
+def test_a_player_whose_game_has_started_shows_what_they_scored() -> None:
+    """Every fake projection is a BUF player, and BUF has finished."""
+    summary = _provider(_live_client({"qb1": 24.5, "rb2": 3.0})).summary("L1")
+
+    values = {spot.player: spot.value for spot in summary.mine.lineup}
+    assert values["Star QB"] == "24.5 pts"
+
+
+def test_a_haul_and_a_blank_are_toned_apart() -> None:
+    summary = _provider(_live_client({"qb1": 24.5, "rb2": 3.0})).summary("L1")
+
+    tones = {spot.player: spot.tone for spot in summary.mine.lineup}
+    assert tones["Star QB"] == "good"
+    assert tones["Bad RB"] == "warning"
+
+
+def test_a_player_whose_game_has_not_kicked_off_keeps_their_projection() -> None:
+    """Nought against somebody playing on Monday says they blanked."""
+    client = _live_client({"qb1": 0.0})
+    client.season_schedule = [ScheduledGame(week=3, date="2026-09-24", home="BUF", away="MIA", status="pre_game")]
+
+    summary = _provider(client).summary("L1")
+
+    assert all(not spot.value.endswith("pts") for spot in summary.mine.lineup)
+
+
+def test_the_side_total_switches_from_projected_to_scored() -> None:
+    assert _provider(_live_client({"qb1": 24.5, "rb2": 3.0})).summary("L1").mine.points == "27.5 pts"
+
+
+def test_before_kickoff_the_side_total_is_still_a_projection() -> None:
+    client = _live_client({})
+    client.season_schedule = [ScheduledGame(week=3, date="2026-09-24", home="BUF", away="MIA", status="pre_game")]
+
+    assert _provider(client).summary("L1").mine.points.endswith("proj")
+
+
+def test_a_missing_scoreboard_falls_back_to_projections() -> None:
+    client = _live_client({})
+    client.matchups_error = SleeperAPIError("down")
+
+    summary = _provider(client).summary("L1")
+
+    assert summary.mine is not None
+    assert summary.mine.points.endswith("proj")
+
+
+# ── the rest of the league ──────────────────────────────────────────────
+
+
+def test_the_teams_list_puts_you_first() -> None:
+    """You are the row somebody is looking for, and a fourteen-team league is
+    long enough that hunting for it is a chore."""
+    teams = _provider(_league_client()).teams("L1")
+
+    assert teams[0].is_mine
+    assert [t.is_mine for t in teams[1:]] == [False]
+
+
+def test_a_team_carries_the_id_its_roster_is_behind() -> None:
+    teams = _provider(_league_client()).teams("L1")
+    assert {t.team_id for t in teams} == {"1", "2"}
+
+
+def test_another_managers_roster_comes_back_in_your_own_columns() -> None:
+    """One table renders both, so they have to agree about the shape."""
+    provider = _provider(_league_client())
+
+    mine = provider.roster("L1")
+    theirs = provider.roster_of("L1", "2")
+
+    assert set(theirs[0].columns) == set(mine[0].columns)
+    assert [c.columns["Player"] for c in theirs] == ["Bad RB"]
+
+
+def test_an_unknown_team_is_refused() -> None:
+    with pytest.raises(TeamNotFoundError):
+        _provider(_league_client()).roster_of("L1", "999")
+
+
+def test_free_agents_exclude_everyone_already_rostered() -> None:
+    client = _league_client()
+    client.players_catalog = {
+        "qb1": PlayerMeta(player_id="qb1", name="Star QB", position="QB", team="BUF"),
+        "free1": PlayerMeta(player_id="free1", name="Waiver WR", position="WR", team="NYJ"),
+    }
+
+    agents = _provider(client).free_agents("L1")
+
+    assert [c.columns["Player"] for c in agents] == ["Waiver WR"]
+
+
+def test_a_position_a_fantasy_league_does_not_score_is_left_out() -> None:
+    """The catalog carries every practice-squad body in the league."""
+    client = _league_client()
+    client.players_catalog = {
+        "ol1": PlayerMeta(player_id="ol1", name="A Guard", position="OL", team="NYJ"),
+        "free1": PlayerMeta(player_id="free1", name="Waiver WR", position="WR", team="NYJ"),
+    }
+
+    agents = _provider(client).free_agents("L1")
+
+    assert [c.columns["Player"] for c in agents] == ["Waiver WR"]
+
+
+def test_free_agents_have_no_lineup_column() -> None:
+    """It would read "BN" down its whole length."""
+    client = _league_client()
+    client.players_catalog = {"free1": PlayerMeta(player_id="free1", name="Waiver WR", position="WR", team="NYJ")}
+
+    assert "Slot" not in _provider(client).free_agents("L1")[0].columns

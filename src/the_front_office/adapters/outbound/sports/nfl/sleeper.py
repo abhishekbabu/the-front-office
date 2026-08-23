@@ -35,7 +35,7 @@ from the_front_office.adapters.outbound.sports.nfl.lineup import (
 from the_front_office.adapters.outbound.sports.trades import resolve_sides
 from the_front_office.config.constants import NFL_SCOUT_PROMPT, NFL_TRADE_PROMPT
 from the_front_office.config.settings import settings
-from the_front_office.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError
+from the_front_office.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError, TeamNotFoundError
 from the_front_office.domain.models import (
     ActivityRow,
     LeagueSchedule,
@@ -51,6 +51,7 @@ from the_front_office.domain.models import (
     StatGroup,
     Summary,
     Swap,
+    TeamRef,
     Tone,
     TradeProposal,
 )
@@ -89,6 +90,35 @@ def _projection_lines(stats: dict[str, float]) -> list[Stat]:
         for key, label in PROJECTION_LABELS
         if stats.get(key)
     ]
+
+
+@dataclass(frozen=True)
+class _Live:
+    """The week as it has actually gone, so far.
+
+    Zero points is ambiguous on its own — a receiver who dropped everything and
+    a receiver whose game is on Monday both sit at nought — so the real-world
+    schedule decides which of the two a row is showing.
+    """
+
+    started: set[str]
+    """Clubs whose real-world game has kicked off."""
+
+    points: dict[str, float]
+    """What each player has scored, keyed by Sleeper's player_id."""
+
+    def scored(self, player_id: str, team: str) -> float | None:
+        """Points where that club's game has started, and nothing before it."""
+        if not self.under_way or team not in self.started:
+            return None
+        return self.points.get(player_id)
+
+    @property
+    def under_way(self) -> bool:
+        """Both halves are required. Kickoffs with no scoreboard behind them
+        would render every row as nought — a whole team that blanked, rather
+        than a request that failed."""
+        return bool(self.started) and bool(self.points)
 
 
 @dataclass(frozen=True)
@@ -188,6 +218,19 @@ def _moment(epoch_ms: int) -> str:
     return day_month(datetime.fromtimestamp(epoch_ms / 1000, tz=timezone.utc))
 
 
+# A week made and a week wasted, on a points-league scale where a startable
+# flex is worth around ten.
+HAUL_POINTS = 20.0
+BLANK_POINTS = 5.0
+
+# What a fantasy league actually scores. The catalog carries every practice
+# squad body in the league, and none of them are a waiver decision.
+FANTASY_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K", "DEF"})
+
+# Enough to find somebody, few enough to read. Past this the projections are
+# indistinguishable from zero anyway.
+FREE_AGENT_LIMIT = 100
+
 REGULAR_SEASON_WEEKS = 18
 # "What did I miss", not the season's whole transaction log.
 ACTIVITY_WEEKS = 3
@@ -254,11 +297,67 @@ class SleeperNFLProvider:
     def roster(self, league_id: str) -> list[PlayerCard]:
         """The full roster, with the depth and experience a week view leaves out."""
         state = self._week(league_id)
-        starters = set(state.roster.starter_ids)
+        return self._cards(state, state.roster.player_ids, set(state.roster.starter_ids))
+
+    def teams(self, league_id: str) -> list[TeamRef]:
+        """Everyone in the league, yours first."""
+        state = self._week(league_id)
+        names = self.client.get_league_users(league_id)
+        refs = [
+            TeamRef(
+                team_id=str(r.roster_id),
+                name=names.get(r.owner_id, f"Roster {r.roster_id}"),
+                detail=f"{r.record} · {r.points_for:.1f} pts",
+                is_mine=r.roster_id == state.roster.roster_id,
+            )
+            for r in self.client.get_rosters(league_id)
+        ]
+        return sorted(refs, key=lambda ref: (not ref.is_mine, ref.name.lower()))
+
+    def roster_of(self, league_id: str, team_id: str) -> list[PlayerCard]:
+        """Somebody else's squad, in the same columns as your own."""
+        state = self._week(league_id)
+        roster = next((r for r in self.client.get_rosters(league_id) if str(r.roster_id) == team_id), None)
+        if roster is None:
+            raise TeamNotFoundError(f"roster {team_id}")
+        return self._cards(state, roster.player_ids, set(roster.starter_ids))
+
+    def free_agents(self, league_id: str) -> list[PlayerCard]:
+        """Everyone nobody in the league holds, best projection first.
+
+        The catalog is twelve thousand players and all but a couple of hundred
+        of them are free, so the list is only useful once it is cut down: no
+        practice-squad depth, nobody a fantasy league scores, and capped at
+        what somebody will actually read.
+        """
+        state = self._week(league_id)
+        owned = {pid for r in self.client.get_rosters(league_id) for pid in r.player_ids}
+
+        available = [
+            (state.projections.get(pid), pid, meta)
+            for pid, meta in state.players.items()
+            if pid not in owned and str(meta.get("position") or "") in FANTASY_POSITIONS
+        ]
+        # Ranked on the projection, and among the unprojected on depth chart —
+        # a starter with no projection yet is worth more than a fourth-stringer.
+        available.sort(
+            key=lambda row: (-(row[0].points if row[0] else 0.0), int(row[2].get("depth_chart_order") or 99))
+        )
+        ranked = [pid for _, pid, _ in available[:FREE_AGENT_LIMIT]]
+        return self._cards(state, ranked, starters=set(), owned_column=False)
+
+    def _cards(
+        self,
+        state: _Week,
+        player_ids: list[str],
+        starters: set[str],
+        owned_column: bool = True,
+    ) -> list[PlayerCard]:
+        """One table shape for every list of players this sport shows."""
         scheduled = any(p.opponent for p in state.projected)
 
         cards = []
-        for player_id in state.roster.player_ids:
+        for player_id in player_ids:
             meta = state.players.get(player_id)
             if not meta:
                 continue
@@ -273,7 +372,9 @@ class SleeperNFLProvider:
                         "Player": str(meta.get("name") or player_id),
                         "Pos": str(meta.get("position") or ""),
                         "Team": str(meta.get("team") or "FA"),
-                        "Slot": "START" if player_id in starters else "BN",
+                        # A free-agent list has no lineup to be in, so the
+                        # column would read "BN" down its whole length.
+                        **({"Slot": "START" if player_id in starters else "BN"} if owned_column else {}),
                         "Proj": f"{projection.points:.1f}" if projection else "0.0",
                         "Opponent": self._opponent_label(projection, scheduled),
                         "Depth": str(depth) if depth else "—",
@@ -444,6 +545,7 @@ class SleeperNFLProvider:
         """The week as it stands: both lineups, the swaps, the byes. No model."""
         state = self._week(league_id)
         _, matchup_stats = self._matchup(state.league, state.roster, league_id, state.week)
+        live = self._live(state, league_id)
         starters = {slot.player.player_id for slot in state.lineup if slot.player}
         # Before the season opens Sleeper publishes no fixtures at all, and
         # flagging every player for having no game turns the page amber over a
@@ -456,16 +558,16 @@ class SleeperNFLProvider:
             mine=Side(
                 name="Your lineup",
                 detail=state.roster.record,
-                points=f"{state.current_points:.1f} proj",
-                lineup=[self._lineup_spot(slot, scheduled) for slot in state.lineup],
+                points=self._side_total(state, live),
+                lineup=[self._lineup_spot(slot, scheduled, live) for slot in state.lineup],
                 bench=[
-                    self._spot(p, scheduled)
+                    self._spot(p, scheduled, live=live)
                     for p in sorted(
                         (p for p in state.projected if p.player_id not in starters), key=lambda p: -p.points
                     )
                 ],
             ),
-            opponent=self._opponent(state, league_id, scheduled),
+            opponent=self._opponent(state, league_id, scheduled, live),
             swaps=[
                 Swap(
                     start=f"{change.start.name} ({change.slot})",
@@ -576,6 +678,7 @@ class SleeperNFLProvider:
                 name=names.get(r.owner_id, f"Roster {r.roster_id}"),
                 record=r.record,
                 points=f"{r.points_for:.1f}",
+                team_id=str(r.roster_id),
                 is_mine=r.roster_id == state.roster.roster_id,
             )
             for i, r in enumerate(ordered, start=1)
@@ -674,7 +777,35 @@ class SleeperNFLProvider:
             by_week.setdefault(g.week, []).append(g)
         return by_week
 
-    def _opponent(self, state: _Week, league_id: str, scheduled: bool) -> Side | None:
+    def _live(self, state: _Week, league_id: str) -> _Live:
+        """What has actually been scored, and whose clubs have kicked off."""
+        started = {
+            club
+            for game in self._games_by_week(state.season).get(state.week, [])
+            if game.status and game.status != "pre_game"
+            for club in (game.home, game.away)
+        }
+        try:
+            matchups = self.client.get_matchups(league_id, state.week)
+        except SleeperAPIError as e:
+            logger.warning(f"Continuing without live scores: {e}")
+            return _Live(started=started, points={})
+
+        points: dict[str, float] = {}
+        for entry in matchups:
+            for player_id, scored in (entry.get("players_points") or {}).items():
+                points[str(player_id)] = float(scored or 0)
+        return _Live(started=started, points=points)
+
+    @staticmethod
+    def _side_total(state: _Week, live: _Live) -> str:
+        """The projection until the ball is rolling, then what is on the board."""
+        if not live.under_way:
+            return f"{state.current_points:.1f} proj"
+        scored = sum(live.scored(slot.player.player_id, slot.player.team) or 0 for slot in state.lineup if slot.player)
+        return f"{scored:.1f} pts"
+
+    def _opponent(self, state: _Week, league_id: str, scheduled: bool, live: _Live) -> Side | None:
         """The team you are playing, and what they are starting.
 
         Their lineup is the other half of the only question this week asks, and
@@ -720,7 +851,7 @@ class SleeperNFLProvider:
         slots = state.league.starting_slots
         if len(roster.starter_ids) == len(slots):
             lineup = [
-                self._spot(by_id[pid], scheduled, slot=slot)
+                self._spot(by_id[pid], scheduled, slot=slot, live=live)
                 if pid in by_id
                 else Spot(slot=slot, player="—", detail="empty", value="0.0", tone="warning")
                 for slot, pid in zip(slots, roster.starter_ids, strict=True)
@@ -729,13 +860,13 @@ class SleeperNFLProvider:
             # Off-length means the positions cannot be trusted, and a WR
             # labelled QB is worse than a row carrying no label at all.
             logger.warning(f"Roster {roster.roster_id} starts {len(roster.starter_ids)} into {len(slots)} slots")
-            lineup = [self._spot(p, scheduled) for p in projected if p.player_id in starting]
+            lineup = [self._spot(p, scheduled, live=live) for p in projected if p.player_id in starting]
         return Side(
             name=names.get(roster.owner_id, "Opponent"),
             detail=roster.record,
             points=f"{float(theirs.get('points') or 0):.1f}",
             lineup=lineup,
-            bench=[self._spot(p, scheduled) for p in projected if p.player_id not in starting],
+            bench=[self._spot(p, scheduled, live=live) for p in projected if p.player_id not in starting],
         )
 
     def _past_seasons(self, player_id: str, state: _Week) -> list[StatGroup]:
@@ -789,27 +920,43 @@ class SleeperNFLProvider:
             return []
         return [str(year - 1), str(year - 2)]
 
-    def _lineup_spot(self, slot: LineupSlot, scheduled: bool) -> Spot:
+    def _lineup_spot(self, slot: LineupSlot, scheduled: bool, live: _Live | None = None) -> Spot:
         if slot.player is None:
             return Spot(slot=slot.slot, player="—", detail="empty", value="0.0", tone="warning")
-        return Spot(
-            player_id=slot.player.player_id,
-            slot=slot.slot,
-            player=slot.player.name,
-            detail=self._spot_detail(slot.player, scheduled, slot.slot),
-            value=f"{slot.points:.1f}",
-            tone=self._spot_tone(slot.player, scheduled),
-        )
+        return self._spot(slot.player, scheduled, slot=slot.slot, live=live, projected=slot.points)
 
-    def _spot(self, projection: WeeklyProjection, scheduled: bool, slot: str = "") -> Spot:
+    def _spot(
+        self,
+        projection: WeeklyProjection,
+        scheduled: bool,
+        slot: str = "",
+        live: _Live | None = None,
+        projected: float | None = None,
+    ) -> Spot:
+        """One row, showing what happened where the game has started.
+
+        Once a club has kicked off, what its players actually scored is the
+        number somebody is looking for, and the projection beside it is a guess
+        about a question already being answered.
+        """
+        scored = live.scored(projection.player_id, projection.team) if live else None
+        points = projection.points if projected is None else projected
         return Spot(
             player_id=projection.player_id,
             slot=slot,
             player=projection.name,
             detail=self._spot_detail(projection, scheduled, slot),
-            value=f"{projection.points:.1f}",
-            tone=self._spot_tone(projection, scheduled),
+            value=f"{scored:.1f} pts" if scored is not None else f"{points:.1f}",
+            tone=self._live_tone(scored) if scored is not None else self._spot_tone(projection, scheduled),
         )
+
+    @staticmethod
+    def _live_tone(scored: float) -> Tone:
+        """A game already played answers its own question: a doubt about
+        somebody who has been on the field is no longer a doubt."""
+        if scored >= HAUL_POINTS:
+            return "good"
+        return "warning" if scored <= BLANK_POINTS else "neutral"
 
     @staticmethod
     def _spot_detail(projection: WeeklyProjection, scheduled: bool, slot: str = "") -> str:

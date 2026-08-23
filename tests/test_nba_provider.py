@@ -433,3 +433,35 @@ def test_the_sections_yahoo_cannot_answer_are_empty_rather_than_invented() -> No
     assert schedule.season == []
     assert schedule.matches == []
     assert schedule.activity == []
+
+
+def test_the_teams_list_puts_you_first() -> None:
+    teams = _provider(FakeYahoo()).teams("")
+
+    assert teams[0].is_mine
+    assert teams[0].name == "My Team"
+
+
+def test_another_managers_roster_comes_back_in_your_own_columns() -> None:
+    yahoo = FakeYahoo()
+
+    mine = _provider(yahoo).roster("")
+    theirs = _provider(yahoo).roster_of("", "t.2")
+
+    assert set(theirs[0].columns) == set(mine[0].columns)
+
+
+def test_an_unknown_team_is_refused() -> None:
+    with pytest.raises(TeamNotFoundError):
+        _provider(FakeYahoo()).roster_of("", "t.99")
+
+
+def test_available_players_have_no_lineup_column() -> None:
+    """Somebody on the wire is not in a lineup of yours."""
+    assert "Slot" not in _provider(FakeYahoo()).free_agents("")[0].columns
+
+
+def test_available_players_carry_the_same_form_columns_as_a_roster() -> None:
+    agents = _provider(FakeYahoo()).free_agents("")
+
+    assert {"Player", "Pos", "Team", "PTS", "REB", "AST", "Status"} <= set(agents[0].columns)

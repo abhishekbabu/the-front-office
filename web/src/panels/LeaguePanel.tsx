@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { m } from "motion/react";
-import { api, type League, type LeagueSchedule, type Sport } from "@/lib/api";
+import { api, type League, type LeagueSchedule, type PlayerCard, type Sport, type TeamRef } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Empty, Loading } from "@/components/ui/state";
+import { RosterTable } from "@/components/ui/roster-table";
+import { PlayerPanel } from "@/components/ui/player";
 import { ErrorNote, PageHeader } from "@/panels/shared";
 import { list, listItem, rise } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -17,11 +19,12 @@ import { cn } from "@/lib/utils";
  * than four cards down one page because they are read one at a time — you come
  * here to check the table, or to see what you missed, not both.
  */
-type TabId = "season" | "standings" | "matches" | "activity";
+type TabId = "season" | "standings" | "rosters" | "matches" | "activity";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "season", label: "Season" },
   { id: "standings", label: "Table" },
+  { id: "rosters", label: "Rosters" },
   { id: "matches", label: "Fixtures" },
   { id: "activity", label: "Activity" },
 ];
@@ -32,11 +35,21 @@ export function LeaguePanel({ sport, league }: { sport: Sport; league: League })
     queryFn: () => api.schedule(sport.key, league.league_id),
   });
 
+  // Rosters come from their own call rather than the schedule: browsing them
+  // is a different question, and the season view should not wait on it.
+  const teams = useQuery<TeamRef[], Error>({
+    queryKey: ["teams", sport.key, league.league_id],
+    queryFn: () => api.teams(sport.key, league.league_id),
+  });
+
   // Only the sections this platform actually answers. A tab that is always
   // empty is worse than one that is not there: FPL publishes no transfer feed,
   // and a category league has no fixture list.
-  const available = TABS.filter((tab) => (schedule.data?.[tab.id]?.length ?? 0) > 0);
+  const available = TABS.filter((tab) =>
+    tab.id === "rosters" ? (teams.data?.length ?? 0) > 0 : (schedule.data?.[tab.id]?.length ?? 0) > 0,
+  );
   const [tab, setTab] = useState<TabId>("season");
+  const [team, setTeam] = useState<string | null>(null);
   const current = available.find((t) => t.id === tab)?.id ?? available[0]?.id;
 
   return (
@@ -75,7 +88,12 @@ export function LeaguePanel({ sport, league }: { sport: Sport; league: League })
       {schedule.data && current && (
         <m.div key={current} variants={rise} initial="hidden" animate="shown" className="p-5">
           {current === "season" && <Season rows={schedule.data.season} />}
-          {current === "standings" && <Standings rows={schedule.data.standings} />}
+          {current === "standings" && (
+            <Standings rows={schedule.data.standings} onOpen={(id) => { setTeam(id); setTab("rosters"); }} />
+          )}
+          {current === "rosters" && (
+            <Rosters sport={sport} league={league} teams={teams.data ?? []} team={team} onPick={setTeam} />
+          )}
           {current === "matches" && <Matches rows={schedule.data.matches} />}
           {current === "activity" && <Activity rows={schedule.data.activity} />}
         </m.div>
@@ -92,18 +110,113 @@ export function LeaguePanel({ sport, league }: { sport: Sport; league: League })
  * the same as everywhere else in this app — state carried in color is also
  * carried in shape, so the row keeps a solid rule down its left edge.
  */
-function Row({ children, current, className }: { children: React.ReactNode; current?: boolean; className?: string }) {
+function Row({
+  children,
+  current,
+  className,
+  onClick,
+}: {
+  children: React.ReactNode;
+  current?: boolean;
+  className?: string;
+  onClick?: () => void;
+}) {
   return (
     <m.div
       variants={listItem}
+      onClick={onClick}
+      onKeyDown={onClick && ((e) => e.key === "Enter" && onClick())}
+      tabIndex={onClick ? 0 : undefined}
+      role={onClick ? "button" : undefined}
       className={cn(
         "flex items-baseline gap-3 border-t border-border py-2.5 pr-4 text-[13px] first:border-t-0",
         current ? "border-l-2 border-l-foreground bg-muted pl-[calc(1rem-2px)]" : "pl-4",
+        onClick && "cursor-pointer hover:bg-muted",
         className,
       )}
     >
       {children}
     </m.div>
+  );
+}
+
+/**
+ * Somebody else's squad.
+ *
+ * The reason to look is to see what they are holding before proposing a trade,
+ * or to work out how they are beating you — so it opens on your own team only
+ * when nothing else has been picked, and every row opens the player.
+ */
+function Rosters({
+  sport,
+  league,
+  teams,
+  team,
+  onPick,
+}: {
+  sport: Sport;
+  league: League;
+  teams: TeamRef[];
+  team: string | null;
+  onPick: (teamId: string) => void;
+}) {
+  const [open, setOpen] = useState<string | null>(null);
+  const selected = teams.find((t) => t.team_id === team) ?? teams[0];
+
+  const roster = useQuery<PlayerCard[], Error>({
+    queryKey: ["team-roster", sport.key, league.league_id, selected?.team_id],
+    queryFn: () => api.teamRoster(sport.key, league.league_id, selected!.team_id),
+    enabled: Boolean(selected),
+  });
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap gap-1.5">
+        {teams.map((t) => (
+          <button
+            key={t.team_id}
+            onClick={() => onPick(t.team_id)}
+            aria-pressed={t.team_id === selected?.team_id}
+            className={cn(
+              "flex h-9 items-center gap-2 rounded-md px-3 text-[13px] transition-colors",
+              t.team_id === selected?.team_id
+                ? "bg-primary text-primary-foreground"
+                : "border border-border hover:bg-muted",
+            )}
+          >
+            <span className="max-w-[14rem] truncate">{t.name}</span>
+            {t.is_mine && (
+              <span className="font-mono text-[10px] uppercase tracking-[0.08em] opacity-70">you</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {selected && (
+        <Card>
+          <CardHeader>
+            <span>{selected.name}</span>
+            <span>{selected.detail}</span>
+          </CardHeader>
+          {roster.isLoading && <Loading lines={5} />}
+          {roster.isError && <ErrorNote error={roster.error} />}
+          {roster.data && (
+            <RosterTable
+              players={roster.data}
+              empty={{ title: "Nothing on this roster" }}
+              onOpen={setOpen}
+            />
+          )}
+        </Card>
+      )}
+
+      <PlayerPanel
+        sport={sport.key}
+        league={league.league_id}
+        playerId={open}
+        onClose={() => setOpen(null)}
+      />
+    </div>
   );
 }
 
@@ -159,11 +272,22 @@ function Season({ rows }: { rows: LeagueSchedule["season"] }) {
   );
 }
 
-function Standings({ rows }: { rows: LeagueSchedule["standings"] }) {
+function Standings({
+  rows,
+  onOpen,
+}: {
+  rows: LeagueSchedule["standings"];
+  onOpen: (teamId: string) => void;
+}) {
   return (
     <Section title="Table" count={`${rows.length} teams`}>
       {rows.map((row) => (
-        <Row key={`${row.rank}-${row.name}`} current={row.is_mine}>
+        <Row
+          key={`${row.rank}-${row.name}`}
+          current={row.is_mine}
+          // A table is a list of teams, so a row is the obvious way in to one.
+          onClick={row.team_id ? () => onOpen(row.team_id) : undefined}
+        >
           <span className="w-6 shrink-0 text-right font-mono text-[12px] tabular-nums text-muted-foreground">
             {row.rank}
           </span>

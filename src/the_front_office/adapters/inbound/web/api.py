@@ -34,6 +34,7 @@ from the_front_office.domain.models import (
     PlayerDetail,
     ScoutReport,
     Summary,
+    TeamRef,
     TradeVerdict,
 )
 from the_front_office.domain.ports import ChatSession
@@ -355,6 +356,21 @@ def _register_routes(app: FastAPI) -> None:
         showing nothing the app already knows.
         """
         return data.build_provider(sport).summary(league_id)
+
+    @app.get("/api/{sport}/leagues/{league_id}/free-agents", response_model=list[PlayerCard])
+    def free_agents(sport: str, league_id: str) -> list[PlayerCard]:
+        """Who is still out there, best first."""
+        return data.build_provider(sport).free_agents(league_id)
+
+    @app.get("/api/{sport}/leagues/{league_id}/teams", response_model=list[TeamRef])
+    def teams(sport: str, league_id: str) -> list[TeamRef]:
+        """Everyone in the league, so their rosters can be opened."""
+        return data.build_provider(sport).teams(league_id)
+
+    @app.get("/api/{sport}/leagues/{league_id}/teams/{team_id}/roster", response_model=list[PlayerCard])
+    def team_roster(sport: str, league_id: str, team_id: str) -> list[PlayerCard]:
+        """Somebody else's squad, in the same columns as your own."""
+        return data.build_provider(sport).roster_of(league_id, team_id)
 
     @app.get("/api/{sport}/leagues/{league_id}/schedule", response_model=LeagueSchedule)
     def schedule(sport: str, league_id: str) -> LeagueSchedule:
