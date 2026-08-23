@@ -42,8 +42,6 @@ class AppSettings(BaseSettings):
     # ── Sleeper (fantasy football) ──────────────────────────────────────
     # Sleeper needs no credentials; the username is only used to find leagues.
     sleeper_username: str | None = None
-    sleeper_league_id: str | None = None
-    """Pin a specific league. Optional — otherwise leagues are discovered from the username."""
     sleeper_cache_file: str = ".sleeper_cache.json"
 
     # ── Fantasy Premier League ──────────────────────────────────────────
@@ -81,7 +79,6 @@ class AppSettings(BaseSettings):
         "yahoo_client_id",
         "yahoo_client_secret",
         "sleeper_username",
-        "sleeper_league_id",
         "fpl_entry_id",
         "logfire_token",
         mode="before",

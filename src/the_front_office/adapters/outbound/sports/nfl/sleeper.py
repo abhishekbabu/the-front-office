@@ -39,6 +39,7 @@ from the_front_office.config.constants import NFL_SCOUT_PROMPT, NFL_TRADE_PROMPT
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError, TeamNotFoundError
 from the_front_office.domain.models import (
+    NOT_APPLICABLE,
     ActivityRow,
     LeagueSchedule,
     Match,
@@ -237,9 +238,6 @@ FANTASY_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K", "DEF"})
 # Enough to find somebody, few enough to read. Past this the projections are
 # indistinguishable from zero anyway.
 FREE_AGENT_LIMIT = 100
-
-# A period with no answer at all, distinct from a nought, which is an answer.
-NOT_APPLICABLE = "N/A"
 
 REGULAR_SEASON_WEEKS = 18
 # "What did I miss", not the season's whole transaction log.
@@ -493,7 +491,7 @@ class SleeperNFLProvider:
             p.name: self._player_line(p) for p in sorted((p for p in rostered if p), key=lambda x: -x.points)
         }
 
-        situation = self._situation(league, roster, league_id, week)
+        situation, _ = self._matchup(league, roster, league_id, week)
         constraints = (
             f"LINEUP SLOTS: {', '.join(league.starting_slots)}\n"
             "- Only points from the starting lineup score. Bench depth has value only as "
@@ -1145,17 +1143,7 @@ class SleeperNFLProvider:
         if player_id in projections:
             return projections[player_id]
         meta = players.get(player_id)
-        if meta is None:
-            return None
-        return WeeklyProjection(
-            player_id=player_id,
-            name=str(meta.get("name") or player_id),
-            position=str(meta.get("position") or ""),
-            team=str(meta.get("team") or "FA"),
-            opponent="",
-            points=0.0,
-            injury_status=str(meta.get("injury_status") or ""),
-        )
+        return SleeperNFLProvider._zero_projection(player_id, meta) if meta else None
 
     @staticmethod
     def _player_line(p: WeeklyProjection) -> str:
@@ -1193,16 +1181,6 @@ class SleeperNFLProvider:
             points = f"{proj.points:.1f} proj pts" if proj else "no projection"
             lines.append(f"- {name}: added by {item.count:,} managers in 24h, {points}\n")
         return "".join(lines) or "- (none)\n"
-
-    def _situation(
-        self,
-        league: SleeperLeague,
-        roster: SleeperRoster,
-        league_id: str,
-        week: int,
-    ) -> str:
-        """The matchup block for the prompt."""
-        return self._matchup(league, roster, league_id, week)[0]
 
     def _matchup(
         self,

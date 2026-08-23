@@ -50,6 +50,7 @@ from the_front_office.domain.errors import (
     TeamNotFoundError,
 )
 from the_front_office.domain.models import (
+    NOT_APPLICABLE,
     LeagueSchedule,
     Match,
     PlayerCard,
@@ -85,9 +86,6 @@ PORTRAIT_URL = "https://resources.premierleague.com/premierleague/photos/players
 # Two back plus the one in progress is three columns, which fits a drawer and
 # is as far as a player's form is still the same player.
 PAST_SEASON_LIMIT = 2
-
-# A period with no answer at all, distinct from a nought, which is an answer.
-NOT_APPLICABLE = "N/A"
 
 # FPL's own scale runs 1-5; 4 is where its UI starts calling a run hard.
 HARD_FIXTURE = 4

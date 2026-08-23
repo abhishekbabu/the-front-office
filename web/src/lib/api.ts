@@ -173,9 +173,18 @@ export type LeagueSchedule = {
   activity: ActivityRow[];
 };
 
+/**
+ * What a cell reads where a period has no answer at all.
+ *
+ * Kept in step with `NOT_APPLICABLE` in `domain/models.py`. Part of the
+ * contract rather than a formatting choice: a nought is an answer and this is
+ * the absence of one, which is why they are shown differently.
+ */
+export const NOT_APPLICABLE = "N/A";
+
 export type StatRow = {
   label: string;
-  /** One per column, in the same order. "N/A" where that column has no answer. */
+  /** One per column, in the same order; NOT_APPLICABLE where there is no answer. */
   values: string[];
   tone: Tone;
 };

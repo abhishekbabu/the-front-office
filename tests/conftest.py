@@ -215,7 +215,6 @@ def _isolate_from_local_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
 
     for field in (
         "sleeper_username",
-        "sleeper_league_id",
         "fpl_entry_id",
         "gemini_api_key",
         "yahoo_client_id",

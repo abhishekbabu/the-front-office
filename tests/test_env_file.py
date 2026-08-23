@@ -157,7 +157,7 @@ def test_a_shell_variable_is_reported_as_shadowing(monkeypatch: pytest.MonkeyPat
     """Otherwise an edit that cannot take effect looks like one that did."""
     monkeypatch.setenv("FPL_ENTRY_ID", "999")
     assert env_file.is_shadowed("FPL_ENTRY_ID")
-    assert not env_file.is_shadowed("SLEEPER_LEAGUE_ID")
+    assert not env_file.is_shadowed("SLEEPER_USERNAME")
 
 
 # ── reloading ───────────────────────────────────────────────────────────

@@ -6,7 +6,7 @@ import { fade, list, listItem, slideOver } from "@/lib/motion";
 import { IconButton } from "@/components/ui/icon-button";
 import { ExternalLink } from "@/components/ui/external-link";
 import { Loading } from "@/components/ui/state";
-import { api, type PlayerDetail, type StatTable } from "@/lib/api";
+import { NOT_APPLICABLE, api, type PlayerDetail, type StatTable } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -69,7 +69,7 @@ function SeasonTable({ table }: { table: StatTable }) {
                   className={cn(
                     "whitespace-nowrap px-3 py-1.5 text-right font-mono text-[12.5px] tabular-nums",
                     // Nothing to report reads as absence, not as a figure.
-                    value === "N/A" && "text-muted-foreground/50",
+                    value === NOT_APPLICABLE && "text-muted-foreground/50",
                     row.tone === "good" && "text-ok",
                     row.tone === "warning" && "text-warn",
                   )}
