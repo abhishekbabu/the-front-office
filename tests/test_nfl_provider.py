@@ -6,11 +6,13 @@ import pytest
 
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
     PlayerMeta,
+    ScheduledGame,
     SeasonState,
     SeasonStats,
     SleeperLeague,
     SleeperRoster,
     SleeperUser,
+    Transaction,
     TrendingPlayer,
     WeeklyProjection,
 )
@@ -37,9 +39,17 @@ class FakeSleeper:
         trending_error: Exception | None = None,
         season_stats: dict[str, dict[str, SeasonStats]] | None = None,
         season_stats_error: Exception | None = None,
+        season_schedule: list[ScheduledGame] | None = None,
+        schedule_error: Exception | None = None,
+        transactions: dict[int, list[Transaction]] | None = None,
+        transactions_error: Exception | None = None,
     ) -> None:
         self.season_stats = season_stats if season_stats is not None else {}
         self.season_stats_error = season_stats_error
+        self.season_schedule = season_schedule if season_schedule is not None else []
+        self.schedule_error = schedule_error
+        self.transactions = transactions if transactions is not None else {}
+        self.transactions_error = transactions_error
         self.league = league or SleeperLeague(
             league_id="L1",
             name="Sunday Money",
@@ -68,6 +78,19 @@ class FakeSleeper:
         self.trending = trending or []
         self.trending_error = trending_error
         self.matchup_fetches = 0
+
+    def get_matchups_bulk(self, league_id: str, weeks: list[int]) -> dict[int, list[dict[str, Any]]]:
+        return {w: self.get_matchups(league_id, w) for w in weeks}
+
+    def get_season_schedule(self, season: str, sport: str = "nfl") -> list[ScheduledGame]:
+        if self.schedule_error:
+            raise self.schedule_error
+        return self.season_schedule
+
+    def get_transactions(self, league_id: str, week: int) -> list[Transaction]:
+        if self.transactions_error:
+            raise self.transactions_error
+        return self.transactions.get(week, [])
 
     def get_season_stats(self, season: str, sport: str = "nfl") -> dict[str, SeasonStats]:
         if self.season_stats_error:
@@ -624,3 +647,150 @@ def test_a_player_carries_a_portrait_from_sleepers_own_cdn() -> None:
     detail = _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).player("L1", "qb1")
 
     assert detail.image_url.endswith("/qb1.jpg")
+
+
+# ── the league beyond this week ─────────────────────────────────────────
+
+
+def _sched(week: int, day: str, home: str, away: str) -> ScheduledGame:
+    return ScheduledGame(week=week, date=day, home=home, away=away)
+
+
+SEASON_SCHEDULE = [
+    _sched(1, "2026-09-10", "KC", "BAL"),
+    _sched(1, "2026-09-13", "DAL", "NYG"),
+    _sched(1, "2026-09-14", "SF", "SEA"),
+    _sched(2, "2026-09-17", "MIA", "BUF"),
+]
+
+
+def _league_client(**extra: Any) -> FakeSleeper:
+    return FakeSleeper(
+        projections=DEFAULT_PROJECTIONS,
+        season_schedule=SEASON_SCHEDULE,
+        rosters=[
+            SleeperRoster(roster_id=1, owner_id=MY_ID, player_ids=["qb1", "rb1"], starter_ids=["qb1"], wins=2),
+            SleeperRoster(roster_id=2, owner_id="them", player_ids=["rb2"], starter_ids=["rb2"], wins=3),
+        ],
+        matchups=[
+            {"roster_id": 1, "matchup_id": 7, "points": 88.5},
+            {"roster_id": 2, "matchup_id": 7, "points": 96.1},
+        ],
+        **extra,
+    )
+
+
+def test_the_season_spans_every_regular_season_week() -> None:
+    season = _provider(_league_client()).schedule("L1").season
+    assert [row.label for row in season[:3]] == ["Week 1", "Week 2", "Week 3"]
+    assert len(season) == 18
+
+
+def test_a_week_carries_the_days_it_is_actually_played() -> None:
+    """An NFL week runs Thursday to Monday, so one date is wrong for most of it."""
+    season = _provider(_league_client()).schedule("L1").season
+    assert season[0].date == "10-14 Sep"
+
+
+def test_a_future_week_has_no_score() -> None:
+    """A week that has not happened is not nil-nil."""
+    season = _provider(_league_client()).schedule("L1").season
+    assert season[5].result == ""
+    assert season[5].tone == "neutral"
+
+
+def test_a_played_week_carries_its_score_and_whether_it_was_won() -> None:
+    season = _provider(_at_week(5)).schedule("L1").season
+
+    assert season[0].result == "88.5-96.1"
+    assert season[0].tone == "warning"  # 88.5 lost
+
+
+def test_the_current_week_is_marked() -> None:
+    season = _provider(_league_client()).schedule("L1").season
+    assert [row.label for row in season if row.is_current] == ["Week 3"]
+
+
+def test_the_table_is_sorted_on_the_record_and_says_which_is_yours() -> None:
+    standings = _provider(_league_client()).schedule("L1").standings
+    assert [row.rank for row in standings] == [1, 2]
+    assert standings[0].record == "3-0"  # the 3-win roster leads
+    assert [row.is_mine for row in standings] == [False, True]
+
+
+def _at_week(week: int, **extra: Any) -> FakeSleeper:
+    client = _league_client(**extra)
+    client.get_state = lambda sport="nfl": SeasonState(  # type: ignore[method-assign]
+        week=week, season="2026", season_type="regular"
+    )
+    return client
+
+
+def test_the_real_games_behind_the_week_are_listed_with_their_day() -> None:
+    matches = _provider(_at_week(2)).schedule("L1").matches
+    assert [(m.away, m.home) for m in matches] == [("BUF", "MIA")]
+    assert matches[0].label == "Thu 17 Sep"
+
+
+def test_a_week_with_no_real_games_lists_none() -> None:
+    """The default fake season only reaches week 2."""
+    assert _provider(_league_client()).schedule("L1").matches == []
+
+
+def test_a_game_you_have_players_in_is_marked() -> None:
+    """The only thing that makes one game on a slate different from another."""
+    matches = _provider(_at_week(2)).schedule("L1").matches
+    marked = {(m.away, m.home) for m in matches if m.detail}
+
+    assert marked == {("BUF", "MIA")}  # every fake projection is a BUF player
+
+
+def test_activity_is_newest_first_on_the_instant_not_the_label() -> None:
+    """ "Sep 3" sorts before "Sep 21" alphabetically and after it in time."""
+    client = _at_week(
+        2,
+        transactions={
+            1: [Transaction(kind="waiver", roster_ids=[1], adds={"qb1": 1}, drops={}, when=1_756_000_000_000)],
+            2: [Transaction(kind="trade", roster_ids=[2], adds={}, drops={"rb2": 2}, when=1_759_000_000_000)],
+        },
+    )
+
+    activity = _provider(client).schedule("L1").activity
+
+    assert [row.what for row in activity] == ["Trade", "Waiver"]
+
+
+def test_activity_names_players_rather_than_identifiers() -> None:
+    client = _league_client(
+        transactions={3: [Transaction(kind="waiver", roster_ids=[1], adds={"qb1": 1}, drops={"rb1": 1}, when=1)]}
+    )
+
+    activity = _provider(client).schedule("L1").activity
+
+    assert activity[0].detail == "+Star QB, -Good RB"
+    assert activity[0].tone == "good"  # it was mine
+
+
+def test_a_failed_activity_fetch_leaves_the_rest_of_the_page() -> None:
+    schedule = _provider(_league_client(transactions_error=SleeperAPIError("down"))).schedule("L1")
+
+    assert schedule.activity == []
+    assert schedule.standings
+
+
+def test_dates_are_enrichment_not_a_reason_to_fail() -> None:
+    """A week without them is still a week."""
+    schedule = _provider(_league_client(schedule_error=SleeperAPIError("down"))).schedule("L1")
+
+    assert schedule.season
+    assert schedule.season[0].date == ""
+    assert schedule.matches == []
+
+
+def test_the_week_says_when_it_is_played() -> None:
+    """A week with no dates on it is a number, which is already known."""
+    assert _provider(_league_client()).summary("L1").window == "Week 3"
+
+
+def test_the_window_carries_the_dates_where_there_are_any() -> None:
+    assert _provider(_at_week(2)).summary("L1").window == "Week 2 · 17 Sep"

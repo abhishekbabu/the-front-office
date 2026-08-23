@@ -10,12 +10,16 @@ is the only configuration.
 
 import logging
 from dataclasses import dataclass
+from datetime import date, datetime, timezone
+from typing import Any
 
 from the_front_office.adapters.outbound.platforms.sleeper.client import NFL, SleeperClient
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
     PlayerMeta,
+    ScheduledGame,
     SleeperLeague,
     SleeperRoster,
+    Transaction,
     WeeklyProjection,
 )
 from the_front_office.adapters.outbound.sports.names import NameIndex
@@ -32,11 +36,16 @@ from the_front_office.config.constants import NFL_SCOUT_PROMPT, NFL_TRADE_PROMPT
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError
 from the_front_office.domain.models import (
+    ActivityRow,
+    LeagueSchedule,
+    Match,
     PlayerCard,
     PlayerDetail,
+    ScheduleRow,
     Side,
     SportContext,
     Spot,
+    StandingRow,
     Stat,
     StatGroup,
     Summary,
@@ -136,6 +145,58 @@ def _split_lines(splits: dict[str, float]) -> list[Stat]:
         if splits.get(key)
     ]
 
+
+def _date(iso: str) -> date | None:
+    """Sleeper publishes a day, not an instant, so this is a label not a time."""
+    try:
+        return datetime.strptime(iso[:10], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+
+
+def _day(iso: str) -> str:
+    """One date, as a person reads it: 'Sun 13 Sep'."""
+    parsed = _date(iso)
+    return parsed.strftime("%a %-d %b") if parsed else ""
+
+
+def _week_dates(games: list[ScheduledGame]) -> str:
+    """The span a fantasy week actually covers.
+
+    An NFL week runs Thursday to Monday, so one date would be wrong for most
+    of it and a range is what somebody is checking against their own calendar.
+    """
+    days = sorted({d for d in (_date(g.date) for g in games) if d})
+    if not days:
+        return ""
+    if days[0] == days[-1]:
+        return days[0].strftime("%-d %b")
+    if days[0].month == days[-1].month:
+        return f"{days[0].strftime('%-d')}-{days[-1].strftime('%-d %b')}"
+    return f"{days[0].strftime('%-d %b')} - {days[-1].strftime('%-d %b')}"
+
+
+def _moment(epoch_ms: int) -> str:
+    """Sleeper timestamps transactions in epoch milliseconds.
+
+    Rendered in UTC rather than the machine's zone: it is a label on a list,
+    and a league spans zones anyway.
+    """
+    if not epoch_ms:
+        return ""
+    return datetime.fromtimestamp(epoch_ms / 1000, tz=timezone.utc).strftime("%-d %b")
+
+
+REGULAR_SEASON_WEEKS = 18
+# "What did I miss", not the season's whole transaction log.
+ACTIVITY_WEEKS = 3
+
+TRANSACTION_LABELS = {
+    "waiver": "Waiver",
+    "free_agent": "Free agent",
+    "trade": "Trade",
+    "commissioner": "Commissioner",
+}
 
 AVAILABLE_PLAYER_LIMIT = 25
 TRENDING_LIMIT = 10
@@ -416,7 +477,201 @@ class SleeperNFLProvider:
                 Stat(label=club, value="no game this week", tone="warning")
                 for club in sorted({p.team for p in state.projected if scheduled and not p.opponent})
             ],
+            window=self._window(state),
         )
+
+    def _window(self, state: _Week) -> str:
+        """Which week, and when it is actually played.
+
+        A week with no dates on it is a number, and the number is the one thing
+        somebody already knows.
+        """
+        span = _week_dates(self._games_by_week(state.season).get(state.week, []))
+        return f"Week {state.week} · {span}" if span else f"Week {state.week}"
+
+    def schedule(self, league_id: str) -> LeagueSchedule:
+        """The season, the table, this week's real games, and what the league did."""
+        state = self._week(league_id)
+        rosters = self.client.get_rosters(league_id)
+        names = self.client.get_league_users(league_id)
+        by_roster = {r.roster_id: r for r in rosters}
+
+        return LeagueSchedule(
+            season=self._season_rows(state, league_id, by_roster, names),
+            standings=self._standings(state, rosters, names),
+            matches=self._matches(state),
+            activity=self._activity(state, league_id, by_roster, names),
+        )
+
+    def _season_rows(
+        self,
+        state: _Week,
+        league_id: str,
+        by_roster: dict[int, SleeperRoster],
+        names: dict[str, str],
+    ) -> list[ScheduleRow]:
+        """Your own season, week by week, with who you play and how it went.
+
+        Eighteen matchup fetches, run concurrently and cached — and the reason
+        this is a separate call from the week rather than something the week
+        carries, since nobody checking a lineup should wait on the season.
+        """
+        games = self._games_by_week(state.season)
+        weeks = list(range(1, REGULAR_SEASON_WEEKS + 1))
+        try:
+            by_week = self.client.get_matchups_bulk(league_id, weeks)
+        except SleeperAPIError as e:
+            logger.warning(f"Continuing without the season's matchups: {e}")
+            by_week = {}
+
+        rows: list[ScheduleRow] = []
+        for week in weeks:
+            matchups = by_week.get(week, [])
+            mine = next((m for m in matchups if m.get("roster_id") == state.roster.roster_id), None)
+            theirs = self._other_side(matchups, mine, state.roster.roster_id)
+            opponent = by_roster.get(int(theirs.get("roster_id", 0))) if theirs else None
+
+            rows.append(
+                ScheduleRow(
+                    label=f"Week {week}",
+                    date=_week_dates(games.get(week, [])),
+                    opponent=names.get(opponent.owner_id, "") if opponent else "",
+                    detail=opponent.record if opponent else "bye",
+                    result=self._result(mine, theirs, week, state.week),
+                    tone=self._week_tone(mine, theirs, week, state.week),
+                    is_current=week == state.week,
+                )
+            )
+        return rows
+
+    @staticmethod
+    def _other_side(matchups: list[dict[str, Any]], mine: dict[str, Any] | None, roster_id: int) -> Any:
+        if not mine or mine.get("matchup_id") is None:
+            return None
+        return next(
+            (m for m in matchups if m.get("matchup_id") == mine.get("matchup_id") and m.get("roster_id") != roster_id),
+            None,
+        )
+
+    @staticmethod
+    def _result(mine: Any, theirs: Any, week: int, current: int) -> str:
+        """The score, and only once there is one. A future week is not 0-0."""
+        if week >= current or not mine or not theirs:
+            return ""
+        return f"{float(mine.get('points') or 0):.1f}-{float(theirs.get('points') or 0):.1f}"
+
+    @staticmethod
+    def _week_tone(mine: Any, theirs: Any, week: int, current: int) -> Tone:
+        if week >= current or not mine or not theirs:
+            return "neutral"
+        return "good" if float(mine.get("points") or 0) > float(theirs.get("points") or 0) else "warning"
+
+    def _standings(self, state: _Week, rosters: list[SleeperRoster], names: dict[str, str]) -> list[StandingRow]:
+        """The table, sorted the way the league is: record first, then points."""
+        ordered = sorted(rosters, key=lambda r: (-(r.wins), -(r.points_for)))
+        return [
+            StandingRow(
+                rank=i,
+                name=names.get(r.owner_id, f"Roster {r.roster_id}"),
+                record=r.record,
+                points=f"{r.points_for:.1f}",
+                is_mine=r.roster_id == state.roster.roster_id,
+            )
+            for i, r in enumerate(ordered, start=1)
+        ]
+
+    def _matches(self, state: _Week) -> list[Match]:
+        """The real games this fantasy week is made of.
+
+        Only the ones your league is actually exposed to would be a smaller
+        list, but which clubs matter changes with every waiver — the whole
+        slate is what a week is, and it is one cached request.
+        """
+        games = self._games_by_week(state.season).get(state.week, [])
+        mine = {p.team for p in state.projected}
+        return [
+            Match(
+                label=_day(g.date),
+                home=g.home,
+                away=g.away,
+                # Whether you have anyone in it, which is the only thing that
+                # makes one game on a Sunday slate different from another.
+                detail="you have players" if {g.home, g.away} & mine else "",
+                tone="good" if {g.home, g.away} & mine else "neutral",
+            )
+            for g in games
+        ]
+
+    def _activity(
+        self,
+        state: _Week,
+        league_id: str,
+        by_roster: dict[int, SleeperRoster],
+        names: dict[str, str],
+    ) -> list[ActivityRow]:
+        """What the league has done lately, newest first.
+
+        Bounded to the last few weeks rather than the season: this is "what did
+        I miss", and a hundred rows of September waivers is not that.
+        """
+        dated: list[tuple[int, ActivityRow]] = []
+        for week in range(max(1, state.week - ACTIVITY_WEEKS + 1), state.week + 1):
+            try:
+                transactions = self.client.get_transactions(league_id, week)
+            except SleeperAPIError as e:
+                logger.warning(f"Skipping week {week} activity: {e}")
+                continue
+            dated.extend(self._activity_rows(transactions, state, by_roster, names))
+        # Sorted on the instant, not on the string that renders it: "Sep 3"
+        # sorts before "Sep 21" alphabetically and after it in time.
+        return [row for _, row in sorted(dated, key=lambda pair: pair[0], reverse=True)]
+
+    def _activity_rows(
+        self,
+        transactions: list[Transaction],
+        state: _Week,
+        by_roster: dict[int, SleeperRoster],
+        names: dict[str, str],
+    ) -> list[tuple[int, ActivityRow]]:
+        rows: list[tuple[int, ActivityRow]] = []
+        for t in transactions:
+            roster = by_roster.get(t.roster_ids[0]) if t.roster_ids else None
+            moved = [f"+{self._name_of(pid, state)}" for pid in t.adds] + [
+                f"-{self._name_of(pid, state)}" for pid in t.drops
+            ]
+            rows.append(
+                (
+                    t.when,
+                    ActivityRow(
+                        when=_moment(t.when),
+                        who=names.get(roster.owner_id, "") if roster else "",
+                        what=TRANSACTION_LABELS.get(t.kind, t.kind),
+                        detail=", ".join(moved),
+                        tone="good" if roster and roster.roster_id == state.roster.roster_id else "neutral",
+                    ),
+                )
+            )
+        return rows
+
+    @staticmethod
+    def _name_of(player_id: str, state: _Week) -> str:
+        meta = state.players.get(player_id)
+        return str(meta.get("name") or player_id) if meta else player_id
+
+    def _games_by_week(self, season: str) -> dict[int, list[ScheduledGame]]:
+        """The season schedule bucketed by week, or nothing if it will not load.
+
+        Dates are enrichment: a week without them is still a week.
+        """
+        try:
+            games = self.client.get_season_schedule(season)
+        except SleeperAPIError as e:
+            logger.warning(f"Continuing without schedule dates: {e}")
+            return {}
+        by_week: dict[int, list[ScheduledGame]] = {}
+        for g in games:
+            by_week.setdefault(g.week, []).append(g)
+        return by_week
 
     def _opponent(self, state: _Week, league_id: str, scheduled: bool) -> Side | None:
         """The team you are playing, and what they are starting.

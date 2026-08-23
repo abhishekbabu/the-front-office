@@ -260,6 +260,30 @@ class H2HMatch:
 
 
 @dataclass(frozen=True)
+class TableRow:
+    """One entry in a mini-league table, of either format."""
+
+    rank: int
+    entry: int
+    entry_name: str
+    manager: str
+    total: int
+    """What the table is sorted on — league points in h2h, FPL points in classic."""
+
+    played: int = 0
+    won: int = 0
+    drawn: int = 0
+    lost: int = 0
+    points_for: int = 0
+    """Only h2h tables carry this; in a classic league `total` is already it."""
+
+    @property
+    def record(self) -> str:
+        """Empty for a classic league, which has no results to have a record of."""
+        return f"{self.won}W {self.drawn}D {self.lost}L" if self.played else ""
+
+
+@dataclass(frozen=True)
 class Fixture:
     """One match, with the difficulty rating the game assigns each side."""
 

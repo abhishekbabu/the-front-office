@@ -12,6 +12,7 @@ from typing import Protocol, TypedDict, TypeVar, runtime_checkable
 from pydantic import BaseModel
 
 from the_front_office.domain.models import (
+    LeagueSchedule,
     PlayerCard,
     PlayerDetail,
     SportContext,
@@ -128,6 +129,21 @@ class SportProvider(Protocol):
         number here is already known.
 
         Cheaper than build_context: no candidate pool, no market, no model.
+
+        Raises:
+            FrontOfficeError: the league or the user's team within it is missing.
+        """
+        ...
+
+    def schedule(self, league_id: str) -> LeagueSchedule:
+        """The league beyond this week: the season, the table, the real games.
+
+        Separate from `summary` because it is a different question asked at a
+        different time — how the season is going, rather than what to do about
+        Sunday — and it costs requests that the week does not need.
+
+        Every section is optional. A platform that has no transaction feed
+        returns none rather than an empty promise.
 
         Raises:
             FrontOfficeError: the league or the user's team within it is missing.

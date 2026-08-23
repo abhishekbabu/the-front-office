@@ -27,7 +27,12 @@ export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) 
 
   return (
     <>
-      <PageHeader title={league.name} meta={league.detail} />
+      {/* The week is what this page is about, so it belongs in the header
+          rather than a row down among the figures. */}
+      <PageHeader
+        title={league.name}
+        meta={[week.data?.window, league.detail].filter(Boolean).join(" · ")}
+      />
       <StatStrip stats={week.data?.headline ?? []} />
 
       {week.isLoading && <Loading lines={4} />}

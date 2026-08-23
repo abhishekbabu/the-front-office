@@ -188,3 +188,40 @@ class SeasonStats:
         availability, and a player who missed six weeks is not worse per week
         for it."""
         return self.scored(scoring) / self.games if self.games else 0.0
+
+
+@dataclass(frozen=True)
+class ScheduledGame:
+    """One real-world NFL game, from Sleeper's own season schedule."""
+
+    week: int
+    date: str
+    """ISO date. Sleeper publishes the day, not the kickoff time."""
+
+    home: str
+    away: str
+    status: str = ""
+
+    def opponent_of(self, team: str) -> tuple[str, bool] | None:
+        """Who `team` plays that week, and whether they are at home."""
+        if team == self.home:
+            return self.away, True
+        if team == self.away:
+            return self.home, False
+        return None
+
+
+@dataclass(frozen=True)
+class Transaction:
+    """One completed move by somebody in the league."""
+
+    kind: str
+    """waiver, free_agent or trade, as Sleeper labels it."""
+
+    roster_ids: list[int]
+    adds: dict[str, int]
+    """player_id -> the roster that gained them."""
+
+    drops: dict[str, int]
+    when: int = 0
+    """Epoch milliseconds, which is a number until somebody formats it."""

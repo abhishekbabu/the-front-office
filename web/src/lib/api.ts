@@ -66,6 +66,9 @@ export type Summary = {
   opponent: Side | null;
   swaps: Swap[];
   fixtures: Stat[];
+  /** When this week actually is, already formatted. A week with no dates on it
+      is a number, and the number is the one thing already known. */
+  window: string;
 };
 
 export type ScoutReport = {
@@ -116,6 +119,48 @@ export type PlayerCard = { player_id: string; columns: Record<string, string>; t
 
 /** A handful of related figures under a heading. */
 export type StatGroup = { title: string; stats: Stat[] };
+
+export type ScheduleRow = {
+  label: string;
+  date: string;
+  opponent: string;
+  detail: string;
+  result: string;
+  tone: Tone;
+  is_current: boolean;
+};
+
+export type StandingRow = {
+  rank: number;
+  name: string;
+  detail: string;
+  record: string;
+  points: string;
+  is_mine: boolean;
+};
+
+export type Match = {
+  label: string;
+  home: string;
+  away: string;
+  detail: string;
+  tone: Tone;
+};
+
+export type ActivityRow = {
+  when: string;
+  who: string;
+  what: string;
+  detail: string;
+  tone: Tone;
+};
+
+export type LeagueSchedule = {
+  season: ScheduleRow[];
+  standings: StandingRow[];
+  matches: Match[];
+  activity: ActivityRow[];
+};
 
 export type PlayerDetail = {
   player_id: string;
@@ -173,6 +218,8 @@ export const api = {
   player: (sport: string, league: string, id: string) =>
     request<PlayerDetail>(`/api/${sport}/leagues/${league}/players/${id}`),
   summary: (sport: string, league: string) => request<Summary>(`/api/${sport}/leagues/${league}/summary`),
+  schedule: (sport: string, league: string) =>
+    request<LeagueSchedule>(`/api/${sport}/leagues/${league}/schedule`),
   scout: (sport: string, league: string) => post<Analysis>(`/api/${sport}/leagues/${league}/scout`, {}),
   trade: (sport: string, league: string, text: string) =>
     post<Evaluation>(`/api/${sport}/leagues/${league}/trade`, { text }),

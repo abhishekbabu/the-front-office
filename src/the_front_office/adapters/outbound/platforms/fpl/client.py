@@ -35,6 +35,7 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
     Pick,
     Player,
     Squad,
+    TableRow,
 )
 from the_front_office.adapters.outbound.platforms.http import JsonApiClient
 from the_front_office.adapters.outbound.platforms.retry import build_retry, is_transient
@@ -380,6 +381,57 @@ class FPLClient:
                         opponent_points=int(match.get(f"entry_{theirs}_points") or 0),
                     )
         return None
+
+    def get_h2h_season(self, league_id: int, entry_id: int) -> dict[int, H2HMatch]:
+        """Every tie this entry has in the league, keyed by gameweek.
+
+        One request for the whole season rather than one per gameweek: FPL
+        returns the league's full fixture list already paginated by 50, and a
+        38-week season in a small league fits in the first page.
+        """
+        data = self._api.cached(
+            f"h2h_season_{league_id}",
+            f"{BASE_URL}/leagues-h2h-matches/league/{league_id}/",
+            ENTRY_TTL,
+        )
+        season: dict[int, H2HMatch] = {}
+        for match in (data or {}).get("results") or []:
+            event = match.get("event")
+            if event is None:
+                continue
+            for mine, theirs in (("1", "2"), ("2", "1")):
+                if match.get(f"entry_{mine}_entry") == entry_id and match.get(f"entry_{theirs}_entry"):
+                    season[int(event)] = H2HMatch(
+                        opponent_entry=int(match[f"entry_{theirs}_entry"]),
+                        opponent_name=str(match.get(f"entry_{theirs}_name") or "Opponent"),
+                        my_points=int(match.get(f"entry_{mine}_points") or 0),
+                        opponent_points=int(match.get(f"entry_{theirs}_points") or 0),
+                    )
+        return season
+
+    def get_standings(self, league_id: int, is_h2h: bool) -> list[TableRow]:
+        """The league table. The two formats are different endpoints entirely."""
+        kind = "leagues-h2h" if is_h2h else "leagues-classic"
+        data = self._api.cached(
+            f"standings_{kind}_{league_id}",
+            f"{BASE_URL}/{kind}/{league_id}/standings/",
+            ENTRY_TTL,
+        )
+        return [
+            TableRow(
+                rank=int(row.get("rank") or 0),
+                entry=int(row.get("entry") or 0),
+                entry_name=str(row.get("entry_name") or ""),
+                manager=str(row.get("player_name") or ""),
+                total=int(row.get("total") or 0),
+                played=int(row.get("matches_played") or 0),
+                won=int(row.get("matches_won") or 0),
+                drawn=int(row.get("matches_drawn") or 0),
+                lost=int(row.get("matches_lost") or 0),
+                points_for=int(row.get("points_for") or 0),
+            )
+            for row in ((data or {}).get("standings") or {}).get("results") or []
+        ]
 
     # ── fixtures ────────────────────────────────────────────────────
 

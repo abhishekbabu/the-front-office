@@ -28,7 +28,14 @@ from the_front_office.config.logging import setup_logging
 from the_front_office.config.settings import PROJECT_ROOT, settings
 from the_front_office.config.telemetry import setup_telemetry
 from the_front_office.domain.errors import FrontOfficeError
-from the_front_office.domain.models import PlayerCard, PlayerDetail, ScoutReport, Summary, TradeVerdict
+from the_front_office.domain.models import (
+    LeagueSchedule,
+    PlayerCard,
+    PlayerDetail,
+    ScoutReport,
+    Summary,
+    TradeVerdict,
+)
 from the_front_office.domain.ports import ChatSession
 
 logger = logging.getLogger(__name__)
@@ -348,6 +355,16 @@ def _register_routes(app: FastAPI) -> None:
         showing nothing the app already knows.
         """
         return data.build_provider(sport).summary(league_id)
+
+    @app.get("/api/{sport}/leagues/{league_id}/schedule", response_model=LeagueSchedule)
+    def schedule(sport: str, league_id: str) -> LeagueSchedule:
+        """The league beyond this week: the season, the table, the real games.
+
+        Separate from `summary` because it answers a different question and
+        costs requests the week does not need — nobody checking their lineup
+        should wait on the whole season's fixtures.
+        """
+        return data.build_provider(sport).schedule(league_id)
 
     @app.post("/api/{sport}/leagues/{league_id}/scout", response_model=Analysis)
     def scout(sport: str, league_id: str) -> Analysis:

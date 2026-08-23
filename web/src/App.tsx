@@ -10,6 +10,7 @@ import { rise } from "@/lib/motion";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScoutPanel } from "@/panels/Scout";
+import { LeaguePanel } from "@/panels/LeaguePanel";
 import { ReportPanel } from "@/panels/Report";
 import { TeamPanel } from "@/panels/Team";
 import { TradePanel } from "@/panels/Trade";
@@ -18,7 +19,7 @@ import { Landing } from "@/panels/Landing";
 import { cn } from "@/lib/utils";
 
 /** The views that need a sport and a league behind them. */
-type SportView = "scout" | "team" | "report" | "trade";
+type SportView = "scout" | "league" | "team" | "report" | "trade";
 
 /** Settings works with nothing configured, which is exactly when it is needed. */
 type View = SportView | "settings" | "home";
@@ -68,6 +69,7 @@ export default function App() {
   const panelKey = `${active?.key}:${league?.league_id}`;
   const views: SportView[] = [
     "scout",
+    "league",
     "team",
     // Both need a model, so neither is offered without one.
     ...(ai ? (["report"] as const) : []),
@@ -121,7 +123,11 @@ export default function App() {
           <Group label="View">
             {views.map((v) => (
               <RailItem key={v} active={v === current} onClick={() => setView(v)}>
-                {{ scout: "This week", team: "My team", report: "Report", trade: "Trade" }[v]}
+                {
+                  { scout: "This week", league: "League", team: "My team", report: "Report", trade: "Trade" }[
+                    v
+                  ]
+                }
               </RailItem>
             ))}
           </Group>
@@ -194,6 +200,8 @@ export default function App() {
             <m.div key={`${panelKey}:${current}`} variants={rise} initial="hidden" animate="shown">
               {current === "scout" ? (
                 <ScoutPanel sport={active} league={league} />
+              ) : current === "league" ? (
+                <LeaguePanel sport={active} league={league} />
               ) : current === "team" ? (
                 <TeamPanel sport={active} league={league} />
               ) : current === "report" ? (
