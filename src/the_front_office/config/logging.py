@@ -1,3 +1,10 @@
+"""One logging setup, called once per process by each entry point.
+
+The vendor loggers are quietened deliberately rather than left at their
+defaults: yahoofantasy and the OAuth stack narrate every request at INFO, which
+buries this app's own lines in a report that makes dozens of them.
+"""
+
 import logging
 import sys
 
@@ -5,7 +12,11 @@ from the_front_office.config.settings import settings
 
 
 def setup_logging():
-    """Configure logging for the application."""
+    """Send this app's logs to stdout, and quieten the libraries.
+
+    Handlers are added only when there are none, so a second call from another
+    entry point in the same process does not double every line.
+    """
     root_logger = logging.getLogger()
     root_logger.setLevel(settings.log_level)
 

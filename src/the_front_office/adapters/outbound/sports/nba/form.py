@@ -82,8 +82,9 @@ def nine_cat(games: list[NBAGameLog]) -> NineCatStats:
 class SleeperNBAForm:
     """Recent form and remaining games for basketball.
 
-    Holds the same three methods the NBA.com client did, so the provider and
-    the context builder ask the same questions they always did.
+    Loads each of the three things it reads once and keeps them: a report asks
+    about every player on a roster and every club in a matchup, and refetching
+    the catalog per question would be the whole cost of the page.
     """
 
     def __init__(self, client: SleeperClient | None = None, season: str | None = None) -> None:
