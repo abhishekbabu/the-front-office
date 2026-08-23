@@ -420,3 +420,95 @@ def test_a_missing_field_size_does_not_render_as_zero() -> None:
 
     league = MiniLeague(id=1, name="x", rank=4200, is_private=True, rank_count=None)
     assert league.standing == "4,200"
+
+
+# ── the league beyond this gameweek ─────────────────────────────────────
+
+H2H_SEASON = {
+    "results": [
+        {
+            "event": 1,
+            "entry_1_entry": 7,
+            "entry_1_name": "Mine",
+            "entry_1_points": 60,
+            "entry_2_entry": 99,
+            "entry_2_name": "Rival",
+            "entry_2_points": 44,
+        },
+        {
+            "event": 2,
+            "entry_1_entry": 99,
+            "entry_1_name": "Rival",
+            "entry_1_points": 51,
+            "entry_2_entry": 7,
+            "entry_2_name": "Mine",
+            "entry_2_points": 70,
+        },
+        # A tie between two other managers, and one with no gameweek yet.
+        {"event": 3, "entry_1_entry": 98, "entry_2_entry": 97},
+        {"event": None, "entry_1_entry": 7, "entry_2_entry": 99},
+    ]
+}
+
+
+def test_the_whole_h2h_season_comes_back_keyed_by_gameweek(tmp_path: Path) -> None:
+    """One request rather than one per gameweek."""
+    session = FakeSession({"/leagues-h2h-matches/league/950/": H2H_SEASON})
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=session)
+
+    season = client.get_h2h_season(950, 7)
+
+    assert sorted(season) == [1, 2]
+    assert season[1].opponent_name == "Rival"
+    assert (season[1].my_points, season[1].opponent_points) == (60, 44)
+
+
+def test_the_side_of_a_tie_is_read_from_whichever_slot_you_are_in(tmp_path: Path) -> None:
+    """FPL puts an entry in slot 1 or slot 2 with no regard for who is asking."""
+    session = FakeSession({"/leagues-h2h-matches/league/950/": H2H_SEASON})
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=session)
+
+    season = client.get_h2h_season(950, 7)
+
+    assert (season[2].my_points, season[2].opponent_points) == (70, 51)
+
+
+STANDINGS = {
+    "standings": {
+        "results": [
+            {
+                "rank": 1,
+                "entry": 99,
+                "entry_name": "Rival",
+                "player_name": "A Rival",
+                "total": 6,
+                "matches_played": 2,
+                "matches_won": 2,
+                "points_for": 104,
+            },
+            {"rank": 2, "entry": 7, "entry_name": "Mine", "player_name": "Me", "total": 3},
+        ]
+    }
+}
+
+
+def test_the_two_league_formats_are_different_endpoints(tmp_path: Path) -> None:
+    session = FakeSession({"/standings/": STANDINGS})
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=session)
+
+    client.get_standings(950, is_h2h=True)
+    client.get_standings(900, is_h2h=False)
+
+    assert "leagues-h2h/950" in session.requests[0]
+    assert "leagues-classic/900" in session.requests[1]
+
+
+def test_a_table_row_has_a_record_only_once_something_is_played(tmp_path: Path) -> None:
+    """A classic league has no results to have a record of."""
+    session = FakeSession({"/standings/": STANDINGS})
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=session)
+
+    rows = client.get_standings(950, is_h2h=True)
+
+    assert rows[0].record == "2W 0D 0L"
+    assert rows[1].record == ""

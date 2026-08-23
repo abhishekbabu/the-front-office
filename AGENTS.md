@@ -51,13 +51,13 @@ the platform are the same thing the names coincide (`fpl/fpl.py`,
 yahoofantasy SDK because it sets attributes via `setattr` at runtime — do not
 re-enable it there, and do not disable anything else globally.
 
-**Yahoo.** yahoofantasy's persistence is a read-modify-write of one shared
-pickle, so never call `_load_or_fetch`/`_save` from a thread pool — only
-`make_request` parallelises safely. The scoreboard needs an explicit short
-`persist_ttl`; the default is an hour. It raises requests' own exceptions, which
-escape as a 500 unless passed through `yahoo.translate`. Never trigger the OAuth
-flow implicitly — it blocks on a browser click, so non-interactive callers use
-`ensure_authorized`.
+**Yahoo.** Responses go through our own `JsonDiskCache`, not the SDK's store:
+`make_request` is the only fetch that parallelises safely and the vendor's
+`_load` takes no expiry. `_load_or_fetch` survives for the scoreboard alone,
+where `Week.sync` reads the SDK's store internally and a short `persist_ttl` is
+the only way to force a refresh. Cache writes stay on one thread. It raises requests' own exceptions, which escape as a 500 unless passed
+through `yahoo.translate`. Never trigger OAuth implicitly — non-interactive
+callers use `ensure_authorized`.
 
 **Chat history is resent every turn.** Seed follow-ups with a briefing, not the
 generation prompt, and say what was left out.
@@ -80,10 +80,10 @@ relied on transitively. Bound both ends (`>=X.Y.Z,<NEXT_MAJOR`), then `just lock
 System CLIs go in the `Brewfile`. Use `just install` / `just lock` (`uv sync`) —
 `uv pip install` ignores `uv.lock`.
 
-**Portability.** Never hardcode `.venv/bin/...` or `.venv/Scripts/...` in a
-recipe, hook or script; `uv run` resolves it everywhere. No POSIX-only commands
-in tooling — the project supports Windows, where no bash is guaranteed. Put
-scripts in `scripts/` instead.
+**Portability.** Never hardcode `.venv/bin/...` or `.venv/Scripts/...`; `uv run`
+resolves it everywhere. No POSIX-only commands in tooling and no `strftime`
+dash-modifiers (`%-d`) — both are glibc-only and the project supports Windows.
+Format dates through `sports/dates.py`; put scripts in `scripts/`.
 
 **Secrets.** Never commit `.env`, `.yahoofantasy`, or any `.*_cache.json`. Read
 config through the `settings` singleton, never `os.getenv` at a call site.
@@ -122,7 +122,8 @@ shared. When you find yourself writing something a second time, extract it then
 
 - `adapters/outbound/platforms/` — infrastructure every platform needs:
   `http.py` (cached, retried JSON GETs), `retry.py` (transient-failure policy),
-  `cache.py` (TTL'd disk cache).
+  `cache.py` (the one disk cache every platform reads through; expiry is a
+  `Freshness` predicate — `within(ttl)`, or a rule a duration cannot express).
 - `adapters/outbound/sports/` — policy every sport needs: `names.py`
   (cross-platform player matching), `trades.py` (resolving a proposal).
 - `domain/` — rules that hold regardless of sport or platform.

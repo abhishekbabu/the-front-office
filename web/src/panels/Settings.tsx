@@ -46,7 +46,15 @@ const GROUPS: { title: string; note: string; keys: string[] }[] = [
   {
     title: "Advanced",
     note: "Rarely worth changing. Each field shows the value already in force; typing replaces it.",
-    keys: ["LOG_LEVEL", "NBA_API_DELAY", "NBA_CACHE_FILE", "SLEEPER_CACHE_FILE", "FPL_CACHE_FILE", "YAHOO_TOKEN_FILE"],
+    keys: [
+      "LOG_LEVEL",
+      "NBA_API_DELAY",
+      "NBA_CACHE_FILE",
+      "SLEEPER_CACHE_FILE",
+      "FPL_CACHE_FILE",
+      "YAHOO_CACHE_FILE",
+      "YAHOO_TOKEN_FILE",
+    ],
   },
 ];
 
@@ -78,9 +86,12 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
 
   return (
     <>
-      <PageHeader title="Settings" meta="Written to .env and applied immediately">
+      <PageHeader
+        title="Settings"
+        meta="Written to .env and applied immediately"
+        leading={<IconButton label="Back" icon={<ArrowLeft />} onClick={onBack} />}
+      >
         <div className="flex items-center gap-1">
-          <IconButton label="Back" icon={<ArrowLeft />} onClick={onBack} />
           {/* The count lives in the label rather than beside the icon: the
               control does one thing whether one field changed or six, and the
               rows that changed already say which. */}

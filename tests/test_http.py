@@ -143,3 +143,108 @@ def test_a_cache_entry_stores_when_it_was_written(tmp_path: Path) -> None:
     assert client.cache_get("k", timedelta(seconds=1)) == 1
     stale = JsonDiskCache(tmp_path / "c.json").get("k", timedelta(seconds=1), now=datetime.now(timezone.utc) + TTL)
     assert stale is None
+
+
+# ── batched reads ───────────────────────────────────────────────────────
+
+
+class RoutedSession:
+    """Answers by URL, and records which thread each request ran on."""
+
+    def __init__(self, routes: dict[str, Any], failing: set[str] | None = None) -> None:
+        self.routes = routes
+        self.failing = failing or set()
+        self.requests: list[str] = []
+        self.threads: set[str] = set()
+
+    def get(self, url: str, timeout: int = 0) -> FakeResponse:
+        import threading
+        import time
+
+        self.threads.add(threading.current_thread().name)
+        self.requests.append(url)
+        if url in self.failing:
+            raise requests.exceptions.ConnectionError("down")
+        time.sleep(0.02)  # long enough that serial execution is distinguishable
+        return FakeResponse(self.routes.get(url))
+
+
+ROUTES = {f"https://example.test/{i}": {"week": i} for i in range(1, 6)}
+URLS = {f"k{i}": f"https://example.test/{i}" for i in range(1, 6)}
+
+
+def test_a_batch_returns_every_key(tmp_path: Path) -> None:
+    session = RoutedSession(ROUTES)
+
+    result = _client(tmp_path, session).cached_many(URLS, TTL)  # type: ignore[arg-type]
+
+    assert result == {f"k{i}": {"week": i} for i in range(1, 6)}
+
+
+def test_a_batch_fetches_concurrently(tmp_path: Path) -> None:
+    """Eighteen weeks run one after another are the whole wait on the page."""
+    session = RoutedSession(ROUTES)
+
+    _client(tmp_path, session).cached_many(URLS, TTL)  # type: ignore[arg-type]
+
+    assert len(session.threads) > 1, "requests ran on a single thread"
+
+
+def test_a_batch_only_fetches_what_it_does_not_have(tmp_path: Path) -> None:
+    cache = JsonDiskCache(tmp_path / "c.json")
+    cache.set("k1", {"week": 1})
+    cache.set("k2", {"week": 2})
+    session = RoutedSession(ROUTES)
+
+    result = _client(tmp_path, session, cache=cache).cached_many(URLS, TTL)  # type: ignore[arg-type]
+
+    assert sorted(session.requests) == [f"https://example.test/{i}" for i in (3, 4, 5)]
+    assert result["k1"] == {"week": 1}
+
+
+def test_a_fully_cached_batch_touches_the_network_at_all(tmp_path: Path) -> None:
+    cache = JsonDiskCache(tmp_path / "c.json")
+    for i in range(1, 6):
+        cache.set(f"k{i}", {"week": i})
+    session = RoutedSession(ROUTES)
+
+    _client(tmp_path, session, cache=cache).cached_many(URLS, TTL)  # type: ignore[arg-type]
+
+    assert session.requests == []
+
+
+def test_batch_writes_stay_on_the_calling_thread(tmp_path: Path) -> None:
+    """The cache file is read-modify-written whole, so concurrent writes would
+    clobber each other. Only the requests are allowed to fan out."""
+    writes: set[str] = set()
+
+    class Recording(JsonDiskCache):
+        def set(self, key: str, value: Any, now: Any = None) -> None:
+            import threading
+
+            writes.add(threading.current_thread().name)
+            super().set(key, value, now=now)
+
+    session = RoutedSession(ROUTES)
+    _client(tmp_path, session, cache=Recording(tmp_path / "c.json")).cached_many(URLS, TTL)  # type: ignore[arg-type]
+
+    assert len(writes) == 1
+
+
+def test_one_failed_request_leaves_a_hole_rather_than_failing_the_batch(tmp_path: Path) -> None:
+    """Seventeen weeks of a season is worth more than no season at all."""
+    session = RoutedSession(ROUTES, failing={"https://example.test/3"})
+
+    result = _client(tmp_path, session).cached_many(URLS, TTL)  # type: ignore[arg-type]
+
+    assert "k3" not in result
+    assert sorted(result) == ["k1", "k2", "k4", "k5"]
+
+
+def test_a_failed_request_is_not_stored_as_though_it_were_an_answer(tmp_path: Path) -> None:
+    cache = JsonDiskCache(tmp_path / "c.json")
+    session = RoutedSession(ROUTES, failing={"https://example.test/3"})
+
+    _client(tmp_path, session, cache=cache).cached_many(URLS, TTL)  # type: ignore[arg-type]
+
+    assert cache.get("k3", TTL) is None

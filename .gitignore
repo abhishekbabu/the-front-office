@@ -37,6 +37,7 @@ token.json
 .nba_cache.json
 .sleeper_cache.json
 .fpl_cache.json
+.yahoo_cache.json
 web/node_modules/
 web/dist/
 *.tsbuildinfo

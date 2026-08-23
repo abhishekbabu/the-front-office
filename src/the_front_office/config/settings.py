@@ -36,6 +36,7 @@ class AppSettings(BaseSettings):
     yahoo_client_secret: str | None = None
     yahoo_redirect_uri: str = "https://localhost:8080"
     yahoo_token_file: str = ".yahoofantasy"
+    yahoo_cache_file: str = ".yahoo_cache.json"
     yahoo_max_weekly_adds: int = Field(default=3, ge=0)
 
     # ── Sleeper (fantasy football) ──────────────────────────────────────

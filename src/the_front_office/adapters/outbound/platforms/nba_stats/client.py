@@ -4,27 +4,24 @@ Invalidation is tied to when games start and end rather than a plain TTL, so a
 report never mixes yesterday's box scores into a live matchup.
 """
 
-import json
 import logging
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from datetime import time as dt_time
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 from nba_api.stats.endpoints import leaguegamelog, scheduleleaguev2  # type: ignore[import-untyped]
 from tenacity import Retrying
 
+from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
 from the_front_office.adapters.outbound.platforms.nba_stats.stats import extract_nine_cat
 from the_front_office.adapters.outbound.platforms.nba_stats.types import (
     GameLogRecord,
     GameRecord,
-    LeagueGamelogCache,
-    NBACacheData,
     PlayerStats,
-    ScheduleCache,
 )
 from the_front_office.adapters.outbound.platforms.retry import build_retry, is_transient
 from the_front_office.config.settings import settings
@@ -32,6 +29,10 @@ from the_front_office.config.settings import settings
 logger = logging.getLogger(__name__)
 
 SCHEDULE_TTL_HOURS = 24
+SCHEDULE_TTL = timedelta(hours=SCHEDULE_TTL_HOURS)
+
+GAMELOG_KEY = "league_gamelog"
+SCHEDULE_KEY = "schedule"
 SCHEDULE_TIMEOUT_SECONDS = 30
 
 RETRY_MAX_ATTEMPTS = 3
@@ -101,81 +102,41 @@ class NBAStatsClient:
     player name, and `schedule`, keyed by team tricode.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, cache: JsonDiskCache | None = None) -> None:
         self._last_call_time: float = 0.0
-        self._cache_file: Path = Path(settings.nba_cache_file)
-        self._cache_data: NBACacheData = {
-            "league_gamelog": {"games": {}, "updated_at": ""},
-            "schedule": {"teams": {}, "updated_at": ""},
-        }
-        self._load_cache()
+        # The same store every other platform uses. What is different here is
+        # not where the answer is kept but when it stops being true, and that
+        # is a freshness rule rather than a second cache.
+        self._cache = cache or JsonDiskCache(Path(settings.nba_cache_file))
+        self._gamelog: dict[str, list[GameLogRecord]] = {}
+        self._schedule: dict[str, list[GameRecord]] = {}
 
-    # ── Cache I/O ──────────────────────────────────────────────────
+    # ── Freshness ──────────────────────────────────────────────────
 
-    def _load_cache(self) -> None:
-        """Load unified cache from disk."""
-        if not self._cache_file.exists():
-            return
+    @staticmethod
+    def _gamelog_is_fresh(stored_at: datetime, now: datetime) -> bool:
+        """Good until the next 1AM/3PM *Pacific* boundary passes.
 
-        try:
-            raw_data = json.loads(self._cache_file.read_text(encoding="utf-8"))
-
-            league_gamelog = cast("LeagueGamelogCache", raw_data.get("league_gamelog", {"games": {}, "updated_at": ""}))
-            schedule = cast("ScheduleCache", raw_data.get("schedule", {"teams": {}, "updated_at": ""}))
-
-            self._cache_data = {"league_gamelog": league_gamelog, "schedule": schedule}
-
-            num_players = len(self._cache_data["league_gamelog"]["games"])
-            logger.debug(
-                f"Loaded NBA cache: {num_players} players in gamelog, "
-                f"schedule is {self._get_schedule_age_hours():.1f}h old."
-            )
-        except Exception as e:
-            logger.warning(f"Failed to load cache: {e}. Starting fresh.")
-            self._cache_data = {
-                "league_gamelog": {"games": {}, "updated_at": ""},
-                "schedule": {"teams": {}, "updated_at": ""},
-            }
-
-    def _save_cache(self) -> None:
-        """Persist unified cache to disk."""
-        try:
-            self._cache_file.write_text(json.dumps(self._cache_data, indent=2), encoding="utf-8")
-        except Exception as e:
-            logger.warning(f"Failed to save cache: {e}")
-
-    def _get_schedule_age_hours(self, now: datetime | None = None) -> float:
-        """Age of the cached schedule in hours, or 999.0 if it cannot be dated."""
-        ts = _parse_timestamp(self._cache_data["schedule"].get("updated_at", ""))
-        if ts is None:
-            return 999.0
-        return ((now or _utc_now()) - ts).total_seconds() / 3600
-
-    def _is_league_gamelog_stale(self, now: datetime | None = None) -> bool:
-        """Whether the gamelog has crossed a 1AM/3PM *Pacific* invalidation boundary.
-
-        Args:
-            now: override the current time; must be timezone-aware. For tests.
+        The rule a TTL cannot express, and the reason a freshness rule is a
+        predicate: the gamelog is worth refetching when the day's games have
+        been played and settled, which is a moment on the league's own clock,
+        not an interval after whenever it happened to be fetched.
         """
-        updated_at = _parse_timestamp(self._cache_data["league_gamelog"]["updated_at"])
-        if updated_at is None:
-            return True
-
-        # Both sides are converted to Pacific so the comparison is against the
-        # zone the boundaries are defined in, whatever the machine's own is.
-        now_pt = (now or _utc_now()).astimezone(PACIFIC)
-        updated_pt = updated_at.astimezone(PACIFIC)
+        # Both sides in Pacific, so the comparison is against the zone the
+        # boundaries are defined in, whatever the machine's own is.
+        now_pt = now.astimezone(PACIFIC)
+        stored_pt = stored_at.astimezone(PACIFIC)
 
         # From an earlier Pacific day: stale relative to today's boundaries.
-        if updated_pt.date() < now_pt.date():
-            return True
+        if stored_pt.date() < now_pt.date():
+            return False
 
-        # Updated today — stale only if a boundary fell between then and now.
+        # Stored today — stale only if a boundary fell between then and now.
         for boundary_time in PLAYER_STATS_INVALIDATION_TIMES:
             boundary = datetime.combine(now_pt.date(), boundary_time, tzinfo=PACIFIC)
-            if updated_pt < boundary <= now_pt:
-                return True
-        return False
+            if stored_pt < boundary <= now_pt:
+                return False
+        return True
 
     # ── Rate Limiting ──────────────────────────────────────────────
 
@@ -197,7 +158,9 @@ class NBAStatsClient:
         return log.get_data_frames()[0]
 
     def _ensure_league_gamelog_loaded(self) -> None:
-        if not self._is_league_gamelog_stale():
+        hit = self._cache.get(GAMELOG_KEY, self._gamelog_is_fresh)
+        if hit is not None:
+            self._gamelog = hit
             return
 
         logger.debug("Refreshing league gamelog via nba_api...")
@@ -226,18 +189,18 @@ class NBAStatsClient:
                 }
                 games_by_player.setdefault(player_name, []).append(record)
 
-            self._cache_data["league_gamelog"] = {
-                "games": games_by_player,
-                "updated_at": _utc_now().isoformat(),
-            }
-            self._save_cache()
+            self._gamelog = games_by_player
+            self._cache.set(GAMELOG_KEY, games_by_player)
         except Exception as e:
+            # A failed refresh leaves whatever was already loaded in place:
+            # stale numbers are worth more than none, and the caller cannot
+            # tell an empty gamelog from a player who has not played.
             logger.warning(f"Failed to fetch league gamelog: {e}")
 
     def get_player_stats(self, full_name: str) -> PlayerStats | None:
         """Fetch recent stats (L5/L10/L15) for a player using the cached league gamelog."""
         self._ensure_league_gamelog_loaded()
-        games = self._cache_data["league_gamelog"]["games"].get(full_name)
+        games = self._gamelog.get(full_name)
 
         if not games:
             return None
@@ -258,17 +221,23 @@ class NBAStatsClient:
         self._wait_for_rate_limit()
         return scheduleleaguev2.ScheduleLeagueV2(timeout=SCHEDULE_TIMEOUT_SECONDS).get_dict()
 
-    def _schedule_predates_tipoff_field(self) -> bool:
-        """Whether the cached schedule was written before tipoff_utc existed."""
-        for games in self._cache_data["schedule"]["teams"].values():
+    @staticmethod
+    def _predates_tipoff_field(teams: dict[str, list[GameRecord]]) -> bool:
+        """Whether a cached schedule was written before tipoff_utc existed.
+
+        Age is not the only way an entry stops being usable: one written by an
+        older version of this code is fresh and still unreadable.
+        """
+        for games in teams.values():
             if games:
                 return "tipoff_utc" not in games[0]
         return False
 
     def _ensure_schedule_loaded(self) -> None:
         """Fetch full season schedule via nba_api if stale, missing, or outdated in shape."""
-        fresh = self._cache_data["schedule"]["updated_at"] and self._get_schedule_age_hours() < SCHEDULE_TTL_HOURS
-        if fresh and not self._schedule_predates_tipoff_field():
+        hit = self._cache.get(SCHEDULE_KEY, SCHEDULE_TTL)
+        if hit is not None and not self._predates_tipoff_field(hit):
+            self._schedule = hit
             return
 
         logger.debug("Refreshing NBA schedule via nba_api...")
@@ -291,8 +260,8 @@ class NBAStatsClient:
                     team_games.setdefault(game_info["home"], []).append(game_info)
                     team_games.setdefault(game_info["away"], []).append(game_info)
 
-            self._cache_data["schedule"] = {"teams": team_games, "updated_at": _utc_now().isoformat()}
-            self._save_cache()
+            self._schedule = team_games
+            self._cache.set(SCHEDULE_KEY, team_games)
         except Exception as e:
             logger.warning(f"Failed to fetch NBA schedule: {e}")
 
@@ -313,7 +282,7 @@ class NBAStatsClient:
             now: override the current instant; must be timezone-aware.
         """
         self._ensure_schedule_loaded()
-        games = self._cache_data["schedule"]["teams"].get(team_abbr.upper(), [])
+        games = self._schedule.get(team_abbr.upper(), [])
         moment = now or _utc_now()
 
         count = 0

@@ -14,16 +14,20 @@ report already recommends.
 """
 
 import logging
+from datetime import datetime
 
 from the_front_office.adapters.outbound.platforms.fpl.client import FPLClient, free_transfers
 from the_front_office.adapters.outbound.platforms.fpl.types import (
     TRANSFER_HIT,
     Entry,
     Gameweek,
+    H2HMatch,
+    MiniLeague,
     Player,
     Squad,
     as_millions,
 )
+from the_front_office.adapters.outbound.sports.dates import at_time
 from the_front_office.adapters.outbound.sports.fpl.squad import (
     Lineup,
     LineupChange,
@@ -38,19 +42,35 @@ from the_front_office.config.constants import FPL_SCOUT_PROMPT
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import FPLAPIError, LeagueNotFoundError, PlayerNotFoundError
 from the_front_office.domain.models import (
+    LeagueSchedule,
+    Match,
     PlayerCard,
     PlayerDetail,
+    ScheduleRow,
     Side,
     SportContext,
     Spot,
+    StandingRow,
     Stat,
     StatGroup,
     Summary,
     Swap,
+    Tone,
 )
 from the_front_office.domain.ports import LeagueRef
 
 logger = logging.getLogger(__name__)
+
+# FPL's own player pages show a portrait keyed by Opta's code, not the element
+# id. Public, keyless, and already alongside every other asset the site serves.
+PORTRAIT_URL = "https://resources.premierleague.com/premierleague/photos/players/250x250/p{code}.png"
+
+# Three back is a different club and usually a different role; a fourth row
+# adds scrolling rather than judgement.
+PAST_SEASON_LIMIT = 3
+
+# FPL's own scale runs 1-5; 4 is where its UI starts calling a run hard.
+HARD_FIXTURE = 4
 
 MARKET_LIMIT = 20
 """Top available players shown per report, across all positions."""
@@ -163,6 +183,7 @@ class FPLProvider:
             team=player.team,
             headline=f"{player.expected_points:.1f} xPts",
             note=player.news,
+            image_url=PORTRAIT_URL.format(code=player.code) if player.code else "",
             tone="warning" if player.availability else "neutral",
             groups=[
                 StatGroup(
@@ -214,6 +235,7 @@ class FPLProvider:
                     ],
                 ),
                 StatGroup(title="Set pieces", stats=self._set_pieces(player)),
+                *self._past_seasons(player),
                 StatGroup(
                     title="Market",
                     stats=[
@@ -230,6 +252,50 @@ class FPLProvider:
                 ),
             ],
         )
+
+    def _past_seasons(self, player: Player) -> list[StatGroup]:
+        """The seasons behind the price, newest first.
+
+        The catalog carries only the season in progress, which in August is a
+        single gameweek — so the page that is meant to justify a £15m striker
+        shows one match. These are finished seasons and cannot change again.
+
+        Costs one request, made only when someone opens a player, and degrades
+        to nothing rather than failing the page: a promoted club's signing has
+        no FPL history at all.
+        """
+        try:
+            seasons = self.client.get_past_seasons(player.id)
+        except FPLAPIError as e:
+            logger.warning(f"Skipping past seasons for {player.name}: {e}")
+            return []
+
+        keeper_or_defender = player.position in ("GKP", "DEF")
+        return [
+            StatGroup(
+                title=f"{season.season} season",
+                stats=[
+                    Stat(label="Points", value=str(season.total_points)),
+                    Stat(label="Per start", value=f"{season.points_per_game:.1f}"),
+                    Stat(label="Starts", value=str(season.starts)),
+                    Stat(label="Minutes", value=f"{season.minutes:,}"),
+                    Stat(label="Goals", value=str(season.goals)),
+                    Stat(label="Assists", value=str(season.assists)),
+                    *([Stat(label="Clean sheets", value=str(season.clean_sheets))] if keeper_or_defender else []),
+                    Stat(label="Bonus", value=str(season.bonus)),
+                    Stat(label="xG", value=f"{season.expected_goals:.2f}"),
+                    Stat(label="xA", value=f"{season.expected_assists:.2f}"),
+                    # What the market made of that season, which is the closest
+                    # thing FPL has to a verdict on it.
+                    Stat(
+                        label="Price",
+                        value=f"{as_millions(season.start_cost)} → {as_millions(season.end_cost)}",
+                        tone="good" if season.end_cost > season.start_cost else "neutral",
+                    ),
+                ],
+            )
+            for season in reversed(seasons[-PAST_SEASON_LIMIT:])
+        ]
 
     def _fixture_line(self, player: Player, gameweek: int) -> str:
         return self._fixtures_by_club([player], gameweek).get(player.team, "no fixture")
@@ -334,7 +400,122 @@ class FPLProvider:
                 for change in lineup_changes(starters, best)
             ],
             fixtures=self._warnings(players, fixtures),
+            window=_window(upcoming),
         )
+
+    def schedule(self, league_id: str) -> LeagueSchedule:
+        """The season, the table, and the real matches behind the gameweek.
+
+        No activity section: FPL publishes no transfer feed for a mini-league,
+        and a tab that is always empty is worse than one that is not there.
+        """
+        entry_id = self._resolve_entry_id()
+        league = self._find_league(league_id, entry_id)
+        upcoming = self.client.upcoming_gameweek()
+
+        # The real matches stand on their own: they are the gameweek itself,
+        # and they are the same whether or not this id names a real league.
+        if league is None:
+            return LeagueSchedule(matches=self._matches(upcoming.id))
+
+        return LeagueSchedule(
+            season=self._season_rows(league, entry_id, upcoming.id),
+            standings=self._standings(league, entry_id),
+            matches=self._matches(upcoming.id),
+        )
+
+    def _find_league(self, league_id: str, entry_id: int) -> MiniLeague | None:
+        """The mini-league behind an id, or None when there is no such thing.
+
+        `list_leagues` falls back to the manager's overall standing when they
+        have joined no private league, and that id is the entry's own — a place
+        in a table of eleven million, not a league with fixtures to read.
+        """
+        entry = self.client.get_entry(entry_id)
+        return next((lg for lg in entry.leagues if str(lg.id) == league_id), None)
+
+    def _season_rows(self, league: MiniLeague, entry_id: int, upcoming: int) -> list[ScheduleRow]:
+        """Your gameweeks, with the tie in each where the league has one.
+
+        A classic league has no season in this sense — it is a running table,
+        not a set of fixtures — so it gets the gameweeks and their deadlines
+        without opponents, which is still the calendar somebody came for.
+        """
+        gameweeks = self.client.get_gameweeks()
+        ties = {}
+        if league.is_h2h:
+            try:
+                ties = self.client.get_h2h_season(league.id, entry_id)
+            except FPLAPIError as e:
+                logger.warning(f"Continuing without the h2h season: {e}")
+
+        rows = []
+        for gw in gameweeks:
+            tie = ties.get(gw.id)
+            played = gw.id < upcoming
+            rows.append(
+                ScheduleRow(
+                    label=gw.name,
+                    date=_deadline_label(gw.deadline),
+                    opponent=tie.opponent_name if tie else "",
+                    detail="" if tie else ("no tie" if league.is_h2h else ""),
+                    result=f"{tie.my_points}-{tie.opponent_points}" if tie and played else "",
+                    tone=self._tie_tone(tie, played),
+                    is_current=gw.id == upcoming,
+                )
+            )
+        return rows
+
+    @staticmethod
+    def _tie_tone(tie: H2HMatch | None, played: bool) -> Tone:
+        if not tie or not played:
+            return "neutral"
+        if tie.my_points == tie.opponent_points:
+            return "neutral"
+        return "good" if tie.my_points > tie.opponent_points else "warning"
+
+    def _standings(self, league: MiniLeague, entry_id: int) -> list[StandingRow]:
+        try:
+            table = self.client.get_standings(league.id, league.is_h2h)
+        except FPLAPIError as e:
+            logger.warning(f"Continuing without the table: {e}")
+            return []
+        return [
+            StandingRow(
+                rank=row.rank,
+                name=row.entry_name,
+                detail=row.manager,
+                record=row.record,
+                # In h2h the table is on league points and the FPL total is the
+                # tiebreak; in a classic league they are the same number.
+                points=f"{row.total:,}" if not league.is_h2h else f"{row.total} ({row.points_for:,} pts)",
+                is_mine=row.entry == entry_id,
+            )
+            for row in table
+        ]
+
+    def _matches(self, gameweek: int) -> list[Match]:
+        """The real matches the gameweek is made of, with both difficulties.
+
+        Difficulty is per side, so it is carried per side: a fixture is easy
+        for one of these clubs and hard for the other, and one number for the
+        match would be true of neither.
+        """
+        try:
+            fixtures = self.client.get_fixtures(gameweek)
+        except FPLAPIError as e:
+            logger.warning(f"Continuing without fixtures: {e}")
+            return []
+        return [
+            Match(
+                label=_kickoff_label(f.kickoff),
+                home=f.home,
+                away=f.away,
+                detail=f"FDR {f.home_difficulty} / {f.away_difficulty}",
+                tone="warning" if max(f.home_difficulty, f.away_difficulty) >= HARD_FIXTURE else "neutral",
+            )
+            for f in sorted(fixtures, key=lambda f: (f.kickoff is None, f.kickoff))
+        ]
 
     def _opponent(self, league_id: str, entry_id: int, gameweek: int, fixtures: dict[str, str]) -> Side | None:
         """Who this entry is playing, and what they are fielding.
@@ -342,8 +523,7 @@ class FPLProvider:
         Only head-to-head leagues pair managers; a classic league is a table,
         so there is no opponent to show and saying so beats inventing one.
         """
-        entry = self.client.get_entry(entry_id)
-        league = next((lg for lg in entry.leagues if str(lg.id) == league_id), None)
+        league = self._find_league(league_id, entry_id)
         if league is None or not league.is_h2h:
             return None
 
@@ -605,3 +785,23 @@ class FPLProvider:
             note = " — double gameweek" if len(matches) > 1 else ""
             lines.append(f"- {club}: {rendered}{note}\n")
         return "".join(lines) or "- (none)\n"
+
+
+def _window(gameweek: Gameweek) -> str:
+    """A gameweek is bounded by its deadline, which is the date that matters:
+    after it, nothing about the squad can be changed."""
+    label = _deadline_label(gameweek.deadline)
+    return f"{gameweek.name} · deadline {label}" if label else gameweek.name
+
+
+def _deadline_label(deadline: datetime | None) -> str:
+    """A gameweek is bounded by its deadline, not by a kickoff.
+
+    Rendered in UTC, which is what FPL publishes and what its own site shows
+    every manager regardless of where they are.
+    """
+    return at_time(deadline) if deadline else ""
+
+
+def _kickoff_label(kickoff: datetime | None) -> str:
+    return at_time(kickoff) if kickoff else "TBC"

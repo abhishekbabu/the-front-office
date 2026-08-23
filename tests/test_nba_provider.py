@@ -393,3 +393,43 @@ def test_the_prompt_explains_team_games_versus_player_games() -> None:
     prompt = _provider_with(sleeper).build_context().prompt
     assert "how many games the player's TEAM has left" in prompt
     assert "expected to miss games" in prompt
+
+
+# ── the league table ────────────────────────────────────────────────────
+
+
+def _provider(yahoo: FakeYahoo) -> YahooNBAProvider:
+    return YahooNBAProvider(league=None, nba=FakeNBA(), yahoo=yahoo)  # type: ignore[arg-type]
+
+
+def test_the_table_comes_back_in_rank_order_and_says_which_is_yours() -> None:
+    standings = _provider(FakeYahoo()).schedule("").standings
+
+    assert [row.name for row in standings] == ["Their Team", "My Team"]
+    assert [row.is_mine for row in standings] == [False, True]
+
+
+def test_a_record_includes_ties_only_where_there_are_any() -> None:
+    standings = _provider(FakeYahoo()).schedule("").standings
+
+    assert standings[0].record == "5-1"
+    assert standings[1].record == "4-2-1"
+
+
+def test_a_team_with_no_standings_block_is_skipped_rather_than_failing() -> None:
+    """yahoofantasy sets these by setattr, so a missing block is a shape
+    question rather than an error."""
+    from types import SimpleNamespace
+
+    yahoo = FakeYahoo(teams=[SimpleNamespace(name="Half-loaded", team_key="t.9")])
+
+    assert _provider(yahoo).schedule("").standings == []
+
+
+def test_the_sections_yahoo_cannot_answer_are_empty_rather_than_invented() -> None:
+    """A category league has no fixture list, and there is no transaction feed."""
+    schedule = _provider(FakeYahoo()).schedule("")
+
+    assert schedule.season == []
+    assert schedule.matches == []
+    assert schedule.activity == []

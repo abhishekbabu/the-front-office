@@ -35,6 +35,25 @@ def make_player(
     return player
 
 
+def _team(name: str, key: str, rank: int, wins: int, losses: int, ties: int = 0, points: str = "") -> Any:
+    """A yahoofantasy Team, which sets its attributes by setattr at runtime."""
+    return SimpleNamespace(
+        name=name,
+        team_key=key,
+        team_standings=SimpleNamespace(
+            rank=rank,
+            points_for=points,
+            outcome_totals=SimpleNamespace(wins=wins, losses=losses, ties=ties),
+        ),
+    )
+
+
+DEFAULT_TEAMS = [
+    _team("Their Team", "t.2", rank=1, wins=5, losses=1, points="812"),
+    _team("My Team", "t.1", rank=2, wins=4, losses=2, ties=1, points="790"),
+]
+
+
 class FakeYahoo:
     """Stands in for YahooClient."""
 
@@ -45,6 +64,7 @@ class FakeYahoo:
         matchup_dates: tuple[str, str] = ("2026-02-09", "2026-02-15"),
         search_results: dict[str, list[Any]] | None = None,
         adds_used: int = 0,
+        teams: list[Any] | None = None,
     ) -> None:
         self.roster = roster if roster is not None else [make_player("Roster One")]
         self.stat_leaders = stat_leaders or {}
@@ -53,14 +73,20 @@ class FakeYahoo:
         self.adds_used = adds_used
         self.searches: list[str] = []
         self.matchup_fetches = 0
+        self.teams = teams if teams is not None else DEFAULT_TEAMS
 
     def get_user_team(self) -> Any:
-        team = SimpleNamespace(
+        return SimpleNamespace(
             name="My Team",
+            team_key="t.1",
             roster_adds=SimpleNamespace(value=self.adds_used),
             players=lambda: self.roster,
         )
-        return team
+
+    @property
+    def league(self) -> Any:
+        """yahoofantasy's League, of which only `teams()` is read here."""
+        return SimpleNamespace(teams=lambda: self.teams)
 
     def get_matchup(self, my_team: Any) -> Any:
         from the_front_office.adapters.outbound.platforms.yahoo.types import MatchupInfo
@@ -186,6 +212,17 @@ def _isolate_from_local_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     # depend on whether this machine has been through the OAuth flow. A test
     # that wants an authorized client says so by pointing this somewhere real.
     monkeypatch.setattr(settings, "yahoo_token_file", str(tmp_path / "no-token"))
+
+    # Every disk cache lands under tmp_path too. The suite must not read a cache
+    # this machine happens to have warmed, nor leave one behind that the next
+    # run reads as a hit.
+    for field, name in (
+        ("yahoo_cache_file", "yahoo.json"),
+        ("sleeper_cache_file", "sleeper.json"),
+        ("fpl_cache_file", "fpl.json"),
+        ("nba_cache_file", "nba.json"),
+    ):
+        monkeypatch.setattr(settings, field, str(tmp_path / name))
 
 
 @pytest.fixture

@@ -10,20 +10,37 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
+/**
+ * The bar that says where you are and what you can do from here.
+ *
+ * Pinned, because both halves stay relevant the whole way down a page: on a
+ * long one the title is what a figure belongs to, and the controls are the way
+ * out. Opaque rather than translucent — content scrolling visibly underneath
+ * a title reads as two pages at once.
+ *
+ * `leading` sits before the title, which is where a control that leaves the
+ * page belongs: back is upstream of where you are, and reads that way to the
+ * left of the name of it.
+ */
 export function PageHeader({
   title,
   meta,
+  leading,
   children,
 }: {
   title: string;
   meta?: string;
+  leading?: React.ReactNode;
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-border px-5 py-4">
-      <div>
-        <h1 className="font-display text-[21px] font-semibold leading-tight tracking-tight">{title}</h1>
-        {meta && <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">{meta}</p>}
+    <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-5 py-4">
+      <div className="flex min-w-0 items-center gap-3">
+        {leading}
+        <div className="min-w-0">
+          <h1 className="font-display text-[21px] font-semibold leading-tight tracking-tight">{title}</h1>
+          {meta && <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">{meta}</p>}
+        </div>
       </div>
       {children}
     </div>

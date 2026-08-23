@@ -129,6 +129,13 @@ class PlayerDetail(BaseModel):
     team: str
     headline: str = Field(default="", description="The one number this player is judged on.")
     note: str = Field(default="", description="Injury or availability news, in the platform's words.")
+    image_url: str = Field(
+        default="",
+        description=(
+            "Portrait on the platform's own CDN, or empty where that sport has none. "
+            "A URL rather than bytes: it is the client that has a cache for it."
+        ),
+    )
     tone: Tone = "neutral"
     groups: list[StatGroup] = Field(default_factory=list)
 
@@ -159,6 +166,78 @@ class Summary(BaseModel):
 
     fixtures: list[Stat] = Field(default_factory=list)
     """The real-world matches behind the week, one per club in play."""
+
+    window: str = Field(
+        default="",
+        description=(
+            "When this week actually is, already formatted — 'Week 1 · Sep 11-15', "
+            "'GW 2 · deadline Sat 22 Aug 10:30'. A week with no dates on it is a number."
+        ),
+    )
+
+
+class ScheduleRow(BaseModel):
+    """One week of your own season, played or still to come."""
+
+    label: str = Field(description="What the league calls the week: 'Week 3', 'GW 12'.")
+    date: str = Field(default="", description="When it is played, in the reader's words: 'Sep 14', 'Sat 13 Sep'.")
+    opponent: str = Field(default="", description="Who you play. Empty on a bye, which is not an opponent named 'bye'.")
+    detail: str = Field(default="", description="Their record, or however the league identifies them.")
+    result: str = Field(default="", description="The score once it is played, and nothing before that.")
+    tone: Tone = "neutral"
+    is_current: bool = False
+    """The week in progress, so a long table can say where you are in it."""
+
+
+class StandingRow(BaseModel):
+    """One team in the league table."""
+
+    rank: int
+    name: str
+    detail: str = Field(default="", description="Manager, or however the league identifies the entry.")
+    record: str = Field(default="", description="In the league's own terms: '3-1', '2W 1D 1L'.")
+    points: str = Field(default="", description="What the table is actually sorted on.")
+    is_mine: bool = False
+    """Yours, so a fourteen-team table does not have to be read to find it."""
+
+
+class Match(BaseModel):
+    """One real-world game behind a fantasy week.
+
+    Distinct from a fantasy fixture: this is two actual clubs, on a date, and
+    it is what a projection is a projection *about*.
+    """
+
+    label: str = Field(default="", description="When it kicks off, already formatted.")
+    home: str
+    away: str
+    detail: str = Field(default="", description="Difficulty, status, or whatever that sport reads off a fixture.")
+    tone: Tone = "neutral"
+
+
+class ActivityRow(BaseModel):
+    """One thing somebody in the league did."""
+
+    when: str = Field(default="", description="Already formatted; a raw epoch is not a date.")
+    who: str = Field(default="", description="The manager, not the roster id.")
+    what: str = Field(description="Add, drop, trade, waiver — in the platform's own vocabulary.")
+    detail: str = Field(default="", description="The players involved.")
+    tone: Tone = "neutral"
+
+
+class LeagueSchedule(BaseModel):
+    """The league beyond this week: where the season goes, and where you sit.
+
+    Every section is optional because the platforms genuinely differ — a
+    classic FPL league has a table and no head-to-head season, and FPL has no
+    transaction feed at all. An empty section renders as nothing rather than as
+    an empty promise.
+    """
+
+    season: list[ScheduleRow] = Field(default_factory=list)
+    standings: list[StandingRow] = Field(default_factory=list)
+    matches: list[Match] = Field(default_factory=list)
+    activity: list[ActivityRow] = Field(default_factory=list)
 
 
 class ScoutReport(BaseModel):

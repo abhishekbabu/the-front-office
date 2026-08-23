@@ -131,6 +131,10 @@ class Player:
     expected_goals_conceded: float = 0.0
     ict_index: float = 0.0
 
+    code: int = 0
+    """Opta's own id, which the photo CDN is keyed by. Distinct from `id`, the
+    element number, which is reassigned between seasons."""
+
     @property
     def is_available(self) -> bool:
         return self.status == "a"
@@ -256,6 +260,30 @@ class H2HMatch:
 
 
 @dataclass(frozen=True)
+class TableRow:
+    """One entry in a mini-league table, of either format."""
+
+    rank: int
+    entry: int
+    entry_name: str
+    manager: str
+    total: int
+    """What the table is sorted on — league points in h2h, FPL points in classic."""
+
+    played: int = 0
+    won: int = 0
+    drawn: int = 0
+    lost: int = 0
+    points_for: int = 0
+    """Only h2h tables carry this; in a classic league `total` is already it."""
+
+    @property
+    def record(self) -> str:
+        """Empty for a classic league, which has no results to have a record of."""
+        return f"{self.won}W {self.drawn}D {self.lost}L" if self.played else ""
+
+
+@dataclass(frozen=True)
 class Fixture:
     """One match, with the difficulty rating the game assigns each side."""
 
@@ -275,3 +303,33 @@ class Fixture:
         if team == self.away:
             return self.home, self.away_difficulty, False
         return None
+
+
+@dataclass(frozen=True)
+class PastSeason:
+    """What a player returned in a season that has finished.
+
+    The season is over, so none of this can change again — which is why it is
+    the one thing here worth caching for a day rather than an hour.
+    """
+
+    season: str
+    """As FPL labels it, e.g. '2025/26'."""
+
+    total_points: int
+    minutes: int
+    starts: int
+    goals: int
+    assists: int
+    clean_sheets: int
+    bonus: int
+    expected_goals: float
+    expected_assists: float
+    start_cost: int
+    end_cost: int
+
+    @property
+    def points_per_game(self) -> float:
+        """Per start rather than per appearance: a substitute cameo and a full
+        ninety are not the same denominator, and starts is what FPL records."""
+        return self.total_points / self.starts if self.starts else 0.0

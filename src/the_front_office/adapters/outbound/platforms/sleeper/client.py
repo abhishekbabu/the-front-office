@@ -21,13 +21,18 @@ from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
 from the_front_office.adapters.outbound.platforms.http import JsonApiClient
 from the_front_office.adapters.outbound.platforms.retry import build_retry, is_transient
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
+    SEASON_STAT_KEYS,
+    SPLIT_KEYS,
     GameProjection,
     PlayerMeta,
+    ScheduledGame,
     ScoringFormat,
     SeasonState,
+    SeasonStats,
     SleeperLeague,
     SleeperRoster,
     SleeperUser,
+    Transaction,
     TrendingPlayer,
     WeeklyProjection,
 )
@@ -38,6 +43,8 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.sleeper.app/v1"
 PROJECTIONS_URL = "https://api.sleeper.app/projections"
+# Not under /v1, unlike everything else here.
+SCHEDULE_URL = "https://api.sleeper.app/schedule"
 
 # Sleeper serves several sports off the same shape. The football path uses "nfl";
 # the basketball projections the NBA scout reads use "nba".
@@ -55,6 +62,13 @@ LEAGUE_TTL = timedelta(hours=6)
 ROSTERS_TTL = timedelta(minutes=10)  # changes on every waiver claim
 MATCHUPS_TTL = timedelta(minutes=2)  # live scores during games
 STATE_TTL = timedelta(hours=1)
+# A season's totals move only when a game is played, and a finished season
+# never moves again. This is the slowest-changing thing Sleeper serves.
+SEASON_STATS_TTL = timedelta(hours=12)
+# A published season schedule barely moves — flexed games are the exception,
+# not the rule — and a transaction feed only grows.
+SEASON_SCHEDULE_TTL = timedelta(hours=12)
+TRANSACTIONS_TTL = timedelta(minutes=15)
 
 RETRY_MAX_ATTEMPTS = 3
 
@@ -232,6 +246,94 @@ class SleeperClient:
         self._api.cache_set(f"players_{sport}", trimmed)
         logger.debug(f"Cached {len(trimmed)} {sport} players from Sleeper")
         return trimmed
+
+    def get_season_stats(self, season: str, sport: str = NFL) -> dict[str, SeasonStats]:
+        """A whole season's production, keyed by player_id.
+
+        Trimmed before caching for the same reason the catalog is: the raw
+        response is ~1.9MB of mostly kicking and defensive splits, and the
+        cache is one file shared with everything else the client reads.
+        """
+        key = f"season_stats_{sport}_{season}"
+        cached = self._api.cache_get(key, SEASON_STATS_TTL)
+        if cached is None:
+            raw = self._get(f"{BASE_URL}/stats/{sport}/regular/{season}", timeout=CATALOG_TIMEOUT_SECONDS)
+            cached = {
+                str(pid): {k: v for k, v in row.items() if k in SEASON_STAT_KEYS}
+                for pid, row in (raw or {}).items()
+                if isinstance(row, dict)
+            }
+            self._api.cache_set(key, cached)
+            logger.debug(f"Cached {len(cached)} {sport} season totals for {season}")
+
+        return {
+            pid: SeasonStats(
+                player_id=pid,
+                season=season,
+                games=int(row.get("gp") or 0),
+                points={fmt: float(row.get(fmt) or 0.0) for fmt in ("pts_ppr", "pts_half_ppr", "pts_std")},
+                position_rank=int(row.get("pos_rank_ppr") or 0),
+                splits={k: float(v) for k, v in row.items() if k in SPLIT_KEYS},
+            )
+            for pid, row in cached.items()
+        }
+
+    def get_season_schedule(self, season: str, sport: str = NFL) -> list[ScheduledGame]:
+        """Every real-world game of the season, with the day it is played.
+
+        The dates behind a fantasy week, which the fantasy endpoints do not
+        carry: a matchup knows it is week 3 and not that week 3 is a Sunday.
+        """
+        data = self._cached(
+            f"schedule_{sport}_{season}",
+            f"{SCHEDULE_URL}/{sport}/regular/{season}",
+            SEASON_SCHEDULE_TTL,
+        )
+        return [
+            ScheduledGame(
+                week=int(g.get("week") or 0),
+                date=str(g.get("date") or ""),
+                home=str(g.get("home") or ""),
+                away=str(g.get("away") or ""),
+                status=str(g.get("status") or ""),
+            )
+            for g in (data or [])
+            if isinstance(g, dict)
+        ]
+
+    def get_matchups_bulk(self, league_id: str, weeks: list[int]) -> dict[int, list[dict[str, Any]]]:
+        """Every requested week's matchups, fetched concurrently.
+
+        The season view needs all eighteen; asked one at a time they are the
+        whole wait on the page.
+        """
+        urls = {f"matchups_{league_id}_{w}": f"{BASE_URL}/league/{league_id}/matchups/{w}" for w in weeks}
+        raw = self._api.cached_many(urls, MATCHUPS_TTL)
+        return {w: raw.get(f"matchups_{league_id}_{w}") or [] for w in weeks}
+
+    def get_transactions(self, league_id: str, week: int) -> list[Transaction]:
+        """What the league did in one week: waivers, free agents and trades.
+
+        Sleeper files these by week rather than by date, so a caller wanting
+        recent activity asks for the last few weeks and concatenates.
+        """
+        data = self._cached(
+            f"transactions_{league_id}_{week}",
+            f"{BASE_URL}/league/{league_id}/transactions/{week}",
+            TRANSACTIONS_TTL,
+        )
+        return [
+            Transaction(
+                kind=str(t.get("type") or ""),
+                roster_ids=[int(r) for r in (t.get("roster_ids") or [])],
+                adds={str(k): int(v) for k, v in (t.get("adds") or {}).items()},
+                drops={str(k): int(v) for k, v in (t.get("drops") or {}).items()},
+                when=int(t.get("status_updated") or 0),
+            )
+            for t in (data or [])
+            # A failed waiver claim is not something that happened.
+            if isinstance(t, dict) and t.get("status") == "complete"
+        ]
 
     def get_projections(self, season: str, week: int, scoring: ScoringFormat) -> dict[str, WeeklyProjection]:
         """Weekly projections keyed by player_id.

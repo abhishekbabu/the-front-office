@@ -7,7 +7,7 @@ is Yahoo's weekly add limit.
 
 import logging
 from datetime import date
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -29,9 +29,11 @@ from the_front_office.domain.errors import (
     PlayerNotFoundError,
 )
 from the_front_office.domain.models import (
+    LeagueSchedule,
     PlayerCard,
     PlayerDetail,
     SportContext,
+    StandingRow,
     Stat,
     StatGroup,
     Summary,
@@ -139,6 +141,53 @@ class YahooNBAProvider:
                 Stat(label="Adds left", value=str(remaining), tone="good" if remaining else "warning"),
             ]
         )
+
+    def schedule(self, league_id: str) -> LeagueSchedule:
+        """The league table, which is the only one of these Yahoo gives cheaply.
+
+        A category league has no season of fixtures to list in the football
+        sense, Yahoo publishes no real-world NBA schedule through this SDK, and
+        there is no league-wide transaction feed on it either. Three empty
+        sections is the honest answer, and each renders as nothing rather than
+        as an empty promise.
+        """
+        self._select_into(league_id)
+        mine = self.yahoo.get_user_team()
+        return LeagueSchedule(standings=self._standings(mine))
+
+    def _standings(self, mine: Any) -> list[StandingRow]:
+        """Read defensively: yahoofantasy sets these by setattr at runtime, so
+        a team missing its standings block is a shape question, not an error."""
+        rows: list[tuple[int, StandingRow]] = []
+        for team in self.yahoo.league.teams():
+            standings = getattr(team, "team_standings", None)
+            if standings is None:
+                continue
+            outcome = getattr(standings, "outcome_totals", None)
+            rank = int(getattr(standings, "rank", 0) or 0)
+            rows.append(
+                (
+                    rank,
+                    StandingRow(
+                        rank=rank,
+                        name=str(getattr(team, "name", "")),
+                        record=self._record(outcome),
+                        points=str(getattr(standings, "points_for", "") or ""),
+                        is_mine=getattr(team, "team_key", None) == getattr(mine, "team_key", object()),
+                    ),
+                )
+            )
+        return [row for _, row in sorted(rows, key=lambda pair: pair[0])]
+
+    @staticmethod
+    def _record(outcome: Any) -> str:
+        if outcome is None:
+            return ""
+        wins = getattr(outcome, "wins", 0) or 0
+        losses = getattr(outcome, "losses", 0) or 0
+        ties = getattr(outcome, "ties", 0) or 0
+        base = f"{wins}-{losses}"
+        return f"{base}-{ties}" if ties else base
 
     def build_context(self, league_id: str = "") -> SportContext:
         """Gather league state and render the scouting prompt."""

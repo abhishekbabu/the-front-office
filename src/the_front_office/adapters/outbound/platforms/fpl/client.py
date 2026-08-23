@@ -31,9 +31,11 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
     GameweekResult,
     H2HMatch,
     MiniLeague,
+    PastSeason,
     Pick,
     Player,
     Squad,
+    TableRow,
 )
 from the_front_office.adapters.outbound.platforms.http import JsonApiClient
 from the_front_office.adapters.outbound.platforms.retry import build_retry, is_transient
@@ -53,6 +55,9 @@ BOOTSTRAP_TTL = timedelta(hours=6)
 FIXTURES_TTL = timedelta(hours=6)
 ENTRY_TTL = timedelta(minutes=10)
 HISTORY_TTL = timedelta(hours=1)
+# A finished season cannot change, and the current one only moves when a match
+# is played, so this is the slowest-moving thing the client reads.
+PLAYER_HISTORY_TTL = timedelta(hours=12)
 
 # The game returns 429 when a client is hammering it, same as Sleeper.
 RETRYABLE_STATUS = frozenset({429})
@@ -195,6 +200,7 @@ class FPLClient:
             full_name = " ".join(filter(None, [e.get("first_name"), e.get("second_name")]))
             players[element_id] = Player(
                 id=element_id,
+                code=int(e.get("code") or 0),
                 name=str(e.get("web_name") or full_name or element_id),
                 full_name=full_name or str(e.get("web_name") or ""),
                 position=POSITIONS.get(int(e.get("element_type") or 0), ""),
@@ -309,6 +315,35 @@ class FPLClient:
             active_chip=str(data.get("active_chip") or ""),
         )
 
+    def get_past_seasons(self, element_id: int) -> list[PastSeason]:
+        """Every finished season this player has a record for, oldest first.
+
+        A separate request per player rather than part of the catalog, which is
+        why it is made only when someone actually opens one.
+        """
+        data = self._api.cached(
+            f"player_history_{element_id}",
+            f"{BASE_URL}/element-summary/{element_id}/",
+            PLAYER_HISTORY_TTL,
+        )
+        return [
+            PastSeason(
+                season=str(row.get("season_name") or ""),
+                total_points=int(row.get("total_points") or 0),
+                minutes=int(row.get("minutes") or 0),
+                starts=int(row.get("starts") or 0),
+                goals=int(row.get("goals_scored") or 0),
+                assists=int(row.get("assists") or 0),
+                clean_sheets=int(row.get("clean_sheets") or 0),
+                bonus=int(row.get("bonus") or 0),
+                expected_goals=_number(row.get("expected_goals")),
+                expected_assists=_number(row.get("expected_assists")),
+                start_cost=int(row.get("start_cost") or 0),
+                end_cost=int(row.get("end_cost") or 0),
+            )
+            for row in data.get("history_past") or []
+        ]
+
     def get_history(self, entry_id: int) -> list[GameweekResult]:
         """Every gameweek this manager has played, in order."""
         data = self._api.cached(f"history_{entry_id}", f"{BASE_URL}/entry/{entry_id}/history/", HISTORY_TTL)
@@ -346,6 +381,57 @@ class FPLClient:
                         opponent_points=int(match.get(f"entry_{theirs}_points") or 0),
                     )
         return None
+
+    def get_h2h_season(self, league_id: int, entry_id: int) -> dict[int, H2HMatch]:
+        """Every tie this entry has in the league, keyed by gameweek.
+
+        One request for the whole season rather than one per gameweek: FPL
+        returns the league's full fixture list already paginated by 50, and a
+        38-week season in a small league fits in the first page.
+        """
+        data = self._api.cached(
+            f"h2h_season_{league_id}",
+            f"{BASE_URL}/leagues-h2h-matches/league/{league_id}/",
+            ENTRY_TTL,
+        )
+        season: dict[int, H2HMatch] = {}
+        for match in (data or {}).get("results") or []:
+            event = match.get("event")
+            if event is None:
+                continue
+            for mine, theirs in (("1", "2"), ("2", "1")):
+                if match.get(f"entry_{mine}_entry") == entry_id and match.get(f"entry_{theirs}_entry"):
+                    season[int(event)] = H2HMatch(
+                        opponent_entry=int(match[f"entry_{theirs}_entry"]),
+                        opponent_name=str(match.get(f"entry_{theirs}_name") or "Opponent"),
+                        my_points=int(match.get(f"entry_{mine}_points") or 0),
+                        opponent_points=int(match.get(f"entry_{theirs}_points") or 0),
+                    )
+        return season
+
+    def get_standings(self, league_id: int, is_h2h: bool) -> list[TableRow]:
+        """The league table. The two formats are different endpoints entirely."""
+        kind = "leagues-h2h" if is_h2h else "leagues-classic"
+        data = self._api.cached(
+            f"standings_{kind}_{league_id}",
+            f"{BASE_URL}/{kind}/{league_id}/standings/",
+            ENTRY_TTL,
+        )
+        return [
+            TableRow(
+                rank=int(row.get("rank") or 0),
+                entry=int(row.get("entry") or 0),
+                entry_name=str(row.get("entry_name") or ""),
+                manager=str(row.get("player_name") or ""),
+                total=int(row.get("total") or 0),
+                played=int(row.get("matches_played") or 0),
+                won=int(row.get("matches_won") or 0),
+                drawn=int(row.get("matches_drawn") or 0),
+                lost=int(row.get("matches_lost") or 0),
+                points_for=int(row.get("points_for") or 0),
+            )
+            for row in ((data or {}).get("standings") or {}).get("results") or []
+        ]
 
     # ── fixtures ────────────────────────────────────────────────────
 

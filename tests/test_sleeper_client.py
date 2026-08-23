@@ -395,3 +395,91 @@ def test_each_sports_catalog_is_cached_separately(tmp_path: Path) -> None:
     assert "1" in client.get_players("nba")
     assert "2" in client.get_players("nfl")
     assert len([r for r in session.requests if "players/" in r]) == 2
+
+
+# ── the season schedule ─────────────────────────────────────────────────
+
+SEASON_SCHEDULE = [
+    {"week": 1, "date": "2026-09-13", "home": "CAR", "away": "CHI", "status": "pre_game"},
+    {"week": 1, "date": "2026-09-14", "home": "CIN", "away": "TB", "status": "pre_game"},
+    "not-a-game",
+]
+
+
+def test_the_season_schedule_is_read_off_a_different_base_url(tmp_path: Path) -> None:
+    """It is not under /v1, unlike everything else the client reads."""
+    client, session = _client({"/schedule/nfl/regular/2026": SEASON_SCHEDULE}, tmp_path)
+
+    games = client.get_season_schedule("2026")
+
+    assert [(g.week, g.date, g.away, g.home) for g in games] == [
+        (1, "2026-09-13", "CHI", "CAR"),
+        (1, "2026-09-14", "TB", "CIN"),
+    ]
+    assert "/v1/schedule" not in session.requests[0]
+
+
+def test_a_scheduled_game_knows_which_side_a_club_is_on(tmp_path: Path) -> None:
+    client, _ = _client({"/schedule/nfl/regular/2026": SEASON_SCHEDULE}, tmp_path)
+
+    game = client.get_season_schedule("2026")[0]
+
+    assert game.opponent_of("CAR") == ("CHI", True)
+    assert game.opponent_of("CHI") == ("CAR", False)
+    assert game.opponent_of("DAL") is None
+
+
+# ── transactions ────────────────────────────────────────────────────────
+
+TRANSACTIONS = [
+    {
+        "type": "waiver",
+        "status": "complete",
+        "roster_ids": [1],
+        "adds": {"111": 1},
+        "drops": {"222": 1},
+        "status_updated": 1787026012872,
+    },
+    # A failed claim is not something that happened.
+    {"type": "waiver", "status": "failed", "roster_ids": [2], "adds": {"333": 2}, "drops": None},
+]
+
+
+def test_only_completed_transactions_are_reported(tmp_path: Path) -> None:
+    client, _ = _client({"/transactions/1": TRANSACTIONS}, tmp_path)
+
+    moves = client.get_transactions("L1", 1)
+
+    assert [t.kind for t in moves] == ["waiver"]
+    assert moves[0].adds == {"111": 1}
+    assert moves[0].drops == {"222": 1}
+    assert moves[0].when == 1787026012872
+
+
+def test_a_null_drops_field_reads_as_nothing_dropped(tmp_path: Path) -> None:
+    """Sleeper sends null rather than an empty object for a bare add."""
+    payload = [{"type": "free_agent", "status": "complete", "roster_ids": [1], "adds": {"9": 1}, "drops": None}]
+    client, _ = _client({"/transactions/1": payload}, tmp_path)
+
+    assert client.get_transactions("L1", 1)[0].drops == {}
+
+
+def test_a_season_of_matchups_comes_back_in_one_call(tmp_path: Path) -> None:
+    """Asked one week at a time they are the whole wait on the season view."""
+    routes = {f"/matchups/{w}": [{"roster_id": 1, "matchup_id": w}] for w in (1, 2, 3)}
+    client, session = _client(routes, tmp_path)
+
+    weeks = client.get_matchups_bulk("L1", [1, 2, 3])
+
+    assert sorted(weeks) == [1, 2, 3]
+    assert weeks[2][0]["matchup_id"] == 2
+    assert len(session.requests) == 3
+
+
+def test_a_week_that_does_not_answer_is_an_empty_week_not_a_missing_key(tmp_path: Path) -> None:
+    """The caller reads it by week number and must not have to guard each one."""
+    client, _ = _client({"/matchups/1": [{"roster_id": 1}]}, tmp_path)
+
+    weeks = client.get_matchups_bulk("L1", [1, 2])
+
+    assert weeks[2] == []

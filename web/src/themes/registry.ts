@@ -42,13 +42,37 @@ export function applyPalette(palette: PaletteId): void {
 }
 
 /**
+ * Repaint under a whole-page crossfade, where the browser can do one.
+ *
+ * Easing the tokens themselves is what the suppression below exists to stop:
+ * forty of them interpolate independently and the swap reads as a smear. A
+ * view transition has no such problem — it crossfades a snapshot of the old
+ * frame into the new one, so the page changes as a single image and the
+ * tokens still swap instantly underneath.
+ *
+ * Falls back to the instant swap where the API is missing, and takes it
+ * deliberately when the viewer has asked for less motion.
+ */
+export function repaint(apply: () => void): void {
+  const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+  const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (still || typeof doc.startViewTransition !== "function") {
+    suppressThemeTransitions();
+    apply();
+    return;
+  }
+  doc.startViewTransition(apply);
+}
+
+/**
  * Make the next palette or mode change paint in one frame.
  *
- * Around forty tokens change at once; left to their own transitions they ease
- * independently and the swap reads as a smear. This disables easing, forces a
- * reflow so the suppression lands before the repaint, then lifts it after the
- * paint. Callers must change the token *synchronously* after calling this, not
- * in an effect, or the class will have lifted before the change lands.
+ * The fallback for browsers with no view transitions. Around forty tokens
+ * change at once; left to their own easing they interpolate independently and
+ * the swap reads as a smear. This disables easing, forces a reflow so the
+ * suppression lands before the repaint, then lifts it after the paint. Callers
+ * must change the token *synchronously* after calling this, not in an effect,
+ * or the class will have lifted before the change lands.
  */
 export function suppressThemeTransitions(): void {
   const root = document.documentElement;

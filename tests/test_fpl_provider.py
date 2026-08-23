@@ -5,6 +5,7 @@ the prompt has to carry, and a report that omits the captaincy or the transfer
 allowance is wrong however well it renders.
 """
 
+from dataclasses import replace
 from datetime import datetime, timezone
 
 import pytest
@@ -16,9 +17,11 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
     GameweekResult,
     H2HMatch,
     MiniLeague,
+    PastSeason,
     Pick,
     Player,
     Squad,
+    TableRow,
 )
 from the_front_office.adapters.outbound.sports.fpl.fpl import FPLProvider
 from the_front_office.domain.errors import FPLAPIError, LeagueNotFoundError, PlayerNotFoundError
@@ -86,6 +89,59 @@ def _picks() -> list[Pick]:
     return picks
 
 
+DEFAULT_H2H_SEASON = {
+    1: H2HMatch(opponent_entry=99, opponent_name="Rival FC", my_points=60, opponent_points=44),
+    2: H2HMatch(opponent_entry=98, opponent_name="Other FC", my_points=31, opponent_points=55),
+    3: H2HMatch(opponent_entry=97, opponent_name="Third FC", my_points=0, opponent_points=0),
+}
+
+DEFAULT_TABLE = [
+    TableRow(rank=1, entry=99, entry_name="Rival FC", manager="A Rival", total=6, played=2, won=2, points_for=104),
+    TableRow(
+        rank=2,
+        entry=ENTRY_ID,
+        entry_name="Front Office FC",
+        manager="Abhishek Babu",
+        total=3,
+        played=2,
+        won=1,
+        lost=1,
+        points_for=91,
+    ),
+]
+
+DEFAULT_PAST_SEASONS = [
+    PastSeason(
+        season="2023/24",
+        total_points=180,
+        minutes=2500,
+        starts=28,
+        goals=20,
+        assists=5,
+        clean_sheets=2,
+        bonus=20,
+        expected_goals=18.5,
+        expected_assists=4.1,
+        start_cost=110,
+        end_cost=118,
+    ),
+    PastSeason(
+        season="2024/25",
+        total_points=210,
+        minutes=2900,
+        starts=33,
+        goals=24,
+        assists=7,
+        clean_sheets=3,
+        bonus=28,
+        expected_goals=22.0,
+        expected_assists=5.5,
+        start_cost=118,
+        end_cost=124,
+    ),
+]
+
+
 class FakeFPL:
     """Stands in for FPLClient."""
 
@@ -101,7 +157,15 @@ class FakeFPL:
         active_chip: str = "",
         points_on_bench: int = 0,
         squad: Squad | None = None,
+        past_seasons: list[PastSeason] | None = None,
+        past_seasons_error: Exception | None = None,
+        h2h_season: dict[int, H2HMatch] | None = None,
+        h2h_season_error: Exception | None = None,
+        standings: list[TableRow] | None = None,
+        standings_error: Exception | None = None,
     ) -> None:
+        self.past_seasons = past_seasons if past_seasons is not None else list(DEFAULT_PAST_SEASONS)
+        self.past_seasons_error = past_seasons_error
         self.leagues = (
             leagues
             if leagues is not None
@@ -134,6 +198,10 @@ class FakeFPL:
         )
         self.fixtures_error = fixtures_error
         self.squad_requests: list[int] = []
+        self.h2h_season = h2h_season if h2h_season is not None else DEFAULT_H2H_SEASON
+        self.h2h_season_error = h2h_season_error
+        self.standings = standings if standings is not None else DEFAULT_TABLE
+        self.standings_error = standings_error
 
     def upcoming_gameweek(self, now: datetime | None = None) -> Gameweek:
         return Gameweek(
@@ -161,6 +229,11 @@ class FakeFPL:
     def get_players(self) -> dict[int, Player]:
         return {**SQUAD_PLAYERS, **MARKET}
 
+    def get_past_seasons(self, element_id: int) -> list[PastSeason]:
+        if self.past_seasons_error:
+            raise self.past_seasons_error
+        return self.past_seasons
+
     def get_history(self, entry_id: int) -> list[GameweekResult]:
         return self.history
 
@@ -171,6 +244,28 @@ class FakeFPL:
         if self.fixtures_error:
             raise self.fixtures_error
         return self.fixtures
+
+    def get_gameweeks(self) -> list[Gameweek]:
+        return [
+            Gameweek(
+                id=i,
+                name=f"Gameweek {i}",
+                deadline=datetime(2026, 8, 7 + i, 17, 30, tzinfo=timezone.utc),
+                is_current=i == self.upcoming,
+                average_score=50,
+            )
+            for i in range(1, 9)
+        ]
+
+    def get_h2h_season(self, league_id: int, entry_id: int) -> dict[int, H2HMatch]:
+        if self.h2h_season_error:
+            raise self.h2h_season_error
+        return self.h2h_season
+
+    def get_standings(self, league_id: int, is_h2h: bool) -> list[TableRow]:
+        if self.standings_error:
+            raise self.standings_error
+        return self.standings
 
 
 def provider(**kwargs: object) -> FPLProvider:
@@ -527,7 +622,15 @@ def test_a_players_numbers_are_grouped_rather_than_listed() -> None:
     be read without looking for anything."""
     titles = [group.title for group in provider().player(LEAGUE_ID, "8").groups]
 
-    assert titles == ["This week", "Season", "Underlying", "Set pieces", "Market"]
+    assert titles == [
+        "This week",
+        "Season",
+        "Underlying",
+        "Set pieces",
+        "2024/25 season",
+        "2023/24 season",
+        "Market",
+    ]
 
 
 def test_set_pieces_list_only_the_duties_actually_held() -> None:
@@ -559,3 +662,162 @@ def test_a_keeper_gets_the_numbers_only_a_keeper_has() -> None:
 def test_an_attacker_is_not_given_a_keepers_line() -> None:
     labels = {s.label for g in provider().player(LEAGUE_ID, "13").groups for s in g.stats}
     assert "Saves" not in labels
+
+
+# ── the seasons behind the price ────────────────────────────────────────
+
+
+def test_past_seasons_are_listed_newest_first() -> None:
+    """The catalog carries only the season in progress, which in August is one
+    gameweek — so a £15m striker is justified by a single match without these."""
+    titles = [g.title for g in provider().player(LEAGUE_ID, "8").groups if g.title.endswith("season")]
+
+    assert titles == ["2024/25 season", "2023/24 season"]
+
+
+def test_a_past_season_is_scored_per_start_not_per_appearance() -> None:
+    """A substitute cameo and a full ninety are not the same denominator."""
+    groups = {g.title: g for g in provider().player(LEAGUE_ID, "8").groups}
+
+    per_start = next(s for s in groups["2024/25 season"].stats if s.label == "Per start")
+    assert per_start.value == f"{210 / 33:.1f}"
+
+
+def test_a_past_season_carries_the_markets_verdict_on_it() -> None:
+    """What the price did over the season is the closest thing FPL has to one."""
+    groups = {g.title: g for g in provider().player(LEAGUE_ID, "8").groups}
+
+    price = next(s for s in groups["2024/25 season"].stats if s.label == "Price")
+    assert price.value == "£11.8m → £12.4m"
+    assert price.tone == "good"
+
+
+def test_a_player_with_no_history_simply_has_none() -> None:
+    """A promoted club's signing has no FPL record, which is not an error."""
+    groups = provider(past_seasons=[]).player(LEAGUE_ID, "8").groups
+
+    assert not [g for g in groups if g.title.endswith("season")]
+
+
+def test_a_failed_history_lookup_does_not_take_the_player_down() -> None:
+    """Everything else on the page was already fetched and is still true."""
+    detail = provider(past_seasons_error=FPLAPIError("down")).player(LEAGUE_ID, "8")
+
+    assert detail.name
+    assert not [g for g in detail.groups if g.title.endswith("season")]
+
+
+def test_a_player_carries_a_portrait_keyed_by_optas_code() -> None:
+    """Not the element id, which FPL reassigns between seasons."""
+    fake = FakeFPL()
+    catalog = fake.get_players()
+    catalog[8] = replace(catalog[8], code=223094)
+    fake.get_players = lambda: catalog  # type: ignore[method-assign]
+
+    detail = FPLProvider(ENTRY_ID, client=fake).player(LEAGUE_ID, "8")  # type: ignore[arg-type]
+    assert detail.image_url.endswith("/p223094.png")
+
+
+def test_a_player_with_no_photo_code_is_given_no_url() -> None:
+    """An empty string is a missing photo; a URL built from zero is a 404."""
+    fake = FakeFPL()
+    catalog = fake.get_players()
+    catalog[8] = replace(catalog[8], code=0)
+    fake.get_players = lambda: catalog  # type: ignore[method-assign]
+
+    detail = FPLProvider(ENTRY_ID, client=fake).player(LEAGUE_ID, "8")  # type: ignore[arg-type]
+    assert detail.image_url == ""
+
+
+# ── the league beyond this gameweek ─────────────────────────────────────
+
+H2H_LEAGUE = "950"
+
+
+def test_the_season_lists_every_gameweek_with_its_deadline() -> None:
+    """A gameweek is bounded by its deadline: after it nothing can change."""
+    season = provider().schedule(H2H_LEAGUE).season
+
+    assert [row.label for row in season[:3]] == ["Gameweek 1", "Gameweek 2", "Gameweek 3"]
+    assert season[0].date == "Sat 8 Aug, 17:30"
+
+
+def test_a_played_gameweek_carries_its_tie_and_whether_it_was_won() -> None:
+    season = {row.label: row for row in provider().schedule(H2H_LEAGUE).season}
+
+    assert season["Gameweek 1"].result == "60-44"
+    assert season["Gameweek 1"].tone == "good"
+    assert season["Gameweek 2"].tone == "warning"
+
+
+def test_the_current_gameweek_has_no_result_yet() -> None:
+    """It is in progress, and a score mid-week is not a result."""
+    season = {row.label: row for row in provider().schedule(H2H_LEAGUE).season}
+    current = [row.label for row in season.values() if row.is_current]
+
+    assert current == ["Gameweek 5"]
+    assert season["Gameweek 5"].result == ""
+
+
+def test_a_classic_league_has_deadlines_but_no_opponents() -> None:
+    """It is a running table, not a set of fixtures — and the calendar is
+    still what somebody came for."""
+    season = provider().schedule("900").season
+
+    assert all(row.opponent == "" for row in season)
+    assert all(row.date for row in season)
+
+
+def test_the_table_says_which_row_is_yours() -> None:
+    standings = provider().schedule(H2H_LEAGUE).standings
+
+    assert [row.name for row in standings] == ["Rival FC", "Front Office FC"]
+    assert [row.is_mine for row in standings] == [False, True]
+
+
+def test_an_h2h_table_shows_league_points_and_the_tiebreak() -> None:
+    """The table is on league points; the FPL total decides ties."""
+    standings = provider().schedule(H2H_LEAGUE).standings
+
+    assert standings[0].points == "6 (104 pts)"
+    assert standings[0].record == "2W 0D 0L"
+
+
+def test_a_classic_table_is_just_the_points() -> None:
+    standings = provider().schedule("900").standings
+
+    assert standings[0].points == "6"
+
+
+def test_the_matches_carry_a_difficulty_for_each_side() -> None:
+    """A fixture is easy for one of these clubs and hard for the other."""
+    matches = provider().schedule(H2H_LEAGUE).matches
+
+    assert matches
+    assert all("FDR" in m.detail for m in matches)
+
+
+def test_fpl_has_no_activity_feed_so_there_is_no_empty_promise() -> None:
+    assert provider().schedule(H2H_LEAGUE).activity == []
+
+
+def test_a_failed_table_leaves_the_rest_of_the_page() -> None:
+    schedule = provider(standings_error=FPLAPIError("down")).schedule(H2H_LEAGUE)
+
+    assert schedule.standings == []
+    assert schedule.season
+
+
+def test_a_failed_h2h_season_still_lists_the_gameweeks() -> None:
+    schedule = provider(h2h_season_error=FPLAPIError("down")).schedule(H2H_LEAGUE)
+
+    assert schedule.season
+    assert all(row.opponent == "" for row in schedule.season)
+
+
+def test_failed_fixtures_leave_no_matches_rather_than_failing() -> None:
+    assert provider(fixtures_error=FPLAPIError("down")).schedule(H2H_LEAGUE).matches == []
+
+
+def test_the_gameweek_says_when_its_deadline_is() -> None:
+    assert provider().summary(H2H_LEAGUE).window == "Gameweek 5 · deadline Sat 12 Sep, 00:00"

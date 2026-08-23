@@ -36,9 +36,30 @@ async function waitForServer(timeoutMs = 60_000) {
   throw new Error(`Preview server never answered on ${BASE}`);
 }
 
+/**
+ * Refuse to run against a server this script did not start.
+ *
+ * The spawn below cannot bind a port already in use, so it dies quietly while
+ * `waitForServer` succeeds against whatever was already there — and the shots
+ * come back from whatever code that process was started with. Twice now that
+ * has looked exactly like a bug in the feature being photographed.
+ */
+async function refuseStaleServer() {
+  try {
+    await fetch(`${BASE}/api/sports`);
+  } catch {
+    return; // nothing listening, which is what we want
+  }
+  throw new Error(
+    `Something is already serving ${BASE}. These shots would come from that process, not from your ` +
+      `current code. Stop it first:\n\n  pkill -f scripts/preview.py\n`,
+  );
+}
+
 async function main() {
   await rm(OUT, { recursive: true, force: true });
   await mkdir(OUT, { recursive: true });
+  await refuseStaleServer();
 
   const server = spawn("uv", ["run", "python", "scripts/preview.py"], {
     cwd: ROOT,
@@ -101,6 +122,21 @@ async function main() {
             await page.waitForTimeout(1200);
           }
           await shoot(`${sport.toLowerCase()}-report`);
+        }
+      }
+      if (wanted("league")) {
+        await page.getByRole("button", { name: "League", exact: true }).click();
+        await page.waitForTimeout(2500); // a whole season of matchups
+        await shoot(`${sport.toLowerCase()}-league`);
+        // Each tab is a different question; one shot of the first proves
+        // nothing about the others.
+        for (const tab of ["Table", "Fixtures", "Activity"]) {
+          const control = page.getByRole("tab", { name: tab });
+          if (await control.count()) {
+            await control.click();
+            await page.waitForTimeout(400);
+            await shoot(`${sport.toLowerCase()}-${tab.toLowerCase()}`);
+          }
         }
       }
       if (wanted("team")) {

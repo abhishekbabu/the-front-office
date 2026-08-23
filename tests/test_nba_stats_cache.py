@@ -1,8 +1,10 @@
-"""Tests for NBAStatsClient's cache lifecycle and fetch orchestration.
+"""Tests for NBAStatsClient's fetch orchestration.
 
-The network calls are stubbed; what is exercised is the load/save round trip,
-the staleness gates that decide whether to fetch at all, and the transform from
-raw payload into cached records.
+The network calls are stubbed; what is exercised is the staleness gates that
+decide whether to fetch at all, and the transform from raw payload into cached
+records. The store itself is the shared JsonDiskCache and is tested with it —
+its round trip, its corrupt-file fallback and its unwritable-path behavior are
+no longer this client's to prove.
 """
 
 import json
@@ -12,18 +14,15 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from the_front_office.adapters.outbound.platforms.nba_stats.client import NBAStatsClient, _utc_now
+from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
+from the_front_office.adapters.outbound.platforms.nba_stats.client import (
+    GAMELOG_KEY,
+    NBAStatsClient,
+)
 
 
 def _client(tmp_path: Path) -> NBAStatsClient:
-    c = NBAStatsClient.__new__(NBAStatsClient)
-    c._last_call_time = 0.0
-    c._cache_file = tmp_path / ".nba_cache.json"
-    c._cache_data = {
-        "league_gamelog": {"games": {}, "updated_at": ""},
-        "schedule": {"teams": {}, "updated_at": ""},
-    }
-    return c
+    return NBAStatsClient(cache=JsonDiskCache(tmp_path / ".nba_cache.json"))
 
 
 GAMELOG_ROW = {
@@ -61,40 +60,6 @@ SCHEDULE_PAYLOAD: dict[str, Any] = {
 }
 
 
-# ── cache I/O ───────────────────────────────────────────────────────────
-
-
-def test_cache_round_trips_through_disk(tmp_path: Path) -> None:
-    c = _client(tmp_path)
-    c._cache_data["schedule"]["updated_at"] = _utc_now().isoformat()
-    c._save_cache()
-
-    reloaded = _client(tmp_path)
-    reloaded._load_cache()
-    assert reloaded._cache_data["schedule"]["updated_at"] == c._cache_data["schedule"]["updated_at"]
-
-
-def test_missing_cache_file_is_not_an_error(tmp_path: Path) -> None:
-    c = _client(tmp_path)
-    c._load_cache()
-    assert c._cache_data["league_gamelog"]["games"] == {}
-
-
-def test_corrupt_cache_falls_back_to_empty(tmp_path: Path) -> None:
-    """A truncated write must not stop the app from starting."""
-    path = tmp_path / ".nba_cache.json"
-    path.write_text("{not json", encoding="utf-8")
-    c = _client(tmp_path)
-    c._load_cache()
-    assert c._cache_data["league_gamelog"]["games"] == {}
-
-
-def test_save_failure_is_logged_not_raised(tmp_path: Path) -> None:
-    c = _client(tmp_path)
-    c._cache_file = tmp_path / "no-such-dir" / "cache.json"
-    c._save_cache()  # must not raise
-
-
 # ── gamelog fetch ───────────────────────────────────────────────────────
 
 
@@ -103,17 +68,18 @@ def test_gamelog_is_transformed_and_persisted(tmp_path: Path) -> None:
     c._fetch_league_gamelog_frame = lambda: pd.DataFrame([GAMELOG_ROW])  # type: ignore[method-assign]
     c._ensure_league_gamelog_loaded()
 
-    games = c._cache_data["league_gamelog"]["games"]
+    games = c._gamelog
     assert list(games) == ["A B"]
     assert games["A B"][0]["PTS"] == 20.0
     assert isinstance(games["A B"][0]["GAME_DATE"], str)
     # and it survived the trip to disk
-    assert "A B" in json.loads(c._cache_file.read_text(encoding="utf-8"))["league_gamelog"]["games"]
+    stored = json.loads((tmp_path / ".nba_cache.json").read_text(encoding="utf-8"))
+    assert "A B" in stored[GAMELOG_KEY]["value"]
 
 
 def test_fresh_gamelog_is_not_refetched(tmp_path: Path) -> None:
     c = _client(tmp_path)
-    c._cache_data["league_gamelog"]["updated_at"] = _utc_now().isoformat()
+    c._cache.set(GAMELOG_KEY, {"A B": []})
     calls: list[int] = []
 
     def _fetch() -> pd.DataFrame:
@@ -134,7 +100,7 @@ def test_gamelog_fetch_failure_leaves_the_cache_usable(tmp_path: Path) -> None:
 
     c._fetch_league_gamelog_frame = _boom  # type: ignore[method-assign]
     c._ensure_league_gamelog_loaded()  # must not raise
-    assert c._cache_data["league_gamelog"]["games"] == {}
+    assert c._gamelog == {}
 
 
 def test_multiple_games_accumulate_under_one_player(tmp_path: Path) -> None:
@@ -142,17 +108,15 @@ def test_multiple_games_accumulate_under_one_player(tmp_path: Path) -> None:
     rows = [GAMELOG_ROW, {**GAMELOG_ROW, "GAME_DATE": "2026-01-07", "PTS": 30}]
     c._fetch_league_gamelog_frame = lambda: pd.DataFrame(rows)  # type: ignore[method-assign]
     c._ensure_league_gamelog_loaded()
-    assert len(c._cache_data["league_gamelog"]["games"]["A B"]) == 2
+    assert len(c._gamelog["A B"]) == 2
 
 
 # ── get_player_stats ────────────────────────────────────────────────────
 
 
 def _seed_games(c: NBAStatsClient, count: int) -> None:
-    c._cache_data["league_gamelog"] = {
-        "games": {"A B": [{**GAMELOG_ROW, "GAME_DATE": f"2026-01-{i + 1:02d}"} for i in range(count)]},  # type: ignore[dict-item]
-        "updated_at": _utc_now().isoformat(),
-    }
+    games = {"A B": [{**GAMELOG_ROW, "GAME_DATE": f"2026-01-{i + 1:02d}"} for i in range(count)]}
+    c._cache.set(GAMELOG_KEY, games)
 
 
 def test_only_windows_with_enough_games_are_reported(tmp_path: Path) -> None:
@@ -192,7 +156,7 @@ def test_schedule_is_indexed_by_both_teams(tmp_path: Path) -> None:
     c = _client(tmp_path)
     c._fetch_schedule_dict = lambda: SCHEDULE_PAYLOAD  # type: ignore[method-assign]
     c._ensure_schedule_loaded()
-    teams = c._cache_data["schedule"]["teams"]
+    teams = c._schedule
     assert set(teams) == {"LAL", "BOS"}
     assert teams["LAL"][0]["tipoff_utc"] == "2026-02-11T03:00:00Z"
     assert teams["LAL"][0]["date"] == "2026-02-10"
@@ -221,7 +185,7 @@ def test_schedule_fetch_failure_does_not_raise(tmp_path: Path) -> None:
 
     c._fetch_schedule_dict = _boom  # type: ignore[method-assign]
     c._ensure_schedule_loaded()
-    assert c._cache_data["schedule"]["teams"] == {}
+    assert c._schedule == {}
 
 
 # ── rate limiting ───────────────────────────────────────────────────────

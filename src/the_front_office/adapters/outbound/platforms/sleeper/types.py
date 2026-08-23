@@ -135,3 +135,93 @@ class GameProjection:
     date: str
     """ISO date of the game, used to select the games inside a matchup period."""
     stats: dict[str, float]
+
+
+# The stats worth keeping from a season row. Sleeper sends ~70 per player
+# across 8k players; the rest are kicking splits and defensive counting stats
+# that no fantasy page reads.
+SEASON_STAT_KEYS = (
+    "gp",
+    "pts_ppr",
+    "pts_half_ppr",
+    "pts_std",
+    "pos_rank_ppr",
+    "pass_yd",
+    "pass_td",
+    "pass_int",
+    "cmp_pct",
+    "rush_yd",
+    "rush_td",
+    "rec",
+    "rec_yd",
+    "rec_td",
+    "rec_tgt",
+)
+
+
+# The production splits, as opposed to the totals and ranks that get their own
+# field on SeasonStats.
+SPLIT_KEYS = tuple(k for k in SEASON_STAT_KEYS if k not in ("gp", "pos_rank_ppr") and not k.startswith("pts_"))
+
+
+@dataclass(frozen=True)
+class SeasonStats:
+    """What a player actually did over a season, as opposed to was projected to.
+
+    Held per scoring format because a league's own currency is the only one
+    worth showing: 75 receptions is 37.5 points of difference between full and
+    standard, which is the gap between a flex and a starter.
+    """
+
+    player_id: str
+    season: str
+    games: int
+    points: dict[str, float]
+    position_rank: int
+    splits: dict[str, float]
+
+    def scored(self, scoring: ScoringFormat) -> float:
+        return self.points.get(scoring, 0.0)
+
+    def per_game(self, scoring: ScoringFormat) -> float:
+        """The number a season is actually judged on — a total rewards
+        availability, and a player who missed six weeks is not worse per week
+        for it."""
+        return self.scored(scoring) / self.games if self.games else 0.0
+
+
+@dataclass(frozen=True)
+class ScheduledGame:
+    """One real-world NFL game, from Sleeper's own season schedule."""
+
+    week: int
+    date: str
+    """ISO date. Sleeper publishes the day, not the kickoff time."""
+
+    home: str
+    away: str
+    status: str = ""
+
+    def opponent_of(self, team: str) -> tuple[str, bool] | None:
+        """Who `team` plays that week, and whether they are at home."""
+        if team == self.home:
+            return self.away, True
+        if team == self.away:
+            return self.home, False
+        return None
+
+
+@dataclass(frozen=True)
+class Transaction:
+    """One completed move by somebody in the league."""
+
+    kind: str
+    """waiver, free_agent or trade, as Sleeper labels it."""
+
+    roster_ids: list[int]
+    adds: dict[str, int]
+    """player_id -> the roster that gained them."""
+
+    drops: dict[str, int]
+    when: int = 0
+    """Epoch milliseconds, which is a number until somebody formats it."""
