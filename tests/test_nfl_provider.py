@@ -794,3 +794,83 @@ def test_the_week_says_when_it_is_played() -> None:
 
 def test_the_window_carries_the_dates_where_there_are_any() -> None:
     assert _provider(_at_week(2)).summary("L1").window == "Week 2 · 17 Sep"
+
+
+# ── reading the two lineups across ──────────────────────────────────────
+
+FULL_SLOTS = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF", "BN"]
+FULL_PROJECTIONS = {
+    "qb1": _proj("qb1", "Star QB", "QB", 22.0),
+    "rb1": _proj("rb1", "Good RB", "RB", 18.0),
+    "rb2": _proj("rb2", "Bad RB", "RB", 4.0),
+    "wr1": _proj("wr1", "WR One", "WR", 15.0),
+    "wr2": _proj("wr2", "WR Two", "WR", 12.0),
+    "te1": _proj("te1", "The TE", "TE", 9.0),
+    "fx1": _proj("fx1", "Flex WR", "WR", 8.0),
+    "k1": _proj("k1", "The K", "K", 7.0),
+    "def1": _proj("def1", "The D", "DEF", 6.0),
+}
+FULL_STARTERS = ["qb1", "rb1", "rb2", "wr1", "wr2", "te1", "fx1", "k1", "def1"]
+
+
+def _full_league() -> SleeperLeague:
+    return SleeperLeague(
+        league_id="L1",
+        name="Sunday Money",
+        season="2026",
+        total_rosters=12,
+        scoring_format="pts_ppr",
+        roster_positions=FULL_SLOTS,
+    )
+
+
+def _both_sides() -> FakeSleeper:
+    return FakeSleeper(
+        projections=FULL_PROJECTIONS,
+        league=_full_league(),
+        rosters=[
+            SleeperRoster(roster_id=1, owner_id=MY_ID, player_ids=FULL_STARTERS, starter_ids=FULL_STARTERS),
+            SleeperRoster(roster_id=2, owner_id="them", player_ids=FULL_STARTERS, starter_ids=FULL_STARTERS),
+        ],
+        matchups=[{"roster_id": 1, "matchup_id": 7}, {"roster_id": 2, "matchup_id": 7, "points": 96.1}],
+    )
+
+
+def test_both_lineups_are_listed_in_the_same_slot_order() -> None:
+    """The sides are read across, so an opponent in roster order is not a
+    comparison — Sleeper returns `player_ids` in no order at all."""
+    summary = _provider(_both_sides()).summary("L1")
+
+    assert summary.opponent is not None
+    slots = [spot.slot for spot in summary.opponent.lineup]
+    assert slots == [spot.slot for spot in summary.mine.lineup]
+    assert slots == ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF"]
+
+
+def test_an_off_length_starter_list_is_left_unlabelled() -> None:
+    """Positions cannot be trusted once the lists disagree, and a WR labelled
+    QB is worse than a row carrying no label at all."""
+    client = _both_sides()
+    client.rosters[1] = SleeperRoster(roster_id=2, owner_id="them", player_ids=FULL_STARTERS, starter_ids=["wr1"])
+
+    summary = _provider(client).summary("L1")
+
+    assert summary.opponent is not None
+    assert [spot.slot for spot in summary.opponent.lineup] == [""]
+
+
+def test_a_slot_does_not_repeat_the_position_beside_it() -> None:
+    """The slot column already says QB; saying it twice reads as two facts."""
+    summary = _provider(_both_sides()).summary("L1")
+
+    quarterback = summary.mine.lineup[0]
+    assert quarterback.slot == "QB"
+    assert not quarterback.detail.startswith("QB")
+
+
+def test_a_flex_still_says_which_position_is_filling_it() -> None:
+    """The one case where place and position genuinely differ."""
+    summary = _provider(_both_sides()).summary("L1")
+
+    flex = next(spot for spot in summary.mine.lineup if spot.slot == "FLEX")
+    assert flex.detail.startswith("WR")
