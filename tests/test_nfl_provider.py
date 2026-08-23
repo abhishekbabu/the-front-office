@@ -137,7 +137,11 @@ class FakeSleeper:
     def get_projections(self, season: str, week: int, scoring: str) -> dict[str, WeeklyProjection]:
         return self.projections
 
-    def get_trending(self, kind: str = "add", lookback_hours: int = 24, limit: int = 25) -> list[TrendingPlayer]:
+    # Signature mirrors the real client exactly, defaults included: a fake that
+    # accepts anything lets a miswired call through, which is how a mangled
+    # `get_trending(client, "add")` once degraded silently to "(unavailable)".
+    def get_trending(self, kind: str, lookback_hours: int = 24, limit: int = 25) -> list[TrendingPlayer]:
+        assert isinstance(kind, str), f"kind must be a string, got {type(kind).__name__}"
         if self.trending_error:
             raise self.trending_error
         return self.trending
@@ -1063,3 +1067,24 @@ def test_a_player_links_to_their_own_page() -> None:
     detail = _provider(_league_client()).player("L1", "qb1")
 
     assert detail.url == "https://sleeper.com/players/nfl/qb1"
+
+
+def test_the_crowd_signal_reaches_the_prompt() -> None:
+    """Trending adds are fetched inside a try/except, so a miswired call
+    degrades to "(unavailable)" rather than raising — which is exactly how it
+    can break without a test noticing."""
+    client = FakeSleeper(
+        projections=DEFAULT_PROJECTIONS,
+        trending=[TrendingPlayer(player_id="rb1", count=12_345)],
+    )
+
+    context = _provider(client).build_context("L1")
+
+    assert "Good RB" in context.prompt
+    assert "12,345" in context.prompt
+
+
+def test_a_failed_trending_lookup_says_so_rather_than_failing_the_report() -> None:
+    client = FakeSleeper(projections=DEFAULT_PROJECTIONS, trending_error=SleeperAPIError("down"))
+
+    assert "(unavailable)" in _provider(client).build_context("L1").prompt
