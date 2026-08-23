@@ -48,7 +48,16 @@ class Sport(BaseModel):
     label: str
     supports_trades: bool
     configured: bool
+    """Whether the credentials this sport needs are set."""
+
     requires: str
+
+    ready: bool
+    """Whether it can actually be used. Configured is necessary, not sufficient."""
+
+    blocked_reason: str = ""
+    blocked_code: str = ""
+    """What stands in the way, and which remedy the client should offer."""
 
 
 class League(BaseModel):
@@ -128,7 +137,7 @@ _login_lock = threading.Lock()
 
 
 def _run_yahoo_login() -> None:
-    """Authorise, then confirm the grant is real before reporting success."""
+    """Authorize, then confirm the grant is real before reporting success."""
     from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
 
     global _login
@@ -136,11 +145,11 @@ def _run_yahoo_login() -> None:
         YahooClient.login(force=True)
         YahooClient.verify()
     except FrontOfficeError as e:
-        logger.error(f"Yahoo authorisation failed: {e}")
+        logger.error(f"Yahoo authorization failed: {e}")
         _login = LoginState(status="failed", detail=str(e))
     except Exception as e:  # a browser or socket failure, not a domain condition
-        logger.error(f"Yahoo authorisation failed unexpectedly: {e}")
-        _login = LoginState(status="failed", detail=f"Authorisation failed: {e}")
+        logger.error(f"Yahoo authorization failed unexpectedly: {e}")
+        _login = LoginState(status="failed", detail=f"Authorization failed: {e}")
     else:
         _login = LoginState(status="ok", detail="Yahoo accepted a Fantasy Sports read.")
 
@@ -187,16 +196,7 @@ def _register_routes(app: FastAPI) -> None:
         Unconfigured sports are returned rather than hidden so the UI can say
         what to set instead of silently offering less than it could.
         """
-        return [
-            Sport(
-                sport=entry.sport,
-                label=entry.label,
-                supports_trades=entry.supports_trades,
-                configured=entry.is_configured(),
-                requires=entry.requires,
-            )
-            for entry in all_sports()
-        ]
+        return [_sport(entry) for entry in all_sports()]
 
     @app.get("/api/settings", response_model=list[Setting])
     def read_settings() -> list[Setting]:
@@ -243,6 +243,30 @@ def _register_routes(app: FastAPI) -> None:
             raise HTTPException(status_code=500, detail=f"Could not write .env: {e}") from e
         return read_settings()
 
+    def _sport(entry: SportEntry) -> Sport:
+        """A sport as the picker sees it, including why it cannot be opened.
+
+        Offering something that will only fail on the next click is worse than
+        greying it out and saying what is missing.
+        """
+        configured = entry.is_configured()
+        reason = code = ""
+        if configured:
+            try:
+                entry.check_ready()
+            except FrontOfficeError as e:
+                reason, code = str(e), e.code
+        return Sport(
+            sport=entry.sport,
+            label=entry.label,
+            supports_trades=entry.supports_trades,
+            configured=configured,
+            requires=entry.requires,
+            ready=configured and not reason,
+            blocked_reason=reason,
+            blocked_code=code,
+        )
+
     @app.get("/api/yahoo/login", response_model=LoginState)
     def yahoo_login_state() -> LoginState:
         return _login
@@ -260,7 +284,7 @@ def _register_routes(app: FastAPI) -> None:
             if _login.status == "running":
                 return _login
             # A stale outcome from a previous attempt would read as this one's.
-            _login = LoginState(status="running", detail="Authorise in the browser tab that just opened.")
+            _login = LoginState(status="running", detail="Authorize in the browser tab that just opened.")
         threading.Thread(target=_run_yahoo_login, daemon=True).start()
         return _login
 

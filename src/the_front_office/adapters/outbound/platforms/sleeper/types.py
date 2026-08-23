@@ -23,7 +23,7 @@ FLEX_ELIGIBILITY: dict[str, tuple[str, ...]] = {
 
 
 class PlayerMeta(TypedDict, total=False):
-    """The fields we keep from Sleeper's ~14MB player catalogue."""
+    """The fields we keep from Sleeper's ~14MB player catalog."""
 
     player_id: str
     name: str

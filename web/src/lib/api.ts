@@ -10,8 +10,14 @@ export type Sport = {
   sport: string;
   label: string;
   supports_trades: boolean;
+  /** Whether the credentials this sport needs are set. */
   configured: boolean;
   requires: string;
+  /** Whether it can actually be used. Configured is necessary, not sufficient. */
+  ready: boolean;
+  /** What stands in the way, and which remedy to offer. Empty when ready. */
+  blocked_reason: string;
+  blocked_code: string;
 };
 
 export type League = { league_id: string; name: string; detail: string };

@@ -346,10 +346,12 @@ def test_a_domain_error_carries_a_code_the_client_can_act_on(client: TestClient)
 
 
 def _raising(error: Exception) -> Any:
-    def _build(sport: str) -> Any:
+    """A stand-in that always fails, whatever it is handed."""
+
+    def _fail(*args: Any, **kwargs: Any) -> Any:
         raise error
 
-    return _build
+    return _fail
 
 
 def test_starting_the_handshake_returns_at_once(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -420,3 +422,48 @@ class _NoopThread:
         self.kwargs = kwargs
 
     def start(self) -> None: ...
+
+
+def _with_readiness(monkeypatch: pytest.MonkeyPatch, sport: str, check: Any) -> None:
+    """Swap one registered sport's readiness check.
+
+    `SportEntry` is frozen, so the entry is rebuilt and the registry lookup
+    pointed at the copy rather than mutated in place.
+    """
+    import dataclasses
+
+    entries = tuple(dataclasses.replace(e, check_ready=check) if e.sport == sport else e for e in web.all_sports())
+    monkeypatch.setattr(web, "all_sports", lambda: entries)
+
+
+def test_a_configured_sport_can_still_be_unusable(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Credentials being set says nothing about whether the platform answers."""
+    from the_front_office.domain.errors import YahooLoginRequiredError
+
+    monkeypatch.setattr(web.settings, "yahoo_client_id", "id")
+    monkeypatch.setattr(web.settings, "yahoo_client_secret", "secret")
+    _with_readiness(monkeypatch, "nba", _raising(YahooLoginRequiredError()))
+
+    nba = next(s for s in client.get("/api/sports").json() if s["sport"] == "nba")
+
+    assert nba["configured"] is True
+    assert nba["ready"] is False
+    assert nba["blocked_code"] == "yahoo_login_required"
+
+
+def test_a_sport_with_nothing_in_the_way_is_ready(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(web.settings, "sleeper_username", "abhibeast")
+
+    nfl = next(s for s in client.get("/api/sports").json() if s["sport"] == "nfl")
+
+    assert (nfl["ready"], nfl["blocked_reason"], nfl["blocked_code"]) == (True, "", "")
+
+
+def test_an_unconfigured_sport_is_not_probed(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Checking readiness on a sport with no credentials would only report the
+    credentials, burying the thing the user actually has to set."""
+    _with_readiness(monkeypatch, "nba", _raising(AssertionError("must not be probed")))
+
+    nba = next(s for s in client.get("/api/sports").json() if s["sport"] == "nba")
+
+    assert (nba["configured"], nba["ready"], nba["blocked_reason"]) == (False, False, "")

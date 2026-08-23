@@ -4,6 +4,7 @@ import { api, type League, type Sport } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { YahooLoginButton } from "@/panels/shared";
 
 /**
  * What the app opens on: every league you are in, across every sport.
@@ -22,12 +23,15 @@ export function Landing({
   const configured = sports.filter((s) => s.configured);
 
   // One query per sport rather than one combined endpoint: they fail
-  // independently — an unauthorised Yahoo must not take the page down — and
-  // each is cached under the same key the panels already use.
+  // independently — one platform being down must not take the page down — and
+  // each is cached under the same key the panels already use. A sport that is
+  // not ready is not asked at all; the request could only fail, and the reason
+  // is already known.
   const results = useQueries({
     queries: configured.map((sport) => ({
       queryKey: ["leagues", sport.sport],
       queryFn: () => api.leagues(sport.sport),
+      enabled: sport.ready,
     })),
   });
 
@@ -50,14 +54,40 @@ export function Landing({
             <Card key={sport.sport}>
               <CardHeader>
                 <span>{sport.label}</span>
-                {result?.isSuccess && (
+                {sport.ready && result?.isSuccess && (
                   <span>
                     {result.data.length} {result.data.length === 1 ? "league" : "leagues"}
                   </span>
                 )}
+                {!sport.ready && (
+                  <Badge variant="warn" appearance="status">
+                    unavailable
+                  </Badge>
+                )}
               </CardHeader>
 
-              {result?.isLoading && <Skeleton className="m-4 h-14" />}
+              {/* Stated once, with the action, rather than left to fail on the
+                  first click into the sport. */}
+              {!sport.ready && (
+                <div className="flex flex-col items-start gap-3 px-4 py-3">
+                  <p className="max-w-[70ch] text-[13px] leading-relaxed text-muted-foreground">
+                    {sport.blocked_reason}
+                  </p>
+                  {sport.blocked_code === "yahoo_login_required" && <YahooLoginButton />}
+                  {sport.blocked_code === "yahoo_not_approved" && (
+                    <a
+                      href="https://sports.yahoo.com/developer/access/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-9 items-center rounded-md border border-border bg-background px-4 text-sm font-medium hover:bg-muted"
+                    >
+                      Apply for API access
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {sport.ready && result?.isLoading && <Skeleton className="m-4 h-14" />}
 
               {result?.isError && (
                 // Shown in place rather than as a page-level failure: the other

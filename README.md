@@ -50,11 +50,11 @@ the span that caused them. Without `LOGFIRE_TOKEN` nothing is exported and no
 network call is made.
 
 **Web UI** (`web/`) — React 19, Vite, Tailwind v4 and Radix primitives, served by
-FastAPI. Colour is themed in two orthogonal dimensions: a palette (`data-theme` on
+FastAPI. Color is themed in two orthogonal dimensions: a palette (`data-theme` on
 `<html>`) and light/dark (`color-scheme`, driven by a class), so every token is a
 single `light-dark(light, dark)` declaration and no component branches on either.
-Status colours are shared across palettes rather than re-themed, and chosen so
-pass/fail reads as a warm/cool contrast that survives red-green colour blindness.
+Status colors are shared across palettes rather than re-themed, and chosen so
+pass/fail reads as a warm/cool contrast that survives red-green color blindness.
 
 **Tooling** — `ruff`, `pyrefly`, `pytest`, `pre-commit`, `just` for Python;
 `tsc`, `vitest` and `pnpm` for the UI. Every Python recipe runs through `uv run`,
@@ -93,13 +93,13 @@ the running process, so a sport becomes available without a restart.
 belong in a password manager, not in this repo, which is public. Then run
 `just doctor`, which names every variable the app reads, reports each as present
 or absent without echoing a secret, and flags keys nothing will pick up —
-`AppSettings` ignores what it does not recognise, so a mistyped key is silent.
+`AppSettings` ignores what it does not recognize, so a mistyped key is silent.
 
 Do **not** copy `.yahoofantasy`: refresh-token rotation means two machines
 sharing one token can invalidate each other, and re-authenticating is a single
 browser flow. Do not copy `.nba_cache.json`, `.sleeper_cache.json` or
 `.fpl_cache.json` either — they are derived, TTL'd, and one holds a ~14MB player
-catalogue.
+catalog.
 
 ### Environment
 
@@ -149,7 +149,7 @@ token instead of trying to obtain one.
 The handshake is implemented in
 [`platforms/yahoo/oauth.py`](src/the_front_office/adapters/outbound/platforms/yahoo/oauth.py)
 rather than delegated to the `yahoofantasy` CLI, which exchanges the code
-against `redirect_uri="oob"` after authorising against a different one. RFC 6749
+against `redirect_uri="oob"` after authorizing against a different one. RFC 6749
 requires the two to match; Yahoo answers the mismatch with a token that
 authenticates and carries no grant, so every endpoint returns 403 instead of
 401. The browser will warn about the self-signed localhost certificate the
@@ -165,7 +165,7 @@ no user permission, which is how this is told apart from a consent problem. An
 invalid token would return 401.
 
 Your Yahoo app must also have **API Permissions → Fantasy Sports → Read**, *saved*.
-Yahoo fixes a token's grant at the moment you authorise, from whatever
+Yahoo fixes a token's grant at the moment you authorize, from whatever
 permissions were saved then — so a token minted before that is accepted and
 permitted nothing, answering 403 (not 401) on every endpoint including ones
 needing no permission at all. A refresh cannot widen a grant, so the only fix is

@@ -1,7 +1,7 @@
 """Resolving the players named in a trade.
 
 How a name becomes a player differs per platform — a Yahoo search, a lookup
-against a Sleeper catalogue — but the policy around it does not: resolve both
+against a Sleeper catalog — but the policy around it does not: resolve both
 sides, and if anything failed, name every failure at once. A user with a typo on
 each side should fix one message, not discover the second on the re-run.
 """

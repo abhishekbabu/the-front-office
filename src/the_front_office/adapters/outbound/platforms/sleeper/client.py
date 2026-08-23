@@ -5,8 +5,8 @@ plain GETs, which is why the football path has nothing resembling the Yahoo
 login flow.
 
 Sleeper asks callers to stay under 1000 requests/minute and to fetch the player
-catalogue "once per day at most". Everything cacheable is cached on disk with a
-TTL chosen per endpoint: the catalogue daily, projections for a settled week
+catalog "once per day at most". Everything cacheable is cached on disk with a
+TTL chosen per endpoint: the catalog daily, projections for a settled week
 effectively forever, trending for an hour.
 """
 
@@ -45,7 +45,7 @@ NFL = "nfl"
 NBA = "nba"
 
 REQUEST_TIMEOUT_SECONDS = 30
-CATALOGUE_TIMEOUT_SECONDS = 90  # the player catalogue is ~14MB
+CATALOG_TIMEOUT_SECONDS = 90  # the player catalog is ~14MB
 
 # TTLs, chosen from how quickly each endpoint's data actually changes.
 PLAYERS_TTL = timedelta(days=1)  # the docs ask for at most one fetch per day
@@ -198,7 +198,7 @@ class SleeperClient:
     # ── player data ─────────────────────────────────────────────────
 
     def get_players(self, sport: str = NFL) -> dict[str, PlayerMeta]:
-        """The player catalogue, trimmed to the fields we use.
+        """The player catalog, trimmed to the fields we use.
 
         The raw response is ~14MB across 12k players. Only a handful of fields
         matter here, so the cache stores the trimmed form — the full payload
@@ -208,7 +208,7 @@ class SleeperClient:
         if cached is not None:
             return cached
 
-        raw = self._get(f"{BASE_URL}/players/{sport}", timeout=CATALOGUE_TIMEOUT_SECONDS)
+        raw = self._get(f"{BASE_URL}/players/{sport}", timeout=CATALOG_TIMEOUT_SECONDS)
         trimmed: dict[str, PlayerMeta] = {}
         for player_id, p in (raw or {}).items():
             if not isinstance(p, dict):

@@ -2,7 +2,7 @@
 
 Setting a project up on a second machine means retyping a handful of values,
 and the failure mode is silent: `AppSettings` ignores keys it does not
-recognise, so `GOOGLE_APIKEY` for `GOOGLE_API_KEY` produces no error at all —
+recognize, so `GOOGLE_APIKEY` for `GOOGLE_API_KEY` produces no error at all —
 the AI simply reports itself unavailable, three commands later.
 
 This names every setting the app reads, says whether it is present, and flags
@@ -103,7 +103,7 @@ def main() -> int:
     unknown = [key for key in _file_keys() if key not in declared]
     if unknown:
         print()
-        print("  Unrecognised keys in .env — nothing reads these:")
+        print("  Unrecognized keys in .env — nothing reads these:")
         for key in unknown:
             print(f"    {key}")
         print("  A typo here is silent: the setting keeps its default.")

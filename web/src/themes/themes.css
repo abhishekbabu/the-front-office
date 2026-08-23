@@ -15,12 +15,12 @@
 
    Status tokens (`ok`, `warn`) and the difficulty ramp are intentionally NOT
    overridden here. They encode meaning rather than taste, and they are tuned
-   for colour-blind legibility; re-picking them per palette would trade that
+   for color-blind legibility; re-picking them per palette would trade that
    away for visual consistency that nobody asked for.
    ──────────────────────────────────────────────────────────────────────── */
 
 /* Floodlight — this app's own. A cool near-black ground under a warm amber,
-   the colour temperature of a stadium at night. The amber is the only hue in
+   the color temperature of a stadium at night. The amber is the only hue in
    the palette, so anything wearing it is either focused or the primary action. */
 html[data-theme="floodlight"] {
   --color-background: light-dark(#fafaf7, #0c0e0d);

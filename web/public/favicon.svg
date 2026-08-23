@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <!-- Follows the OS theme the way the app does: the mark is the foreground
-       colour on the ground, so it stays legible on either browser chrome. -->
+       color on the ground, so it stays legible on either browser chrome. -->
   <style>
     .ground { fill: #171717 }
     .mark   { stroke: #ffffff }

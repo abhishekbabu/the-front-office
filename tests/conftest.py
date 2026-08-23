@@ -164,7 +164,7 @@ def _isolate_from_local_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     """Blank every credential-derived setting for the duration of a test.
 
     `settings` is built from the developer's .env at import time. Without this a
-    test asserting "unconfigured" behaviour passes in CI, which has no .env, and
+    test asserting "unconfigured" behavior passes in CI, which has no .env, and
     fails on a machine that does — or worse, a test quietly exercises a real
     account. Tests that need a value set it explicitly.
     """
@@ -185,7 +185,7 @@ def _isolate_from_local_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
 
     # Point the Yahoo token at a path that cannot exist, so a suite run does not
     # depend on whether this machine has been through the OAuth flow. A test
-    # that wants an authorised client says so by pointing this somewhere real.
+    # that wants an authorized client says so by pointing this somewhere real.
     monkeypatch.setattr(settings, "yahoo_token_file", str(tmp_path / "no-token"))
 
 

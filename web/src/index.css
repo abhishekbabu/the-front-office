@@ -18,7 +18,7 @@
 
   /* Default palette. Monochrome by construction: `primary` is the foreground,
      so a primary button is black on white and white on black, and the blue is
-     spent only on focus rings and links. With this much data on screen, colour
+     spent only on focus rings and links. With this much data on screen, color
      that carries no meaning is noise — every hue below either encodes status or
      marks focus. */
   --color-background: light-dark(#ffffff, #000000);
@@ -41,8 +41,8 @@
   --color-input: light-dark(#d4d4d4, #454545);
   --color-ring: light-dark(#0070f3, #52a8ff);
 
-  /* Status colours are SHARED by every palette rather than re-themed, and are
-     picked to survive red-green colour blindness: `ok` is a cool bluish-green
+  /* Status colors are SHARED by every palette rather than re-themed, and are
+     picked to survive red-green color blindness: `ok` is a cool bluish-green
      and `destructive` stays a warm red, so pass-versus-fail reads as a warm/cool
      contrast rather than a hue difference that CVD collapses. `warn` amber sits
      between them by lightness. Every value clears WCAG AA against its own ground.
@@ -53,7 +53,7 @@
   /* Fixture and matchup difficulty, 1 (easiest) to 5 (hardest). The obvious
      ramp is green to red, which is exactly the axis CVD flattens — so lightness
      falls monotonically across the five as well, and every component that uses
-     these also prints the number. The colour is reinforcement, never the only
+     these also prints the number. The color is reinforcement, never the only
      carrier of the value. */
   --color-fdr-1: light-dark(#0b5d4a, #0b5d4a);
   --color-fdr-2: light-dark(#3d8a6b, #35785d);
@@ -76,7 +76,7 @@
 /* The load-bearing line for theming. `color-scheme` tells the browser to render
    native controls, scrollbars and focus rings in the matching mode, and selects
    which arm every `light-dark()` token resolves to — so flipping one class
-   re-themes everything with no JavaScript recolouring. */
+   re-themes everything with no JavaScript recoloring. */
 :root { color-scheme: light; }
 .dark { color-scheme: dark; }
 

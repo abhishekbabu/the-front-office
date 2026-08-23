@@ -50,7 +50,7 @@ def test_response_shape_changes_are_not_retryable() -> None:
     assert not _is_nba_retryable_error(ValueError("bad literal"))
 
 
-# ── retry behaviour ─────────────────────────────────────────────────────
+# ── retry behavior ─────────────────────────────────────────────────────
 
 
 def test_transient_failure_then_success_is_retried() -> None:

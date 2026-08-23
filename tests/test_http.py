@@ -66,7 +66,7 @@ def test_a_successful_get_returns_the_payload(tmp_path: Path) -> None:
 
 
 def test_a_call_can_override_the_default_timeout(tmp_path: Path) -> None:
-    """The player catalogue is far larger than anything else and needs longer."""
+    """The player catalog is far larger than anything else and needs longer."""
     session = FakeSession({})
     _client(tmp_path, session).get("https://example.test/big", timeout=90)
     assert session.timeouts == [90]
@@ -116,7 +116,7 @@ def test_an_expired_entry_is_refetched(tmp_path: Path) -> None:
 
 
 def test_a_caller_can_transform_before_storing(tmp_path: Path) -> None:
-    """The catalogue is trimmed on the way in, so it bypasses `cached`."""
+    """The catalog is trimmed on the way in, so it bypasses `cached`."""
     client = _client(tmp_path, FakeSession())
     assert client.cache_get("k", TTL) is None
     client.cache_set("k", {"trimmed": True})

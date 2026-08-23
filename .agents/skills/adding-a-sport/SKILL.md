@@ -79,7 +79,7 @@ wrong: no team in the league, an unresolvable player in a trade.
 Fantasy platforms and stats providers rarely share identifiers. When joining by
 name (`adapters/outbound/sports/nba/projections.py` is the worked example):
 
-- Normalise accents, punctuation and generational suffixes. A hyphen separates
+- Normalize accents, punctuation and generational suffixes. A hyphen separates
   words (`Karl-Anthony` → `karl anthony`); an apostrophe does not (`De'Aaron` →
   `deaaron`).
 - Refuse ambiguity. Two players sharing a surname must resolve to *neither*, not
@@ -93,7 +93,7 @@ Check these before implementing anything a sport "needs":
 
 | Need | Use |
 |------|-----|
-| Match a player name across platforms | `sports/names.py` — `NameIndex`, `normalise_name` |
+| Match a player name across platforms | `sports/names.py` — `NameIndex`, `normalize_name` |
 | Resolve the players in a trade | `sports/trades.py` — `resolve_sides` |
 | Retry a flaky platform call | `platforms/retry.py` — `build_retry`, `is_transient` |
 | Cache a platform response | `platforms/cache.py` — `JsonDiskCache` |

@@ -1,9 +1,9 @@
 """The Yahoo OAuth2 authorization-code flow.
 
 Written here rather than delegated because the vendor CLI's flow is subtly
-wrong in a way Yahoo no longer tolerates. It authorises against the real
+wrong in a way Yahoo no longer tolerates. It authorizes against the real
 redirect URI and then exchanges the code with `redirect_uri="oob"`, a value it
-never authorised against. RFC 6749 §4.1.3 requires the two to be identical.
+never authorized against. RFC 6749 §4.1.3 requires the two to be identical.
 Yahoo answers that mismatch with a token rather than an error — one that
 authenticates and carries no grant, so every endpoint returns 403 instead of
 401, including endpoints that need no permission at all. Nothing downstream can
@@ -39,7 +39,7 @@ FANTASY_READ_SCOPE = "fspt-r"
 
 CALLBACK_TIMEOUT_SECONDS = 300
 
-_DONE = "<html><body style='font:16px system-ui;padding:3rem'>Authorised. Close this tab.</body></html>"
+_DONE = "<html><body style='font:16px system-ui;padding:3rem'>Authorized. Close this tab.</body></html>"
 
 
 def _certificate() -> tuple[Path, Path] | None:
@@ -115,13 +115,13 @@ def _capture_code(redirect_uri: str, client_id: str, scope: str) -> str:
             "scope": scope,
             # Ask to be re-consented rather than handed a stored grant. Yahoo
             # does not appear to honour this, but requesting it is correct and
-            # costs nothing: without it, an app authorised before its
+            # costs nothing: without it, an app authorized before its
             # permissions were saved would silently keep the older grant.
             "prompt": "consent",
         }
     )
     url = f"{AUTH_URL}?{query}"
-    logger.info(f"Opening browser for Yahoo authorisation: {url}")
+    logger.info(f"Opening browser for Yahoo authorization: {url}")
     webbrowser.open_new_tab(url)
 
     # Serve until the redirect actually arrives rather than handling a single
@@ -147,7 +147,7 @@ def _capture_code(redirect_uri: str, client_id: str, scope: str) -> str:
                 "API Permissions → Fantasy Sports → Read, press Update, then reload the page and "
                 "confirm it is still ticked before running this again."
             )
-        raise YahooLoginRequiredError(f"Yahoo refused the authorisation: {_Callback.error}")
+        raise YahooLoginRequiredError(f"Yahoo refused the authorization: {_Callback.error}")
     if not _Callback.code:
         raise YahooLoginRequiredError(
             f"No redirect arrived within {CALLBACK_TIMEOUT_SECONDS}s. The browser must reach "
@@ -177,7 +177,7 @@ def _exchange(code: str, client_id: str, client_secret: str, redirect_uri: str) 
     return response.json()
 
 
-def authorise(client_id: str, client_secret: str, redirect_uri: str, scope: str = FANTASY_READ_SCOPE) -> None:
+def authorize(client_id: str, client_secret: str, redirect_uri: str, scope: str = FANTASY_READ_SCOPE) -> None:
     """Run the full handshake and persist the result.
 
     Interactive: opens a browser and blocks until the redirect arrives.

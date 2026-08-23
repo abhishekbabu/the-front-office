@@ -29,7 +29,7 @@ const GROUPS: { title: string; note: string; keys: string[] }[] = [
   },
   {
     title: "NBA on Yahoo",
-    note: "From a Yahoo developer app with Fantasy Sports read permission and redirect URI https://localhost:8080. The first report opens a browser to authorise.",
+    note: "From a Yahoo developer app with Fantasy Sports read permission and redirect URI https://localhost:8080. The first report opens a browser to authorize.",
     keys: ["YAHOO_CLIENT_ID", "YAHOO_CLIENT_SECRET", "YAHOO_REDIRECT_URI", "YAHOO_MAX_WEEKLY_ADDS"],
   },
   {

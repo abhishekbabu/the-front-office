@@ -28,10 +28,12 @@ export default function App() {
   const sports = useQuery({ queryKey: ["sports"], queryFn: api.sports });
   const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   const mockOn = (settings.data ?? []).some((s) => s.key === "MOCK_AI" && s.value === "true");
-  const configured = useMemo(() => (sports.data ?? []).filter((s) => s.configured), [sports.data]);
+  // Ready, not merely configured: credentials being set says nothing about
+  // whether a platform will actually answer.
+  const usable = useMemo(() => (sports.data ?? []).filter((s) => s.ready), [sports.data]);
   // No fallback to the first configured sport: until one is chosen the landing
   // page is what shows, and choosing for the user is what it exists to avoid.
-  const active: Sport | undefined = configured.find((s) => s.sport === sport);
+  const active: Sport | undefined = usable.find((s) => s.sport === sport);
 
   const leagues = useQuery({
     queryKey: ["leagues", active?.sport],
@@ -64,8 +66,14 @@ export default function App() {
             <RailItem
               key={s.sport}
               active={s.sport === active?.sport}
-              disabled={!s.configured}
-              title={s.configured ? undefined : `Not configured — set ${s.requires} in .env`}
+              disabled={!s.ready}
+              title={
+                s.ready
+                  ? undefined
+                  : s.configured
+                    ? s.blocked_reason
+                    : `Not configured — set ${s.requires} in .env`
+              }
               onClick={() => {
                 setSport(s.sport);
                 setLeagueId(null);
@@ -73,7 +81,9 @@ export default function App() {
               }}
             >
               {s.label.replace(/\s*\(.*\)$/, "")}
-              {!s.configured && <span className="font-mono text-[10px] opacity-60">off</span>}
+              {!s.ready && (
+                <span className="font-mono text-[10px] opacity-60">{s.configured ? "blocked" : "off"}</span>
+              )}
             </RailItem>
           ))}
         </Group>
@@ -133,7 +143,7 @@ export default function App() {
       <main className="min-w-0">
         {view === "settings" ? (
           <SettingsPanel />
-        ) : sports.isSuccess && configured.length === 0 ? (
+        ) : sports.isSuccess && usable.length === 0 ? (
           <Empty sports={sports.data} />
         ) : view === "home" ? (
           sports.isSuccess ? (

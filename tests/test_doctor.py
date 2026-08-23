@@ -1,6 +1,6 @@
 """Tests for the environment doctor.
 
-Its reason to exist is that `AppSettings` ignores unrecognised keys, so a
+Its reason to exist is that `AppSettings` ignores unrecognized keys, so a
 mistyped one produces no error anywhere — the setting silently keeps its
 default and the feature reports itself unavailable much later.
 """
@@ -63,7 +63,7 @@ def test_a_correct_file_passes(
     _env(tmp_path, "GOOGLE_API_KEY=abc\nSLEEPER_USERNAME=someone\n", monkeypatch)
 
     assert doctor.main() == 0
-    assert "Unrecognised" not in capsys.readouterr().out
+    assert "Unrecognized" not in capsys.readouterr().out
 
 
 def test_comments_and_blank_lines_are_not_keys(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

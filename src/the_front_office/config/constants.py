@@ -109,7 +109,7 @@ TRENDING ADDS ACROSS SLEEPER (crowd signal, often ahead of projections):
 {trending_str}
 
 YOUR TASK:
-1. Read the matchup: are we favoured or chasing, and by how much?
+1. Read the matchup: are we favored or chasing, and by how much?
 2. Recommend START/BENCH moves where the projection gap is real and you believe it.
 3. Recommend ADD moves from the available list, each paired with a DROP from the bench.
 4. Skip any move you would not actually make. Three good moves beat six padded ones.

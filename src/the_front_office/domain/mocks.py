@@ -73,7 +73,7 @@ MOCK_NFL_REPORT = ScoutReport(
             position="RB",
             team="BUF",
             metric="16.7 proj pts, +4.2 over the current starter",
-            rationale="[MOCK] Clear volume lead and a bottom-five run defence opposite him.",
+            rationale="[MOCK] Clear volume lead and a bottom-five run defense opposite him.",
             replaces="Mock Bench Back",
             replaces_rationale="[MOCK] Splitting carries and facing the league's best front.",
         ),
@@ -104,7 +104,7 @@ MOCK_FPL_REPORT = ScoutReport(
             position="FWD",
             team="MCI",
             metric="7.4 xPts, fixture difficulty 2",
-            rationale="[MOCK] Home to the weakest defence in the division, and on penalties.",
+            rationale="[MOCK] Home to the weakest defense in the division, and on penalties.",
         ),
         Move(
             action="TRANSFER",
@@ -127,7 +127,7 @@ MOCK_FPL_REPORT = ScoutReport(
             replaces_rationale="[MOCK] Started one of the last four with a cup tie midweek.",
         ),
     ],
-    strategy="[MOCK] Take the free transfer in defence, captain the premium, no hit.",
+    strategy="[MOCK] Take the free transfer in defense, captain the premium, no hit.",
 )
 
 MOCK_REPORTS: dict[str, ScoutReport] = {

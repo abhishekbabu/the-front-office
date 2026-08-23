@@ -84,9 +84,9 @@ def _parse_timestamp(value: str) -> datetime | None:
     """
     # fromisoformat accepts a trailing "Z" only from 3.11, and every NBA
     # timestamp has one.
-    normalised = value[:-1] + "+00:00" if value.endswith("Z") else value
+    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
     try:
-        parsed = datetime.fromisoformat(normalised)
+        parsed = datetime.fromisoformat(normalized)
     except ValueError:
         return None
     if parsed.tzinfo is None:

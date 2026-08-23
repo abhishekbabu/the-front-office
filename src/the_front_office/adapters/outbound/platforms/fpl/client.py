@@ -99,7 +99,7 @@ def free_transfers(history: list[GameweekResult], upcoming: int) -> int:
     is earned per gameweek, unused ones roll over, and the total is capped.
 
     Falls back to a single transfer when the history is missing, which is the
-    floor: it is never wrong in the manager's favour.
+    floor: it is never wrong in the manager's favor.
     """
     played = {row.event: row for row in history}
     available = 1

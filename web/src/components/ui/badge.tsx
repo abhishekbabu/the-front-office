@@ -20,7 +20,7 @@ const badgeVariants = cva(
       },
       appearance: {
         // The leading dot repeats the variant as a shape, so status survives
-        // where the hue does not — print, low contrast, colour blindness.
+        // where the hue does not — print, low contrast, color blindness.
         status: "rounded-full before:size-1.5 before:shrink-0 before:rounded-full before:bg-current",
         pill: "rounded-full",
         label: "rounded-sm",

@@ -31,6 +31,15 @@ class SportEntry:
     requires: str
     """What to put in .env to enable it, quoted in the 'not configured' message."""
 
+    check_ready: Callable[[], None] = lambda: None
+    """Raise if the sport is configured but cannot be used yet.
+
+    Separate from `is_configured` because credentials being present and a sport
+    being usable are different questions — Yahoo needs an authorization on top
+    of them, and offering a sport that will only fail is worse than greying it
+    out. Must stay cheap and non-interactive: it runs on every page load.
+    """
+
     supports_trades: bool = False
     """Whether trade evaluation works for this sport.
 
@@ -46,6 +55,13 @@ def _build_nfl() -> SportProvider:
     return SleeperNFLProvider()
 
 
+def _check_yahoo_ready() -> None:
+    """Yahoo also needs a cached token, which is a file this can just look for."""
+    from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
+
+    YahooClient.ensure_authorized()
+
+
 def _build_fpl() -> SportProvider:
     from the_front_office.adapters.outbound.sports.fpl.fpl import FPLProvider
 
@@ -53,7 +69,7 @@ def _build_fpl() -> SportProvider:
 
 
 def _build_nba() -> SportProvider:
-    """Yahoo needs an authorised context and a specific league object.
+    """Yahoo needs an authorized context and a specific league object.
 
     Deferred to here so that constructing the registry — which every entry point
     does at startup — never touches Yahoo. Nothing in this path is interactive:
@@ -64,7 +80,7 @@ def _build_nba() -> SportProvider:
     from the_front_office.adapters.outbound.sports.nba.yahoo import YahooNBAProvider
     from the_front_office.domain.errors import LeagueNotFoundError
 
-    yahoo.YahooClient.ensure_authorised()
+    yahoo.YahooClient.ensure_authorized()
     ctx = yahoo.YahooClient.get_context()
     try:
         leagues = list(ctx.get_leagues("nba", YahooNBAProvider.season_year()))
@@ -87,6 +103,7 @@ REGISTRY: tuple[SportEntry, ...] = (
         build=_build_nba,
         is_configured=lambda: bool(settings.yahoo_client_id and settings.yahoo_client_secret),
         requires="YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET",
+        check_ready=_check_yahoo_ready,
         supports_trades=True,
     ),
     SportEntry(

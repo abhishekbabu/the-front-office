@@ -54,7 +54,7 @@ def test_unrelated_exceptions_are_not_transient() -> None:
     assert not is_transient(ValueError("bad literal"))
 
 
-# ── behaviour ───────────────────────────────────────────────────────────
+# ── behavior ───────────────────────────────────────────────────────────
 
 
 def _retry(predicate: Callable[[BaseException], bool] = is_transient) -> Retrying:
@@ -113,7 +113,7 @@ def test_a_custom_predicate_decides() -> None:
 
 
 def test_both_platform_clients_use_the_shared_policy() -> None:
-    """The point of extracting it: one place to change the common behaviour."""
+    """The point of extracting it: one place to change the common behavior."""
     import inspect
 
     from the_front_office.adapters.outbound.platforms.nba_stats import client as nba

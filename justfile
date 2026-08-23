@@ -44,7 +44,7 @@ lint:
     uv run ruff check src/ tests/ scripts/
     uv run ruff format --check src/ tests/ scripts/
 
-# Authorise this machine with Yahoo (opens a browser); --force replaces the token
+# Authorize this machine with Yahoo (opens a browser); --force replaces the token
 yahoo-login *args:
     uv run python scripts/yahoo_login.py {{ args }}
 

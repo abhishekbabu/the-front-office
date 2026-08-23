@@ -2,7 +2,7 @@
 
 Sports differ in almost every detail — categories versus points, adds versus a
 transfer budget, head-to-head versus league rank — but a report has the same
-shape in each: read the situation, propose a ranked set of moves, summarise the
+shape in each: read the situation, propose a ranked set of moves, summarize the
 plan. One renderer, one chat-seeding path and one UI serve them all.
 """
 

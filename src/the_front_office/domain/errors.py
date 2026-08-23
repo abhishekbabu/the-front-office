@@ -11,7 +11,7 @@ class FrontOfficeError(Exception):
 
     The message describes the condition; it never names a command or a button,
     because the same error is read in a terminal and in a browser and the
-    remedy differs. `code` is how an inbound adapter recognises a condition it
+    remedy differs. `code` is how an inbound adapter recognizes a condition it
     can offer to fix, without matching on message text that is free to change.
     """
 
@@ -53,7 +53,7 @@ class YahooAuthError(FrontOfficeError):
             "permission are refused, so this is about the app rather than the login. Yahoo "
             "reviews every application before granting access to this API, so creating the app "
             "and ticking Fantasy Sports → Read is necessary but not sufficient. Personal, "
-            "single-league use is an accepted category. Authorise again once approved. NFL and "
+            "single-league use is an accepted category. Authorize again once approved. NFL and "
             "FPL are unaffected."
         )
 
@@ -70,7 +70,7 @@ class YahooLoginRequiredError(FrontOfficeError):
 
     def __init__(self, detail: str = "") -> None:
         super().__init__(
-            detail or "Yahoo is not authorised on this machine yet. Authorising caches a token and is done once."
+            detail or "Yahoo is not authorized on this machine yet. Authorizing caches a token and is done once."
         )
 
 
@@ -118,7 +118,7 @@ class TradeParseError(FrontOfficeError):
 
 
 class AIUnavailableError(FrontOfficeError):
-    """Gemini is not usable — no API key, or the client failed to initialise."""
+    """Gemini is not usable — no API key, or the client failed to initialize."""
 
     def __init__(self, detail: str = "GOOGLE_API_KEY is not set") -> None:
         super().__init__(

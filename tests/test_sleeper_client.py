@@ -215,7 +215,7 @@ def test_league_users_map_ids_to_names(tmp_path: Path) -> None:
 # ── players and projections ─────────────────────────────────────────────
 
 
-def test_catalogue_is_trimmed_to_the_fields_used(tmp_path: Path) -> None:
+def test_catalog_is_trimmed_to_the_fields_used(tmp_path: Path) -> None:
     """The raw response is ~14MB; caching it whole would dominate the file."""
     raw = {"1": {"full_name": "Star QB", "position": "QB", "team": "BUF", "unused": "x" * 500}}
     client, _ = _client({"players/nfl": raw}, tmp_path)
@@ -224,18 +224,18 @@ def test_catalogue_is_trimmed_to_the_fields_used(tmp_path: Path) -> None:
     assert "unused" not in meta
 
 
-def test_catalogue_falls_back_to_first_and_last_name(tmp_path: Path) -> None:
+def test_catalog_falls_back_to_first_and_last_name(tmp_path: Path) -> None:
     raw = {"1": {"first_name": "Star", "last_name": "QB", "position": "QB"}}
     client, _ = _client({"players/nfl": raw}, tmp_path)
     assert client.get_players()["1"]["name"] == "Star QB"
 
 
-def test_catalogue_skips_malformed_entries(tmp_path: Path) -> None:
+def test_catalog_skips_malformed_entries(tmp_path: Path) -> None:
     client, _ = _client({"players/nfl": {"1": "not a dict"}}, tmp_path)
     assert client.get_players() == {}
 
 
-def test_catalogue_is_cached(tmp_path: Path) -> None:
+def test_catalog_is_cached(tmp_path: Path) -> None:
     """The docs ask for at most one fetch per day."""
     client, session = _client({"players/nfl": {"1": {"full_name": "A", "position": "QB"}}}, tmp_path)
     client.get_players()
@@ -322,8 +322,8 @@ def test_an_empty_matchup_week_is_an_empty_list(tmp_path: Path) -> None:
     assert client.get_matchups("L1", 3) == []
 
 
-def test_live_matchups_expire_far_sooner_than_the_catalogue() -> None:
-    """Scores move during games; the player catalogue does not."""
+def test_live_matchups_expire_far_sooner_than_the_catalog() -> None:
+    """Scores move during games; the player catalog does not."""
     from the_front_office.adapters.outbound.platforms.sleeper.client import MATCHUPS_TTL, PLAYERS_TTL
 
     assert timedelta(minutes=5) > MATCHUPS_TTL
@@ -384,7 +384,7 @@ def test_state_is_fetched_per_sport(tmp_path: Path) -> None:
     assert any("state/nfl" in r for r in session.requests)
 
 
-def test_each_sports_catalogue_is_cached_separately(tmp_path: Path) -> None:
+def test_each_sports_catalog_is_cached_separately(tmp_path: Path) -> None:
     client, session = _client(
         {
             "players/nba": {"1": {"full_name": "Star Center", "position": "C"}},

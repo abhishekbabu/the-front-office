@@ -333,7 +333,7 @@ def test_roster_rows_mark_starters_and_bench() -> None:
     assert {r["Player"]: r["Slot"] for r in rows} == {"Star QB": "START", "Good RB": "BN"}
 
 
-def test_roster_rows_skip_players_missing_from_the_catalogue() -> None:
+def test_roster_rows_skip_players_missing_from_the_catalog() -> None:
     client = FakeSleeper(rosters=[SleeperRoster(roster_id=1, owner_id=MY_ID, player_ids=["ghost"], starter_ids=[])])
     assert _provider(client).roster_rows("L1") == []
 

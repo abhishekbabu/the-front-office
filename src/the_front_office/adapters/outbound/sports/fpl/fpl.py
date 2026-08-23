@@ -120,8 +120,8 @@ class FPLProvider:
         the order the manager listed them.
         """
         squad = self.client.get_squad(entry_id, gameweek)
-        catalogue = self.client.get_players()
-        in_order = [(pick, catalogue[pick.element]) for pick in squad.picks if pick.element in catalogue]
+        catalog = self.client.get_players()
+        in_order = [(pick, catalog[pick.element]) for pick in squad.picks if pick.element in catalog]
         in_order.sort(key=lambda pair: pair[0].position)
         return (
             squad,
@@ -163,7 +163,7 @@ class FPLProvider:
 
         entry = self.client.get_entry(entry_id)
         squad, players, current_starters, current_bench = self._squad(entry_id, last)
-        catalogue = self.client.get_players()
+        catalog = self.client.get_players()
 
         captain_id = next((pick.element for pick in squad.picks if pick.is_captain), None)
         captain = next((p for p in current_starters if p.id == captain_id), None)
@@ -173,7 +173,7 @@ class FPLProvider:
         allowance = free_transfers(self.client.get_history(entry_id), upcoming.id)
 
         market = sorted(
-            (p for p in catalogue.values() if p.is_available and p.minutes > 0),
+            (p for p in catalog.values() if p.is_available and p.minutes > 0),
             key=effective_points,
             reverse=True,
         )

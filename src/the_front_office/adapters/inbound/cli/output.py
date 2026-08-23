@@ -57,7 +57,7 @@ def _interactive_followup(
 # What a terminal can do about a condition the domain only describes. The web
 # adapter offers a button for the same codes; neither belongs in the error.
 CLI_REMEDIES = {
-    "yahoo_login_required": "Run `just yahoo-login` to authorise.",
+    "yahoo_login_required": "Run `just yahoo-login` to authorize.",
     "yahoo_not_approved": "Apply at https://sports.yahoo.com/developer/access/, then `just yahoo-login --force`.",
 }
 

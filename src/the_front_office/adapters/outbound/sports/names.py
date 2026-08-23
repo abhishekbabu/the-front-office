@@ -18,7 +18,7 @@ _SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
 T = TypeVar("T")
 
 
-def normalise_name(name: str) -> str:
+def normalize_name(name: str) -> str:
     """Reduce a name to a comparable key.
 
     Strips accents, punctuation and generational suffixes, so "Luka Dončić",
@@ -37,7 +37,7 @@ def normalise_name(name: str) -> str:
 class NameIndex(Generic[T]):
     """Values looked up by player name, refusing ambiguity.
 
-    An exact normalised match wins. Failing that, a surname match is allowed
+    An exact normalized match wins. Failing that, a surname match is allowed
     only when that surname is unique in the index — two Jacksons resolve to
     neither rather than to whichever was added first.
     """
@@ -48,7 +48,7 @@ class NameIndex(Generic[T]):
         self._ambiguous: set[str] = set()
 
     def add(self, name: str, value: T) -> None:
-        key = normalise_name(name)
+        key = normalize_name(name)
         if not key:
             return
         self._by_name[key] = value
@@ -63,7 +63,7 @@ class NameIndex(Generic[T]):
 
     def lookup(self, name: str) -> T | None:
         """The value for `name`, or None if it cannot be matched unambiguously."""
-        key = normalise_name(name)
+        key = normalize_name(name)
         if not key:
             return None
         if key in self._by_name:

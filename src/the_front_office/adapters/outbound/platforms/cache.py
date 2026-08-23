@@ -1,7 +1,7 @@
 """A TTL'd JSON cache on disk, one entry per key.
 
 Sleeper asks callers to stay under 1000 requests a minute and to fetch its ~14MB
-player catalogue at most once a day, so caching here is politeness rather than
+player catalog at most once a day, so caching here is politeness rather than
 optimisation.
 
 NBAStatsClient uses its own cache instead: its invalidation is tied to when games

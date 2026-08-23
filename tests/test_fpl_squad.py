@@ -125,7 +125,7 @@ def test_the_captain_is_the_highest_expecting_starter_and_counts_twice() -> None
 def test_taking_the_best_eleven_outright_would_be_illegal() -> None:
     """The guard the formation search exists for.
 
-    With a strong midfield and a weak defence, the eleven highest projections
+    With a strong midfield and a weak defense, the eleven highest projections
     field two defenders, which is not a shape the game will accept.
     """
     squad = squad_of(

@@ -11,7 +11,7 @@ from the_front_office.adapters.outbound.platforms.sleeper.types import GameProje
 from the_front_office.adapters.outbound.sports.nba.projections import (
     ProjectionIndex,
     aggregate,
-    normalise_name,
+    normalize_name,
 )
 
 WEEK_START, WEEK_END = date(2026, 1, 5), date(2026, 1, 11)
@@ -42,26 +42,26 @@ def game(name: str, day: str, **stats: float) -> GameProjection:
     )
 
 
-# ── name normalisation ──────────────────────────────────────────────────
+# ── name normalization ──────────────────────────────────────────────────
 
 
 def test_accents_are_stripped() -> None:
     """Yahoo writes "Luka Doncic"; Sleeper writes "Luka Dončić"."""
-    assert normalise_name("Luka Dončić") == normalise_name("Luka Doncic")
+    assert normalize_name("Luka Dončić") == normalize_name("Luka Doncic")
 
 
 def test_generational_suffixes_are_dropped() -> None:
-    assert normalise_name("Jaren Jackson Jr.") == normalise_name("Jaren Jackson")
-    assert normalise_name("Gary Trent II") == normalise_name("Gary Trent")
+    assert normalize_name("Jaren Jackson Jr.") == normalize_name("Jaren Jackson")
+    assert normalize_name("Gary Trent II") == normalize_name("Gary Trent")
 
 
 def test_punctuation_and_case_are_ignored() -> None:
-    assert normalise_name("De'Aaron Fox") == normalise_name("DeAaron  FOX")
-    assert normalise_name("Karl-Anthony Towns") == normalise_name("karl anthony towns")
+    assert normalize_name("De'Aaron Fox") == normalize_name("DeAaron  FOX")
+    assert normalize_name("Karl-Anthony Towns") == normalize_name("karl anthony towns")
 
 
 def test_distinct_players_do_not_collapse() -> None:
-    assert normalise_name("Nikola Jokic") != normalise_name("Nikola Jovic")
+    assert normalize_name("Nikola Jokic") != normalize_name("Nikola Jovic")
 
 
 # ── aggregation ─────────────────────────────────────────────────────────

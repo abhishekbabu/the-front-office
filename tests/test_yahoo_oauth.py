@@ -50,7 +50,7 @@ def saved(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, dict[str, Any]]]:
 
 
 @pytest.fixture
-def authorised(monkeypatch: pytest.MonkeyPatch) -> None:
+def authorized(monkeypatch: pytest.MonkeyPatch) -> None:
     """Skip the browser, returning a code as though someone had clicked."""
     monkeypatch.setattr(oauth, "_capture_code", lambda redirect_uri, client_id, scope: "the-code")
 
@@ -59,20 +59,20 @@ def authorised(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_the_exchange_quotes_back_the_same_redirect_uri(
-    posted: list[dict[str, Any]], saved: list[Any], authorised: None
+    posted: list[dict[str, Any]], saved: list[Any], authorized: None
 ) -> None:
     """RFC 6749 §4.1.3 requires it, and Yahoo answers a mismatch with a token
     rather than an error — one that authenticates and grants nothing."""
-    oauth.authorise("id", "secret", REDIRECT)
+    oauth.authorize("id", "secret", REDIRECT)
 
     assert posted[0]["redirect_uri"] == REDIRECT
     assert posted[0]["redirect_uri"] != "oob"
 
 
 def test_the_exchange_sends_an_authorization_code_grant(
-    posted: list[dict[str, Any]], saved: list[Any], authorised: None
+    posted: list[dict[str, Any]], saved: list[Any], authorized: None
 ) -> None:
-    oauth.authorise("id", "secret", REDIRECT)
+    oauth.authorize("id", "secret", REDIRECT)
 
     assert posted[0]["grant_type"] == "authorization_code"
     assert posted[0]["code"] == "the-code"
@@ -86,7 +86,7 @@ def test_fantasy_read_is_requested_explicitly(
     seen: list[str] = []
     monkeypatch.setattr(oauth, "_capture_code", lambda redirect_uri, client_id, scope: seen.append(scope) or "c")
 
-    oauth.authorise("id", "secret", REDIRECT)
+    oauth.authorize("id", "secret", REDIRECT)
 
     assert seen == ["fspt-r"]
 
@@ -140,22 +140,22 @@ def test_the_url_is_built_from_the_same_redirect_uri(monkeypatch: pytest.MonkeyP
 
 
 def test_a_refused_exchange_raises_rather_than_saving_nothing(
-    monkeypatch: pytest.MonkeyPatch, saved: list[Any], authorised: None
+    monkeypatch: pytest.MonkeyPatch, saved: list[Any], authorized: None
 ) -> None:
-    """Persisting a half-token would look authorised and fail on first use."""
+    """Persisting a half-token would look authorized and fail on first use."""
     monkeypatch.setattr(oauth.requests, "post", lambda *a, **k: FakeResponse({"error": "invalid_grant"}, status=400))
 
     with pytest.raises(YahooLoginRequiredError):
-        oauth.authorise("id", "secret", REDIRECT)
+        oauth.authorize("id", "secret", REDIRECT)
 
     assert saved == []
 
 
 def test_the_token_is_persisted_in_the_shape_the_client_reads(
-    posted: list[Any], saved: list[tuple[str, dict[str, Any]]], authorised: None
+    posted: list[Any], saved: list[tuple[str, dict[str, Any]]], authorized: None
 ) -> None:
     """Only the handshake changed; the vendor Context still loads this file."""
-    oauth.authorise("id", "secret", REDIRECT)
+    oauth.authorize("id", "secret", REDIRECT)
 
     key, value = saved[0]
     assert key == "auth"
@@ -165,12 +165,12 @@ def test_the_token_is_persisted_in_the_shape_the_client_reads(
 
 
 def test_an_expiry_is_stored_as_an_absolute_time(
-    posted: list[Any], saved: list[tuple[str, dict[str, Any]]], authorised: None
+    posted: list[Any], saved: list[tuple[str, dict[str, Any]]], authorized: None
 ) -> None:
     """`expires_in` is a duration; storing it raw would read as 1970."""
     import time
 
-    oauth.authorise("id", "secret", REDIRECT)
+    oauth.authorize("id", "secret", REDIRECT)
 
     assert saved[0][1]["access_token_expires"] > time.time()
 
@@ -258,7 +258,7 @@ def test_a_rejected_scope_points_at_the_app_not_the_user(monkeypatch: pytest.Mon
     """Yahoo declines to issue a permission the app was never configured for.
 
     Every other refusal at this point is about the person or the request; this
-    one is about a checkbox, so it must not read as "authorisation failed".
+    one is about a checkbox, so it must not read as "authorization failed".
     """
     _serve(monkeypatch, [(None, "invalid scope")])
 

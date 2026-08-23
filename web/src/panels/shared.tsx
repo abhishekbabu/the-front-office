@@ -124,7 +124,7 @@ export function ErrorNote({ error }: { error: unknown }) {
 /**
  * Starts the Yahoo handshake and watches it.
  *
- * The click cannot be answered by one request: authorising means a browser tab
+ * The click cannot be answered by one request: authorizing means a browser tab
  * and a person, so the server starts the flow and reports progress separately.
  */
 export function YahooLoginButton() {
@@ -143,7 +143,7 @@ export function YahooLoginButton() {
   useEffect(() => {
     if (state.data?.status !== "ok") return;
     setWatching(false);
-    // Everything about this sport failed on the missing authorisation; none of
+    // Everything about this sport failed on the missing authorization; none of
     // those answers are worth keeping now that it exists.
     queryClient.invalidateQueries();
   }, [state.data?.status, queryClient]);
@@ -154,7 +154,7 @@ export function YahooLoginButton() {
   return (
     <div className="flex flex-col gap-2">
       <Button variant="primary" onClick={() => start.mutate()} disabled={running}>
-        {running ? "Waiting for the browser…" : "Authorise Yahoo"}
+        {running ? "Waiting for the browser…" : "Authorize Yahoo"}
       </Button>
       {running && (
         <p className="max-w-[60ch] text-[12.5px] text-muted-foreground">

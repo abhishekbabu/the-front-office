@@ -2,7 +2,7 @@
  * The palette registry — the single source of truth the picker renders from and
  * the hook validates against.
  *
- * A palette is the *colour* dimension. Light versus dark is a separate,
+ * A palette is the *color* dimension. Light versus dark is a separate,
  * orthogonal dimension (see `lib/useTheme`) that selects each token's
  * `light-dark()` arm. Ten palettes and two modes cost ten CSS blocks, not
  * twenty: no component ever branches on either.

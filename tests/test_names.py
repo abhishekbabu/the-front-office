@@ -4,36 +4,36 @@ A wrong match silently attributes one player's numbers to another, so the
 policy refuses ambiguity rather than guessing.
 """
 
-from the_front_office.adapters.outbound.sports.names import NameIndex, normalise_name
+from the_front_office.adapters.outbound.sports.names import NameIndex, normalize_name
 
-# ── normalisation ───────────────────────────────────────────────────────
+# ── normalization ───────────────────────────────────────────────────────
 
 
 def test_accents_are_stripped() -> None:
-    assert normalise_name("Luka Dončić") == normalise_name("Luka Doncic")
+    assert normalize_name("Luka Dončić") == normalize_name("Luka Doncic")
 
 
 def test_generational_suffixes_are_dropped() -> None:
-    assert normalise_name("Jaren Jackson Jr.") == normalise_name("Jaren Jackson")
-    assert normalise_name("Gary Trent II") == normalise_name("Gary Trent")
+    assert normalize_name("Jaren Jackson Jr.") == normalize_name("Jaren Jackson")
+    assert normalize_name("Gary Trent II") == normalize_name("Gary Trent")
 
 
 def test_a_hyphen_separates_words_but_an_apostrophe_does_not() -> None:
-    assert normalise_name("Karl-Anthony Towns") == "karl anthony towns"
-    assert normalise_name("De'Aaron Fox") == "deaaron fox"
+    assert normalize_name("Karl-Anthony Towns") == "karl anthony towns"
+    assert normalize_name("De'Aaron Fox") == "deaaron fox"
 
 
 def test_case_and_extra_whitespace_are_ignored() -> None:
-    assert normalise_name("  LeBRON   james ") == normalise_name("LeBron James")
+    assert normalize_name("  LeBRON   james ") == normalize_name("LeBron James")
 
 
 def test_distinct_players_do_not_collapse() -> None:
-    assert normalise_name("Nikola Jokic") != normalise_name("Nikola Jovic")
+    assert normalize_name("Nikola Jokic") != normalize_name("Nikola Jovic")
 
 
-def test_an_empty_name_normalises_to_empty() -> None:
-    assert normalise_name("") == ""
-    assert normalise_name("...") == ""
+def test_an_empty_name_normalizes_to_empty() -> None:
+    assert normalize_name("") == ""
+    assert normalize_name("...") == ""
 
 
 # ── lookup ──────────────────────────────────────────────────────────────

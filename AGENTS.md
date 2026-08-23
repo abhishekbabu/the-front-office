@@ -11,7 +11,7 @@ for the index.
 `just check` (lint, format, types, tests, 95% coverage floor) must pass. The
 pre-commit hooks run the same gates, so a commit that skips them will fail anyway.
 
-Update `README.md` in the same commit when behaviour, commands, dependencies or
+Update `README.md` in the same commit when behavior, commands, dependencies or
 environment variables change. Prose documentation lives there and in this file;
 do not add new doc files.
 
@@ -59,7 +59,7 @@ pickle, so never call `_load_or_fetch`/`_save` from a thread pool — only
 `persist_ttl`; the default is an hour. It raises requests' own exceptions, which
 escape as a 500 unless passed through `yahoo.translate`. Never trigger the OAuth
 flow implicitly — it blocks on a browser click, so non-interactive callers use
-`ensure_authorised`.
+`ensure_authorized`.
 
 **Chat history is resent every turn.** Seed follow-up chats with a briefing, not
 the generation prompt, and say explicitly what was left out.
@@ -74,7 +74,7 @@ transfer allowance is computed in `free_transfers`. There is no trade path;
 managers transfer against the market, not each other.
 
 **Player identity across platforms.** Yahoo and Sleeper share no identifier, so
-the NBA projection join is by normalised name (`adapters/outbound/sports/nba/
+the NBA projection join is by normalized name (`adapters/outbound/sports/nba/
 projections.py`).
 Never guess: an ambiguous surname must resolve to nothing rather than to
 whichever player was indexed first, and an unmatched player carries no
@@ -111,13 +111,13 @@ server running. Whether the model is really called is configuration (`MOCK_AI`),
 read per request, not a flag a client sets — and since a canned report is
 indistinguishable from a real one, anything running mocked must show it.
 
-In `web/`, colour comes only from semantic tokens (`bg-card`,
+In `web/`, color comes only from semantic tokens (`bg-card`,
 `text-muted-foreground`) — never a raw Tailwind palette utility, which cannot
 follow a palette change. Every token is one `light-dark(light, dark)` pair, so a
 palette is a `themes.css` block plus a `registry.ts` entry and no component
-change. Status colours and the difficulty ramp are deliberately shared across
-palettes: they encode meaning, are tuned for colour-blind legibility, and clear
-WCAG AA against their own ground. State carried in colour must also be carried
+change. Status colors and the difficulty ramp are deliberately shared across
+palettes: they encode meaning, are tuned for color-blind legibility, and clear
+WCAG AA against their own ground. State carried in color must also be carried
 in text or shape.
 
 **Extract on the second instance.** This app is deliberately shaped so sports
@@ -132,7 +132,7 @@ shared. When you find yourself writing something a second time, extract it then
   (cross-platform player matching), `trades.py` (resolving a proposal).
 - `domain/` — rules that hold regardless of sport or platform.
 
-**Prefer composition to a base class.** The outbound clients share behaviours,
+**Prefer composition to a base class.** The outbound clients share behaviors,
 not a shape: three go through different vendor SDKs and cache differently, while
 Sleeper and FPL are both plain public JSON and share `JsonApiClient` — held as a
 collaborator, given its own retry policy and domain error, not inherited.

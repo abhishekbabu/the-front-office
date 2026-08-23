@@ -280,7 +280,7 @@ def test_existing_token_skips_the_login_flow(monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setattr(YahooClient, "_token_exists", classmethod(lambda cls: True))
     monkeypatch.setattr(
-        mod.oauth, "authorise", lambda *a, **k: pytest.fail("must not re-authorise with a token cached")
+        mod.oauth, "authorize", lambda *a, **k: pytest.fail("must not re-authorize with a token cached")
     )
 
     YahooClient.login()
@@ -293,7 +293,7 @@ def test_force_relogins_even_with_a_token(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(mod.settings, "yahoo_client_id", "id")
     monkeypatch.setattr(mod.settings, "yahoo_client_secret", "secret")
     calls: list[tuple[Any, ...]] = []
-    monkeypatch.setattr(mod.oauth, "authorise", lambda *a, **k: calls.append(a))
+    monkeypatch.setattr(mod.oauth, "authorize", lambda *a, **k: calls.append(a))
 
     YahooClient.login(force=True)
 
@@ -309,7 +309,7 @@ def test_login_passes_credentials_and_the_registered_redirect_uri(monkeypatch: p
     monkeypatch.setattr(mod.settings, "yahoo_client_id", "the-id")
     monkeypatch.setattr(mod.settings, "yahoo_client_secret", "the-secret")
     calls: list[tuple[Any, ...]] = []
-    monkeypatch.setattr(mod.oauth, "authorise", lambda *a, **k: calls.append(a))
+    monkeypatch.setattr(mod.oauth, "authorize", lambda *a, **k: calls.append(a))
 
     YahooClient.login()
 
@@ -339,7 +339,7 @@ def test_a_failed_handshake_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fail(*args: Any, **kwargs: Any) -> None:
         raise YahooLoginRequiredError()
 
-    monkeypatch.setattr(mod.oauth, "authorise", _fail)
+    monkeypatch.setattr(mod.oauth, "authorize", _fail)
 
     with pytest.raises(YahooLoginRequiredError):
         YahooClient.login()
@@ -417,7 +417,7 @@ def _http(status: int) -> requests.exceptions.HTTPError:
 
 def test_a_403_names_the_permission_that_is_actually_missing() -> None:
     """Yahoo says only "not authorized to perform this action", which reads like
-    a bad token — and re-authorising a token that was never the problem is an
+    a bad token — and re-authorizing a token that was never the problem is an
     afternoon. The scope on the developer app is the fix."""
     from the_front_office.adapters.outbound.platforms.yahoo.client import translate
     from the_front_office.domain.errors import YahooAuthError
@@ -447,7 +447,7 @@ def test_an_error_without_a_response_is_translated_rather_than_crashing() -> Non
     assert isinstance(translate(ValueError("unparseable")), YahooAPIError)
 
 
-# ── authorisation is never obtained implicitly ──────────────────────────
+# ── authorization is never obtained implicitly ──────────────────────────
 
 
 def test_a_missing_token_is_reported_not_obtained(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -459,8 +459,8 @@ def test_a_missing_token_is_reported_not_obtained(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr(settings, "yahoo_token_file", str(tmp_path / "absent"))
 
-    with pytest.raises(YahooLoginRequiredError, match="not authorised on this machine"):
-        YahooClient.ensure_authorised()
+    with pytest.raises(YahooLoginRequiredError, match="not authorized on this machine"):
+        YahooClient.ensure_authorized()
 
 
 def test_an_existing_token_satisfies_the_check(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -471,7 +471,7 @@ def test_an_existing_token_satisfies_the_check(monkeypatch: pytest.MonkeyPatch, 
     token.write_text("cached", encoding="utf-8")
     monkeypatch.setattr(settings, "yahoo_token_file", str(token))
 
-    YahooClient.ensure_authorised()  # does not raise
+    YahooClient.ensure_authorized()  # does not raise
 
 
 def test_login_without_credentials_raises_rather_than_exiting(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -569,7 +569,7 @@ def test_conditions_an_adapter_can_offer_to_fix_carry_a_code() -> None:
     """Message text is free to change; a client matching on it would break.
 
     The remedy differs by adapter — a terminal names a command, the web offers a
-    button — so neither belongs in the error and both need to recognise it.
+    button — so neither belongs in the error and both need to recognize it.
     """
     from the_front_office.domain.errors import YahooAuthError, YahooLoginRequiredError
 

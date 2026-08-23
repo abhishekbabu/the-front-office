@@ -176,7 +176,7 @@ class YahooNBAProvider:
 
         Returns None rather than raising when projections are unavailable —
         Sleeper publishes none before opening night, and a scout report built
-        from recent form alone is the behaviour this had all along.
+        from recent form alone is the behavior this had all along.
         """
         if start is None or end is None:
             return None

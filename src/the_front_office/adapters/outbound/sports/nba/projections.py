@@ -5,7 +5,7 @@ league scores on the totals across the games inside its matchup period, so the
 rows for a player are filtered to that window and summed.
 
 The join is by name, because Yahoo and Sleeper share no identifier. That is the
-fragile part of this module and it is treated as such: names are normalised, an
+fragile part of this module and it is treated as such: names are normalized, an
 ambiguous surname is refused rather than guessed, and a player who cannot be
 matched simply carries no projection instead of borrowing someone else's.
 """
@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from the_front_office.adapters.outbound.platforms.sleeper.types import GameProjection
-from the_front_office.adapters.outbound.sports.names import NameIndex, normalise_name
+from the_front_office.adapters.outbound.sports.names import NameIndex, normalize_name
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ class ProjectionIndex:
         grouped: dict[str, list[GameProjection]] = {}
         for row in rows:
             if _within(row.date, start, end):
-                grouped.setdefault(normalise_name(row.name), []).append(row)
+                grouped.setdefault(normalize_name(row.name), []).append(row)
 
         self._index: NameIndex[list[GameProjection]] = NameIndex()
         for key, games in grouped.items():

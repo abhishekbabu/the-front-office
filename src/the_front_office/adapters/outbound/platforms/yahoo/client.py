@@ -42,7 +42,7 @@ def translate(error: Exception) -> FrontOfficeError:
 
     A 403 from Yahoo Fantasy means one specific thing — the developer app lacks
     the Fantasy Sports scope — and saying so is the difference between a
-    two-minute fix and an afternoon spent re-authorising a token that was never
+    two-minute fix and an afternoon spent re-authorizing a token that was never
     the problem.
     """
     response = getattr(error, "response", None)
@@ -60,7 +60,7 @@ class YahooClient:
         return Path(settings.yahoo_token_file).exists()
 
     @classmethod
-    def ensure_authorised(cls) -> None:
+    def ensure_authorized(cls) -> None:
         """Require a cached token without trying to obtain one.
 
         What every non-interactive caller wants. The handshake opens a browser
@@ -88,24 +88,24 @@ class YahooClient:
         if not client_id or not client_secret:
             raise YahooAPIError("YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET must be set before logging in.")
 
-        oauth.authorise(client_id, client_secret, settings.yahoo_redirect_uri)
+        oauth.authorize(client_id, client_secret, settings.yahoo_redirect_uri)
         logger.info("Yahoo login complete; token cached.")
 
     @classmethod
     def get_context(cls) -> Context:
-        """Return an authorised yahoofantasy Context.
+        """Return an authorized yahoofantasy Context.
 
         Reports a missing token rather than starting the browser handshake: this
         runs inside a request handler as often as from a terminal.
         """
-        cls.ensure_authorised()
+        cls.ensure_authorized()
         return Context()
 
     @classmethod
     def verify(cls) -> None:
         """Confirm the cached token can actually read Fantasy Sports.
 
-        A Yahoo authorisation can succeed and still grant nothing: the library
+        A Yahoo authorization can succeed and still grant nothing: the library
         requests no scope, so Yahoo derives it from whatever API permissions the
         app had *at that moment*. The resulting token authenticates — Yahoo
         answers 403 rather than 401 — and is refused by every endpoint. A
