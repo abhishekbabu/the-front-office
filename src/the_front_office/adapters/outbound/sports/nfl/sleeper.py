@@ -710,11 +710,31 @@ class SleeperNFLProvider:
             p for p in (self._projection_for(pid, state.projections, state.players) for pid in roster.player_ids) if p
         ]
         starting = set(roster.starter_ids)
+        by_id = {p.player_id: p for p in projected}
+
+        # Walked in slot order rather than filtered out of `player_ids`, which
+        # Sleeper returns in no order at all. Both sides are read across, so an
+        # opponent listed QB-first against your kicker is not a comparison.
+        # `starter_ids` is positionally aligned with the league's starting
+        # slots, which is the only thing that makes the two columns rows.
+        slots = state.league.starting_slots
+        if len(roster.starter_ids) == len(slots):
+            lineup = [
+                self._spot(by_id[pid], scheduled, slot=slot)
+                if pid in by_id
+                else Spot(slot=slot, player="—", detail="empty", value="0.0", tone="warning")
+                for slot, pid in zip(slots, roster.starter_ids, strict=True)
+            ]
+        else:
+            # Off-length means the positions cannot be trusted, and a WR
+            # labelled QB is worse than a row carrying no label at all.
+            logger.warning(f"Roster {roster.roster_id} starts {len(roster.starter_ids)} into {len(slots)} slots")
+            lineup = [self._spot(p, scheduled) for p in projected if p.player_id in starting]
         return Side(
             name=names.get(roster.owner_id, "Opponent"),
             detail=roster.record,
             points=f"{float(theirs.get('points') or 0):.1f}",
-            lineup=[self._spot(p, scheduled) for p in projected if p.player_id in starting],
+            lineup=lineup,
             bench=[self._spot(p, scheduled) for p in projected if p.player_id not in starting],
         )
 
@@ -776,26 +796,33 @@ class SleeperNFLProvider:
             player_id=slot.player.player_id,
             slot=slot.slot,
             player=slot.player.name,
-            detail=self._spot_detail(slot.player, scheduled),
+            detail=self._spot_detail(slot.player, scheduled, slot.slot),
             value=f"{slot.points:.1f}",
             tone=self._spot_tone(slot.player, scheduled),
         )
 
-    def _spot(self, projection: WeeklyProjection, scheduled: bool) -> Spot:
+    def _spot(self, projection: WeeklyProjection, scheduled: bool, slot: str = "") -> Spot:
         return Spot(
             player_id=projection.player_id,
+            slot=slot,
             player=projection.name,
-            detail=self._spot_detail(projection, scheduled),
+            detail=self._spot_detail(projection, scheduled, slot),
             value=f"{projection.points:.1f}",
             tone=self._spot_tone(projection, scheduled),
         )
 
     @staticmethod
-    def _spot_detail(projection: WeeklyProjection, scheduled: bool) -> str:
+    def _spot_detail(projection: WeeklyProjection, scheduled: bool, slot: str = "") -> str:
         if projection.opponent:
             opponent = f"vs {projection.opponent}"
         else:
             opponent = "no game" if scheduled else "not scheduled yet"
+        # The slot column already says "QB", so repeating it here reads as two
+        # different facts about one row. A FLEX is the case worth keeping: the
+        # place and the position genuinely differ, and which of them is filling
+        # it is the whole question the row is asking.
+        if projection.position == slot:
+            return f"{projection.team} {opponent}"
         return f"{projection.position} · {projection.team} {opponent}"
 
     @staticmethod
