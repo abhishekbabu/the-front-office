@@ -115,14 +115,23 @@ class StatGroup(BaseModel):
     stats: list[Stat] = Field(default_factory=list)
 
 
+NOT_APPLICABLE = "N/A"
+"""What a cell reads where a period has no answer at all.
+
+Part of the contract rather than a formatting choice: a nought is an answer and
+this is the absence of one, and every client that dims one and not the other is
+matching on this exact string.
+"""
+
+
 class StatRow(BaseModel):
     """One measure, across every column of a table."""
 
     label: str
     values: list[str] = Field(
         description=(
-            "One per column, in the same order. 'N/A' where that column has no answer — "
-            "distinct from '0', which is an answer."
+            f"One per column, in the same order. {NOT_APPLICABLE!r} where that column has no "
+            "answer — distinct from '0', which is an answer."
         )
     )
     tone: Tone = "neutral"

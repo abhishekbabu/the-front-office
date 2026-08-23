@@ -26,7 +26,7 @@ const GROUPS: { title: string; note: string; keys: string[] }[] = [
   {
     title: "NFL on Sleeper",
     note: "Sleeper needs no key or OAuth — just the username your leagues are under.",
-    keys: ["SLEEPER_USERNAME", "SLEEPER_LEAGUE_ID"],
+    keys: ["SLEEPER_USERNAME"],
   },
   {
     title: "NBA on Yahoo",

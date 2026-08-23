@@ -10,45 +10,45 @@ is the only configuration.
 
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import date, datetime, timezone
-from typing import Any
 
 from the_front_office.adapters.outbound.platforms.sleeper.client import NFL, SleeperClient
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
     PlayerMeta,
-    ScheduledGame,
     SeasonStats,
     SleeperLeague,
     SleeperRoster,
-    Transaction,
     WeeklyProjection,
 )
-from the_front_office.adapters.outbound.sports.dates import day_month, weekday_day_month
 from the_front_office.adapters.outbound.sports.names import NameIndex
+from the_front_office.adapters.outbound.sports.nfl import league, prompt
 from the_front_office.adapters.outbound.sports.nfl.lineup import (
-    LineupChange,
     LineupSlot,
     current_lineup,
     lineup_changes,
     lineup_points,
     optimal_lineup,
 )
+from the_front_office.adapters.outbound.sports.nfl.week import (
+    SCORING_LABELS,
+    Live,
+    Week,
+    games_by_week,
+    projection_for,
+    week_dates,
+    zero_projection,
+)
 from the_front_office.adapters.outbound.sports.trades import resolve_sides
-from the_front_office.config.constants import NFL_SCOUT_PROMPT, NFL_TRADE_PROMPT
+from the_front_office.config.constants import NFL_TRADE_PROMPT
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError, TeamNotFoundError
 from the_front_office.domain.models import (
-    ActivityRow,
+    NOT_APPLICABLE,
     LeagueSchedule,
-    Match,
     PlayerCard,
     PlayerDetail,
-    ScheduleRow,
     Side,
     SportContext,
     Spot,
-    StandingRow,
     Stat,
     StatGroup,
     StatRow,
@@ -96,64 +96,6 @@ def _projection_lines(stats: dict[str, float]) -> list[Stat]:
     ]
 
 
-@dataclass(frozen=True)
-class _Live:
-    """The week as it has actually gone, so far.
-
-    Zero points is ambiguous on its own — a receiver who dropped everything and
-    a receiver whose game is on Monday both sit at nought — so the real-world
-    schedule decides which of the two a row is showing.
-    """
-
-    started: set[str]
-    """Clubs whose real-world game has kicked off."""
-
-    points: dict[str, float]
-    """What each player has scored, keyed by Sleeper's player_id."""
-
-    def scored(self, player_id: str, team: str) -> float | None:
-        """Points where that club's game has started, and nothing before it."""
-        if not self.under_way or team not in self.started:
-            return None
-        return self.points.get(player_id)
-
-    @property
-    def under_way(self) -> bool:
-        """Both halves are required. Kickoffs with no scoreboard behind them
-        would render every row as nought — a whole team that blanked, rather
-        than a request that failed."""
-        return bool(self.started) and bool(self.points)
-
-
-@dataclass(frozen=True)
-class _Week:
-    """One week's state, gathered once and read by both callers."""
-
-    league: SleeperLeague
-    roster: SleeperRoster
-    week: int
-    season: str
-    projections: dict[str, WeeklyProjection]
-    players: dict[str, PlayerMeta]
-    projected: list[WeeklyProjection]
-    lineup: list[LineupSlot]
-    best: list[LineupSlot]
-    changes: list[LineupChange]
-    current_points: float
-    best_points: float
-    on_bench: float
-
-    is_regular_season: bool = False
-    """Whether the season has actually begun. In preseason every season total
-    is a nought that has not been earned yet."""
-
-
-SCORING_LABELS = {
-    "pts_ppr": "Full PPR (1 point per reception)",
-    "pts_half_ppr": "Half PPR (0.5 per reception)",
-    "pts_std": "Standard (no point per reception)",
-}
-
 # Sleeper serves portraits off its own CDN, keyed by the same player_id the
 # rest of the API uses, with no key and no lookup.
 PORTRAIT_URL = "https://sleepercdn.com/content/nfl/players/{player_id}.jpg"
@@ -184,47 +126,6 @@ def _split_value(key: str, value: float | None) -> str:
     return f"{value:.1f}%" if key == "cmp_pct" else f"{value:.0f}"
 
 
-def _date(iso: str) -> date | None:
-    """Sleeper publishes a day, not an instant, so this is a label not a time."""
-    try:
-        return datetime.strptime(iso[:10], "%Y-%m-%d").date()
-    except (ValueError, TypeError):
-        return None
-
-
-def _day(iso: str) -> str:
-    """One date, as a person reads it: 'Sun 13 Sep'."""
-    parsed = _date(iso)
-    return weekday_day_month(parsed) if parsed else ""
-
-
-def _week_dates(games: list[ScheduledGame]) -> str:
-    """The span a fantasy week actually covers.
-
-    An NFL week runs Thursday to Monday, so one date would be wrong for most
-    of it and a range is what somebody is checking against their own calendar.
-    """
-    days = sorted({d for d in (_date(g.date) for g in games) if d})
-    if not days:
-        return ""
-    if days[0] == days[-1]:
-        return day_month(days[0])
-    if days[0].month == days[-1].month:
-        return f"{days[0].day}-{day_month(days[-1])}"
-    return f"{day_month(days[0])} - {day_month(days[-1])}"
-
-
-def _moment(epoch_ms: int) -> str:
-    """Sleeper timestamps transactions in epoch milliseconds.
-
-    Rendered in UTC rather than the machine's zone: it is a label on a list,
-    and a league spans zones anyway.
-    """
-    if not epoch_ms:
-        return ""
-    return day_month(datetime.fromtimestamp(epoch_ms / 1000, tz=timezone.utc))
-
-
 # A week made and a week wasted, on a points-league scale where a startable
 # flex is worth around ten.
 HAUL_POINTS = 20.0
@@ -237,23 +138,6 @@ FANTASY_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K", "DEF"})
 # Enough to find somebody, few enough to read. Past this the projections are
 # indistinguishable from zero anyway.
 FREE_AGENT_LIMIT = 100
-
-# A period with no answer at all, distinct from a nought, which is an answer.
-NOT_APPLICABLE = "N/A"
-
-REGULAR_SEASON_WEEKS = 18
-# "What did I miss", not the season's whole transaction log.
-ACTIVITY_WEEKS = 3
-
-TRANSACTION_LABELS = {
-    "waiver": "Waiver",
-    "free_agent": "Free agent",
-    "trade": "Trade",
-    "commissioner": "Commissioner",
-}
-
-AVAILABLE_PLAYER_LIMIT = 25
-TRENDING_LIMIT = 10
 
 
 class SleeperNFLProvider:
@@ -359,7 +243,7 @@ class SleeperNFLProvider:
 
     def _cards(
         self,
-        state: _Week,
+        state: Week,
         player_ids: list[str],
         starters: set[str],
         owned_column: bool = True,
@@ -488,26 +372,26 @@ class SleeperNFLProvider:
 
         giving, receiving = resolve_sides(proposal, index.lookup)
 
-        rostered = [self._projection_for(pid, projections, players) for pid in roster.player_ids]
+        rostered = [projection_for(pid, projections, players) for pid in roster.player_ids]
         roster_lines = {
-            p.name: self._player_line(p) for p in sorted((p for p in rostered if p), key=lambda x: -x.points)
+            p.name: prompt.player_line(p) for p in sorted((p for p in rostered if p), key=lambda x: -x.points)
         }
 
-        situation = self._situation(league, roster, league_id, week)
+        situation, _ = prompt.matchup(self.client, league, roster, league_id, week)
         constraints = (
             f"LINEUP SLOTS: {', '.join(league.starting_slots)}\n"
             "- Only points from the starting lineup score. Bench depth has value only as "
             "insurance or as a future starter."
         )
-        prompt = NFL_TRADE_PROMPT.format(
-            giving_str="".join(self._player_line(p) for p in giving),
-            receiving_str="".join(self._player_line(p) for p in receiving),
+        text = NFL_TRADE_PROMPT.format(
+            giving_str="".join(prompt.player_line(p) for p in giving),
+            receiving_str="".join(prompt.player_line(p) for p in receiving),
             situation=situation,
             constraints=constraints,
             roster_str="".join(roster_lines.values()),
             scoring_label=SCORING_LABELS.get(league.scoring_format, league.scoring_format),
         )
-        return SportContext(prompt=prompt, situation=situation, constraints=constraints, roster_lines=roster_lines)
+        return SportContext(prompt=text, situation=situation, constraints=constraints, roster_lines=roster_lines)
 
     @staticmethod
     def _name_index(
@@ -521,17 +405,21 @@ class SleeperNFLProvider:
         for player_id, meta in players.items():
             name = meta.get("name")
             if name and player_id not in projections and meta.get("position"):
-                index.add(name, SleeperNFLProvider._zero_projection(player_id, meta))
+                index.add(name, zero_projection(player_id, meta))
         return index
 
     # ── context ─────────────────────────────────────────────────────
+
+    def build_context(self, league_id: str) -> SportContext:
+        """Gather the week, then render it as the text a model reads."""
+        return prompt.build(self.client, self._week(league_id), league_id)
 
     def _current_week(self) -> int:
         """The week the report is about; the opener while still in preseason."""
         state = self.client.get_state(NFL)
         return max(1, state.week if state.is_regular_season else 1)
 
-    def _week(self, league_id: str) -> _Week:
+    def _week(self, league_id: str) -> Week:
         """Everything both the header and the prompt are derived from.
 
         Gathered once because the two would otherwise fetch the same
@@ -545,7 +433,7 @@ class SleeperNFLProvider:
 
         projections = self.client.get_projections(season, week, league.scoring_format)
         players = self.client.get_players()
-        projected = [p for p in (self._projection_for(pid, projections, players) for pid in roster.player_ids) if p]
+        projected = [p for p in (projection_for(pid, projections, players) for pid in roster.player_ids) if p]
 
         slots = league.starting_slots
         lineup = current_lineup(slots, roster.starter_ids, projected)
@@ -553,7 +441,7 @@ class SleeperNFLProvider:
         current_points = round(lineup_points(lineup), 1)
         best_points = round(lineup_points(best), 1)
 
-        return _Week(
+        return Week(
             is_regular_season=state.is_regular_season,
             league=league,
             roster=roster,
@@ -573,7 +461,7 @@ class SleeperNFLProvider:
     def summary(self, league_id: str) -> Summary:
         """The week as it stands: both lineups, the swaps, the byes. No model."""
         state = self._week(league_id)
-        _, matchup_stats = self._matchup(state.league, state.roster, league_id, state.week)
+        _, matchup_stats = prompt.matchup(self.client, state.league, state.roster, league_id, state.week)
         live = self._live(state, league_id)
         starters = {slot.player.player_id for slot in state.lineup if slot.player}
         # Before the season opens Sleeper publishes no fixtures at all, and
@@ -582,7 +470,7 @@ class SleeperNFLProvider:
         scheduled = any(p.opponent for p in state.projected)
 
         return Summary(
-            headline=self._headline(state.roster, state.week, state.current_points, state.best_points, state.on_bench)
+            headline=prompt.headline(state.roster, state.week, state.current_points, state.best_points, state.on_bench)
             + matchup_stats,
             mine=Side(
                 name="Your lineup",
@@ -612,205 +500,24 @@ class SleeperNFLProvider:
             window=self._window(state),
         )
 
-    def _window(self, state: _Week) -> str:
+    def _window(self, state: Week) -> str:
         """Which week, and when it is actually played.
 
         A week with no dates on it is a number, and the number is the one thing
         somebody already knows.
         """
-        span = _week_dates(self._games_by_week(state.season).get(state.week, []))
+        span = week_dates(games_by_week(self.client, state.season).get(state.week, []))
         return f"Week {state.week} · {span}" if span else f"Week {state.week}"
 
     def schedule(self, league_id: str) -> LeagueSchedule:
         """The season, the table, this week's real games, and what the league did."""
-        state = self._week(league_id)
-        rosters = self.client.get_rosters(league_id)
-        names = self.client.get_league_users(league_id)
-        by_roster = {r.roster_id: r for r in rosters}
+        return league.build(self.client, self._week(league_id), league_id)
 
-        return LeagueSchedule(
-            season=self._season_rows(state, league_id, by_roster, names),
-            standings=self._standings(state, rosters, names),
-            matches=self._matches(state),
-            activity=self._activity(state, league_id, by_roster, names),
-        )
-
-    def _season_rows(
-        self,
-        state: _Week,
-        league_id: str,
-        by_roster: dict[int, SleeperRoster],
-        names: dict[str, str],
-    ) -> list[ScheduleRow]:
-        """Your own season, week by week, with who you play and how it went.
-
-        Eighteen matchup fetches, run concurrently and cached — and the reason
-        this is a separate call from the week rather than something the week
-        carries, since nobody checking a lineup should wait on the season.
-        """
-        games = self._games_by_week(state.season)
-        weeks = list(range(1, REGULAR_SEASON_WEEKS + 1))
-        try:
-            by_week = self.client.get_matchups_bulk(league_id, weeks)
-        except SleeperAPIError as e:
-            logger.warning(f"Continuing without the season's matchups: {e}")
-            by_week = {}
-
-        rows: list[ScheduleRow] = []
-        for week in weeks:
-            matchups = by_week.get(week, [])
-            mine = next((m for m in matchups if m.get("roster_id") == state.roster.roster_id), None)
-            theirs = self._other_side(matchups, mine, state.roster.roster_id)
-            opponent = by_roster.get(int(theirs.get("roster_id", 0))) if theirs else None
-
-            rows.append(
-                ScheduleRow(
-                    label=f"Week {week}",
-                    date=_week_dates(games.get(week, [])),
-                    opponent=names.get(opponent.owner_id, "") if opponent else "",
-                    detail=opponent.record if opponent else "bye",
-                    result=self._result(mine, theirs, week, state.week),
-                    tone=self._week_tone(mine, theirs, week, state.week),
-                    is_current=week == state.week,
-                )
-            )
-        return rows
-
-    @staticmethod
-    def _other_side(matchups: list[dict[str, Any]], mine: dict[str, Any] | None, roster_id: int) -> Any:
-        if not mine or mine.get("matchup_id") is None:
-            return None
-        return next(
-            (m for m in matchups if m.get("matchup_id") == mine.get("matchup_id") and m.get("roster_id") != roster_id),
-            None,
-        )
-
-    @staticmethod
-    def _result(mine: Any, theirs: Any, week: int, current: int) -> str:
-        """The score, and only once there is one. A future week is not 0-0."""
-        if week >= current or not mine or not theirs:
-            return ""
-        return f"{float(mine.get('points') or 0):.1f}-{float(theirs.get('points') or 0):.1f}"
-
-    @staticmethod
-    def _week_tone(mine: Any, theirs: Any, week: int, current: int) -> Tone:
-        if week >= current or not mine or not theirs:
-            return "neutral"
-        return "good" if float(mine.get("points") or 0) > float(theirs.get("points") or 0) else "warning"
-
-    def _standings(self, state: _Week, rosters: list[SleeperRoster], names: dict[str, str]) -> list[StandingRow]:
-        """The table, sorted the way the league is: record first, then points."""
-        ordered = sorted(rosters, key=lambda r: (-(r.wins), -(r.points_for)))
-        return [
-            StandingRow(
-                rank=i,
-                name=names.get(r.owner_id, f"Roster {r.roster_id}"),
-                record=r.record,
-                points=f"{r.points_for:.1f}",
-                team_id=str(r.roster_id),
-                is_mine=r.roster_id == state.roster.roster_id,
-            )
-            for i, r in enumerate(ordered, start=1)
-        ]
-
-    def _matches(self, state: _Week) -> list[Match]:
-        """The real games this fantasy week is made of.
-
-        Only the ones your league is actually exposed to would be a smaller
-        list, but which clubs matter changes with every waiver — the whole
-        slate is what a week is, and it is one cached request.
-        """
-        games = self._games_by_week(state.season).get(state.week, [])
-        mine = {p.team for p in state.projected}
-        return [
-            Match(
-                label=_day(g.date),
-                home=g.home,
-                away=g.away,
-                # Whether you have anyone in it, which is the only thing that
-                # makes one game on a Sunday slate different from another.
-                detail="you have players" if {g.home, g.away} & mine else "",
-                tone="good" if {g.home, g.away} & mine else "neutral",
-            )
-            for g in games
-        ]
-
-    def _activity(
-        self,
-        state: _Week,
-        league_id: str,
-        by_roster: dict[int, SleeperRoster],
-        names: dict[str, str],
-    ) -> list[ActivityRow]:
-        """What the league has done lately, newest first.
-
-        Bounded to the last few weeks rather than the season: this is "what did
-        I miss", and a hundred rows of September waivers is not that.
-        """
-        dated: list[tuple[int, ActivityRow]] = []
-        for week in range(max(1, state.week - ACTIVITY_WEEKS + 1), state.week + 1):
-            try:
-                transactions = self.client.get_transactions(league_id, week)
-            except SleeperAPIError as e:
-                logger.warning(f"Skipping week {week} activity: {e}")
-                continue
-            dated.extend(self._activity_rows(transactions, state, by_roster, names))
-        # Sorted on the instant, not on the string that renders it: "Sep 3"
-        # sorts before "Sep 21" alphabetically and after it in time.
-        return [row for _, row in sorted(dated, key=lambda pair: pair[0], reverse=True)]
-
-    def _activity_rows(
-        self,
-        transactions: list[Transaction],
-        state: _Week,
-        by_roster: dict[int, SleeperRoster],
-        names: dict[str, str],
-    ) -> list[tuple[int, ActivityRow]]:
-        rows: list[tuple[int, ActivityRow]] = []
-        for t in transactions:
-            roster = by_roster.get(t.roster_ids[0]) if t.roster_ids else None
-            moved = [f"+{self._name_of(pid, state)}" for pid in t.adds] + [
-                f"-{self._name_of(pid, state)}" for pid in t.drops
-            ]
-            rows.append(
-                (
-                    t.when,
-                    ActivityRow(
-                        when=_moment(t.when),
-                        who=names.get(roster.owner_id, "") if roster else "",
-                        what=TRANSACTION_LABELS.get(t.kind, t.kind),
-                        detail=", ".join(moved),
-                        tone="good" if roster and roster.roster_id == state.roster.roster_id else "neutral",
-                    ),
-                )
-            )
-        return rows
-
-    @staticmethod
-    def _name_of(player_id: str, state: _Week) -> str:
-        meta = state.players.get(player_id)
-        return str(meta.get("name") or player_id) if meta else player_id
-
-    def _games_by_week(self, season: str) -> dict[int, list[ScheduledGame]]:
-        """The season schedule bucketed by week, or nothing if it will not load.
-
-        Dates are enrichment: a week without them is still a week.
-        """
-        try:
-            games = self.client.get_season_schedule(season)
-        except SleeperAPIError as e:
-            logger.warning(f"Continuing without schedule dates: {e}")
-            return {}
-        by_week: dict[int, list[ScheduledGame]] = {}
-        for g in games:
-            by_week.setdefault(g.week, []).append(g)
-        return by_week
-
-    def _live(self, state: _Week, league_id: str) -> _Live:
+    def _live(self, state: Week, league_id: str) -> Live:
         """What has actually been scored, and whose clubs have kicked off."""
         started = {
             club
-            for game in self._games_by_week(state.season).get(state.week, [])
+            for game in games_by_week(self.client, state.season).get(state.week, [])
             if game.status and game.status != "pre_game"
             for club in (game.home, game.away)
         }
@@ -818,23 +525,23 @@ class SleeperNFLProvider:
             matchups = self.client.get_matchups(league_id, state.week)
         except SleeperAPIError as e:
             logger.warning(f"Continuing without live scores: {e}")
-            return _Live(started=started, points={})
+            return Live(started=started, points={})
 
         points: dict[str, float] = {}
         for entry in matchups:
             for player_id, scored in (entry.get("players_points") or {}).items():
                 points[str(player_id)] = float(scored or 0)
-        return _Live(started=started, points=points)
+        return Live(started=started, points=points)
 
     @staticmethod
-    def _side_total(state: _Week, live: _Live) -> str:
+    def _side_total(state: Week, live: Live) -> str:
         """The projection until the ball is rolling, then what is on the board."""
         if not live.under_way:
             return f"{state.current_points:.1f} proj"
         scored = sum(live.scored(slot.player.player_id, slot.player.team) or 0 for slot in state.lineup if slot.player)
         return f"{scored:.1f} pts"
 
-    def _opponent(self, state: _Week, league_id: str, scheduled: bool, live: _Live) -> Side | None:
+    def _opponent(self, state: Week, league_id: str, scheduled: bool, live: Live) -> Side | None:
         """The team you are playing, and what they are starting.
 
         Their lineup is the other half of the only question this week asks, and
@@ -867,7 +574,7 @@ class SleeperNFLProvider:
 
         names = self.client.get_league_users(league_id)
         projected = [
-            p for p in (self._projection_for(pid, state.projections, state.players) for pid in roster.player_ids) if p
+            p for p in (projection_for(pid, state.projections, state.players) for pid in roster.player_ids) if p
         ]
         starting = set(roster.starter_ids)
         by_id = {p.player_id: p for p in projected}
@@ -898,7 +605,7 @@ class SleeperNFLProvider:
             bench=[self._spot(p, scheduled, live=live) for p in projected if p.player_id not in starting],
         )
 
-    def _season_table(self, player_id: str, state: _Week) -> StatTable | None:
+    def _season_table(self, player_id: str, state: Week) -> StatTable | None:
         """This season beside the two before it, read across rather than down.
 
         A projection is a guess; these are the seasons it is a guess about, and
@@ -967,7 +674,7 @@ class SleeperNFLProvider:
             return []
         return [str(year - 1), str(year - 2)]
 
-    def _lineup_spot(self, slot: LineupSlot, scheduled: bool, live: _Live | None = None) -> Spot:
+    def _lineup_spot(self, slot: LineupSlot, scheduled: bool, live: Live | None = None) -> Spot:
         if slot.player is None:
             return Spot(slot=slot.slot, player="—", detail="empty", value="0.0", tone="warning")
         return self._spot(slot.player, scheduled, slot=slot.slot, live=live, projected=slot.points)
@@ -977,7 +684,7 @@ class SleeperNFLProvider:
         projection: WeeklyProjection,
         scheduled: bool,
         slot: str = "",
-        live: _Live | None = None,
+        live: Live | None = None,
         projected: float | None = None,
     ) -> Spot:
         """One row, showing what happened where the game has started.
@@ -1032,239 +739,4 @@ class SleeperNFLProvider:
             return "warning"
         return "warning" if scheduled and not projection.opponent else "neutral"
 
-    def build_context(self, league_id: str) -> SportContext:
-        state = self._week(league_id)
-        league, roster, week = state.league, state.roster, state.week
-        projections, players, projected = state.projections, state.players, state.projected
-        lineup, changes = state.lineup, state.changes
-
-        slots = league.starting_slots
-        roster_lines = {p.name: self._player_line(p) for p in sorted(projected, key=lambda x: -x.points)}
-        starter_ids = {s.player.player_id for s in lineup if s.player}
-        lineup_str = "".join(
-            f"- {slot.slot}: {slot.player.name} ({slot.player.position}, {slot.player.team}) "
-            f"{slot.player.points:.1f} pts vs {slot.player.opponent or 'TBD'}\n"
-            if slot.player
-            else f"- {slot.slot}: (empty)\n"
-            for slot in lineup
-        )
-        bench_str = "".join(self._player_line(p) for p in projected if p.player_id not in starter_ids) or "- (none)\n"
-        changes_str = (
-            "".join(
-                f"- START {c.start.name} ({c.start.position}) in {c.slot} for "
-                f"{c.bench.name if c.bench else 'an empty slot'}: +{c.gain:.1f} projected points\n"
-                for c in changes
-            )
-            or "- None; the current lineup is already the highest-projecting legal one.\n"
-        )
-
-        available = self._available_players(league_id, projections, players)
-        available_lines = {p.name: self._player_line(p) for p in available}
-        trending_str = self._trending(projections, players)
-
-        situation, matchup_stats = self._matchup(league, roster, league_id, week)
-        current_points, best_points, on_bench = state.current_points, state.best_points, state.on_bench
-        constraints = (
-            f"LINEUP SLOTS: {', '.join(slots)}\n"
-            f"- Current lineup projects {current_points:.1f} points.\n"
-            f"- The best legal lineup projects {best_points:.1f}"
-            + (f", so {on_bench:.1f} points are sitting on the bench.\n" if on_bench > 0 else ".\n")
-            + "- Bench players score nothing. A start/sit change costs nothing; an add costs a roster spot."
-        )
-
-        prompt = NFL_SCOUT_PROMPT.format(
-            scoring_label=SCORING_LABELS.get(league.scoring_format, league.scoring_format),
-            situation=situation,
-            constraints=constraints,
-            lineup_str=lineup_str or "- (no lineup set)\n",
-            bench_str=bench_str,
-            changes_str=changes_str,
-            available_str="".join(available_lines.values()) or "- (none available)\n",
-            trending_str=trending_str,
-        )
-
-        return SportContext(
-            prompt=prompt,
-            situation=situation,
-            constraints=constraints,
-            extra=f"LINEUP CHANGES IMPLIED BY PROJECTIONS:\n{changes_str}",
-            roster_lines=roster_lines,
-            candidate_lines=available_lines,
-            headline=self._headline(roster, week, current_points, best_points, on_bench) + matchup_stats,
-        )
-
-    @staticmethod
-    def _headline(
-        roster: SleeperRoster,
-        week: int,
-        current_points: float,
-        best_points: float,
-        on_bench: float,
-    ) -> list[Stat]:
-        """Where this team stands this week, in points.
-
-        Only points sitting on the bench warns: it is the one figure here that
-        represents a decision still open rather than a result already in.
-        """
-        stats = [
-            Stat(label="Week", value=str(week)),
-            Stat(label="Record", value=roster.record),
-            Stat(label="Points for", value=f"{roster.points_for:.1f}"),
-            Stat(label="Lineup", value=f"{current_points:.1f}"),
-            Stat(label="Best legal", value=f"{best_points:.1f}", tone="good" if on_bench > 0 else "neutral"),
-        ]
-        if on_bench > 0:
-            stats.append(Stat(label="On bench", value=f"+{on_bench:.1f}", tone="warning"))
-        return stats
-
     # ── helpers ─────────────────────────────────────────────────────
-
-    @staticmethod
-    def _zero_projection(player_id: str, meta: PlayerMeta) -> WeeklyProjection:
-        """A player with no projection this week: a bye, or inactive."""
-        return WeeklyProjection(
-            player_id=player_id,
-            name=str(meta.get("name") or player_id),
-            position=str(meta.get("position") or ""),
-            team=str(meta.get("team") or "FA"),
-            opponent="",
-            points=0.0,
-            injury_status=str(meta.get("injury_status") or ""),
-        )
-
-    @staticmethod
-    def _projection_for(
-        player_id: str, projections: dict[str, WeeklyProjection], players: dict[str, PlayerMeta]
-    ) -> WeeklyProjection | None:
-        """A player's projection, falling back to a zero-point entry.
-
-        A rostered player with no projection is usually on a bye or inactive —
-        which is exactly the case the report must see, so they are kept at zero
-        rather than dropped from the projected.
-        """
-        if player_id in projections:
-            return projections[player_id]
-        meta = players.get(player_id)
-        if meta is None:
-            return None
-        return WeeklyProjection(
-            player_id=player_id,
-            name=str(meta.get("name") or player_id),
-            position=str(meta.get("position") or ""),
-            team=str(meta.get("team") or "FA"),
-            opponent="",
-            points=0.0,
-            injury_status=str(meta.get("injury_status") or ""),
-        )
-
-    @staticmethod
-    def _player_line(p: WeeklyProjection) -> str:
-        injury = f" [{p.injury_status}]" if p.is_questionable else ""
-        opponent = f" vs {p.opponent}" if p.opponent else " (no game)"
-        return f"- {p.name} ({p.position}, {p.team}){injury}{opponent}: {p.points:.1f} proj pts\n"
-
-    def _available_players(
-        self, league_id: str, projections: dict[str, WeeklyProjection], players: dict[str, PlayerMeta]
-    ) -> list[WeeklyProjection]:
-        """Highest-projecting players not rostered anywhere in the league."""
-        rostered: set[str] = set()
-        for roster in self.client.get_rosters(league_id):
-            rostered.update(roster.player_ids)
-
-        free = [p for pid, p in projections.items() if pid not in rostered and p.points > 0]
-        return sorted(free, key=lambda p: p.points, reverse=True)[:AVAILABLE_PLAYER_LIMIT]
-
-    def _trending(self, projections: dict[str, WeeklyProjection], players: dict[str, PlayerMeta]) -> str:
-        try:
-            trending = self.client.get_trending("add", limit=TRENDING_LIMIT)
-        except SleeperAPIError as e:
-            # An independent signal, not load-bearing — losing it degrades the
-            # prompt rather than the report.
-            logger.warning(f"Skipping trending players: {e}")
-            return "- (unavailable)\n"
-
-        lines = []
-        for item in trending:
-            meta = players.get(item.player_id)
-            name = meta.get("name") if meta else None
-            if not name:
-                continue
-            proj = projections.get(item.player_id)
-            points = f"{proj.points:.1f} proj pts" if proj else "no projection"
-            lines.append(f"- {name}: added by {item.count:,} managers in 24h, {points}\n")
-        return "".join(lines) or "- (none)\n"
-
-    def _situation(
-        self,
-        league: SleeperLeague,
-        roster: SleeperRoster,
-        league_id: str,
-        week: int,
-    ) -> str:
-        """The matchup block for the prompt."""
-        return self._matchup(league, roster, league_id, week)[0]
-
-    def _matchup(
-        self,
-        league: SleeperLeague,
-        roster: SleeperRoster,
-        league_id: str,
-        week: int,
-    ) -> tuple[str, list[Stat]]:
-        """The matchup as prose for the prompt, and as figures for the header.
-
-        Built together because they come from the same three requests; deriving
-        them separately would fetch the scoreboard twice for one report.
-        """
-        header = (
-            f"LEAGUE: {league.name} ({league.total_rosters} teams)\n"
-            f"WEEK: {week}\nYOUR RECORD: {roster.record}, {roster.points_for:.1f} points for\n"
-        )
-        try:
-            matchups = self.client.get_matchups(league_id, week)
-        except SleeperAPIError as e:
-            logger.warning(f"No matchup data: {e}")
-            return header, []
-
-        mine = next((m for m in matchups if m.get("roster_id") == roster.roster_id), None)
-        if not mine or mine.get("matchup_id") is None:
-            return header + "No head-to-head matchup this week.\n", []
-
-        opponent = next(
-            (
-                m
-                for m in matchups
-                if m.get("matchup_id") == mine.get("matchup_id") and m.get("roster_id") != roster.roster_id
-            ),
-            None,
-        )
-        if not opponent:
-            return header + "No opponent assigned this week.\n", []
-
-        names = self.client.get_league_users(league_id)
-        by_roster = {r.roster_id: r for r in self.client.get_rosters(league_id)}
-        opp_roster = by_roster.get(int(opponent.get("roster_id", 0)))
-        opp_name = names.get(opp_roster.owner_id, "Opponent") if opp_roster else "Opponent"
-
-        mine_points = float(mine.get("points") or 0)
-        their_points = float(opponent.get("points") or 0)
-        margin = round(mine_points - their_points, 1)
-
-        prose = (
-            header
-            + f"OPPONENT: {opp_name}"
-            + (f" ({opp_roster.record})" if opp_roster else "")
-            + f"\nLIVE SCORE: you {mine_points:.1f} - {their_points:.1f} them\n"
-        )
-        stats = [
-            Stat(label="Opponent", value=opp_name + (f" ({opp_roster.record})" if opp_roster else "")),
-            Stat(label="Live", value=f"{mine_points:.1f} – {their_points:.1f}"),
-            # The only figure here that is a verdict rather than a reading, so
-            # it is the only one that takes a tone.
-            Stat(
-                label="Margin",
-                value=f"{margin:+.1f}",
-                tone="good" if margin > 0 else "warning" if margin < 0 else "neutral",
-            ),
-        ]
-        return prose, stats

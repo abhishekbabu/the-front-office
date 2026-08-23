@@ -43,6 +43,23 @@ sports/nfl/lineup.py       optimal lineup, computed from projections
 Name helpers for what they produce, not where the data came from. A file called
 `sleeper.py` under two different sports would mean two different things.
 
+## Where the provider's own work goes
+
+A provider answers four separable questions, and past a few hundred lines they
+stop fitting in one file. Both football and FPL are split the same way, and a
+third sport should reach for the same names before inventing others:
+
+```text
+sports/<sport>/<platform>.py  the port, delegating — leagues, identity, lookups
+sports/<sport>/week.py        the state every view of a week is derived from
+sports/<sport>/league.py      the season, the table, the fixtures, the activity
+sports/<sport>/prompt.py      gathered state rendered as the text a model reads
+```
+
+`week.py` is the base: nothing in it imports the others, so `league.py` and
+`prompt.py` can both build on it without a cycle. Nothing in `prompt.py`
+decides anything — the provider fetches and the prompt describes.
+
 ## Rules
 
 **Never name a provider in an entry point.** The CLI, the web UI and the help
