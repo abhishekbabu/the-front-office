@@ -322,6 +322,8 @@ class PastSeason:
     goals: int
     assists: int
     clean_sheets: int
+    goals_conceded: int
+    saves: int
     bonus: int
     expected_goals: float
     expected_assists: float

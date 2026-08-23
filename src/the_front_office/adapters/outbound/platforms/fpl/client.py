@@ -370,6 +370,8 @@ class FPLClient:
                 goals=int(row.get("goals_scored") or 0),
                 assists=int(row.get("assists") or 0),
                 clean_sheets=int(row.get("clean_sheets") or 0),
+                goals_conceded=int(row.get("goals_conceded") or 0),
+                saves=int(row.get("saves") or 0),
                 bonus=int(row.get("bonus") or 0),
                 expected_goals=_number(row.get("expected_goals")),
                 expected_assists=_number(row.get("expected_assists")),
