@@ -128,6 +128,18 @@ async function main() {
       }
     }
 
+    if (wanted("scrolled")) {
+      // Deliberately not fullPage: the question is what stays on screen when
+      // the content moves, which a full-page capture flattens away.
+      await page.getByRole("button", { name: /Settings/ }).click();
+      await page.waitForTimeout(500);
+      await page.mouse.move(900, 500);
+      await page.mouse.wheel(0, 1400);
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: path.join(OUT, `scrolled${suffix}.png`) });
+      console.log(`  scrolled${suffix}.png`);
+    }
+
     if (wanted("settings")) {
       await page.getByRole("button", { name: /Settings/ }).click();
       await shoot("settings");
