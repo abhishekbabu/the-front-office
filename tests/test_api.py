@@ -467,3 +467,32 @@ def test_an_unconfigured_sport_is_not_probed(client: TestClient, monkeypatch: py
     nba = next(s for s in client.get("/api/sports").json() if s["sport"] == "nba")
 
     assert (nba["configured"], nba["ready"], nba["blocked_reason"]) == (False, False, "")
+
+
+def test_the_summary_is_served_without_calling_a_model(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The whole point: a page that waits on a model is blank while it waits."""
+    from the_front_office.domain.models import Spot, Stat, Summary
+
+    monkeypatch.setattr(web, "scout_engine", _raising(AssertionError("must not run the engine")))
+    monkeypatch.setattr(
+        web.data,
+        "build_provider",
+        lambda sport: _SummaryProvider(
+            Summary(headline=[Stat(label="Week", value="4")], lineup=[Spot(player="P", detail="d", value="1.0")])
+        ),
+    )
+
+    body = client.get("/api/nfl/leagues/L1/summary").json()
+
+    assert body["headline"][0]["label"] == "Week"
+    assert body["lineup"][0]["player"] == "P"
+    assert body["swaps"] == []
+
+
+class _SummaryProvider(FakeProvider):
+    def __init__(self, summary: Any) -> None:
+        super().__init__()
+        self._summary = summary
+
+    def summary(self, league_id: str) -> Any:
+        return self._summary

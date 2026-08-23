@@ -35,11 +35,17 @@ export type Move = {
   replaces_rationale: string;
 };
 
-export type Stat = {
-  label: string;
-  value: string;
-  tone: "neutral" | "good" | "warning";
-};
+export type Tone = "neutral" | "good" | "warning";
+
+export type Stat = { label: string; value: string; tone: Tone };
+
+/** One place in a lineup, or one player on a bench. */
+export type Spot = { slot: string; player: string; detail: string; value: string; tone: Tone };
+
+/** A change the numbers already imply, before anyone has judged them. */
+export type Swap = { start: string; out: string; gain: string };
+
+export type Summary = { headline: Stat[]; lineup: Spot[]; bench: Spot[]; swaps: Swap[] };
 
 export type ScoutReport = {
   situation: string;
@@ -121,6 +127,7 @@ export const api = {
   sports: () => request<Sport[]>("/api/sports"),
   leagues: (sport: string) => request<League[]>(`/api/${sport}/leagues`),
   roster: (sport: string, league: string) => request<RosterRow[]>(`/api/${sport}/leagues/${league}/roster`),
+  summary: (sport: string, league: string) => request<Summary>(`/api/${sport}/leagues/${league}/summary`),
   scout: (sport: string, league: string) => post<Analysis>(`/api/${sport}/leagues/${league}/scout`, {}),
   trade: (sport: string, league: string, text: string) =>
     post<Evaluation>(`/api/${sport}/leagues/${league}/trade`, { text }),

@@ -1,15 +1,28 @@
-import { useMutation } from "@tanstack/react-query";
-import { api, type Analysis, type League, type Sport } from "@/lib/api";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { api, type Analysis, type League, type Sport, type Summary } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatStrip } from "@/components/ui/stat";
+import { LineupCard } from "@/components/ui/lineup";
 import { Chat, Chips, ErrorNote, MoveRow, PageHeader } from "@/panels/shared";
 
 export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) {
+  // Loaded on arrival rather than with the report: every figure in it is
+  // already known, and a page that shows nothing until a model has answered is
+  // blank for as long as that takes.
+  const standing = useQuery<Summary, Error>({
+    queryKey: ["summary", sport.sport, league.league_id],
+    queryFn: () => api.summary(sport.sport, league.league_id),
+  });
+
   const run = useMutation<Analysis, Error>({
     mutationFn: () => api.scout(sport.sport, league.league_id),
   });
+
+  // The report carries its own, computed the same way; before one exists the
+  // standing stands in.
+  const headline = run.data?.report.headline ?? standing.data?.headline ?? [];
 
   return (
     <>
@@ -19,7 +32,9 @@ export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) 
         </Button>
       </PageHeader>
 
-      {run.data && <StatStrip stats={run.data.report.headline} />}
+      <StatStrip stats={headline} />
+      {standing.isLoading && <Skeleton className="mx-5 mt-4 h-12" />}
+      {standing.isError && !run.data && <ErrorNote error={standing.error} />}
 
       {run.isError && <ErrorNote error={run.error} />}
 
@@ -64,10 +79,21 @@ export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) 
         </div>
       )}
 
-      {!run.data && !run.isPending && !run.isError && (
-        <p className="p-5 text-[13.5px] text-muted-foreground">
-          Reads live league state, computes what has an exact answer, and asks the model only for judgement.
-        </p>
+      {standing.data && !run.isPending && (
+        <div className="flex flex-col gap-4 px-5 pb-5 pt-4">
+          <LineupCard
+            title={run.data ? "As it stands" : "Your lineup"}
+            lineup={standing.data.lineup}
+            bench={standing.data.bench}
+            swaps={standing.data.swaps}
+          />
+          {!run.data && !run.isError && (
+            <p className="max-w-[70ch] text-[13.5px] leading-relaxed text-muted-foreground">
+              Everything above is read or computed from league state. Running a report adds the
+              judgement — which projections to believe, which matchups to discount, what to do.
+            </p>
+          )}
+        </div>
       )}
     </>
   );

@@ -37,7 +37,7 @@ from the_front_office.adapters.outbound.sports.fpl.squad import (
 from the_front_office.config.constants import FPL_SCOUT_PROMPT
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import FPLAPIError, LeagueNotFoundError
-from the_front_office.domain.models import SportContext, Stat
+from the_front_office.domain.models import SportContext, Spot, Stat, Summary, Swap
 from the_front_office.domain.ports import LeagueRef
 
 logger = logging.getLogger(__name__)
@@ -153,6 +153,75 @@ class FPLProvider:
                 }
             )
         return rows
+
+    def summary(self, league_id: str) -> Summary:
+        """The header, without the market or the model.
+
+        Reaches for the squad, the history and the gameweek — everything the
+        standing is made of — and stops short of the transfer candidates, which
+        is the expensive half of a report.
+        """
+        entry_id = self._resolve_entry_id()
+        upcoming = self.client.upcoming_gameweek()
+        squad, players, current_starters, _ = self._squad(entry_id, self._last_completed_gameweek(upcoming.id))
+
+        captain_id = next((pick.element for pick in squad.picks if pick.is_captain), None)
+        captain = next((p for p in current_starters if p.id == captain_id), None)
+        allowance = free_transfers(self.client.get_history(entry_id), upcoming.id)
+
+        best = best_lineup(players)
+        _, _, _, current_bench = self._squad(entry_id, self._last_completed_gameweek(upcoming.id))
+        fixtures = self._fixtures_by_club(players, upcoming.id)
+
+        return Summary(
+            headline=self._headline(
+                self.client.get_entry(entry_id),
+                league_id,
+                squad,
+                allowance,
+                best,
+                points_with_captain(current_starters, captain),
+                upcoming,
+            ),
+            lineup=[self._spot(p, fixtures, captain=p.id == captain_id) for p in current_starters],
+            bench=[self._spot(p, fixtures) for p in current_bench],
+            swaps=[
+                Swap(
+                    start=change.start.name,
+                    out=change.drop.name if change.drop else "",
+                    gain=f"+{change.gain:.1f} xPts",
+                )
+                for change in lineup_changes(current_starters, best)
+            ],
+        )
+
+    def _spot(self, player: Player, fixtures: dict[str, str], captain: bool = False) -> Spot:
+        flag = player.availability
+        return Spot(
+            player=player.name + (" (C)" if captain else ""),
+            detail=f"{player.position} · {player.team} {fixtures.get(player.team, 'no fixture')}"
+            + (f" · {flag}" if flag else ""),
+            value=f"{effective_points(player):.1f} xPts",
+            # A blank gameweek and a doubt are both reasons this number is not
+            # what it looks like, and both are why a row needs to be noticed.
+            tone="warning" if flag or player.team not in fixtures else "neutral",
+        )
+
+    def _fixtures_by_club(self, players: list[Player], gameweek: int) -> dict[str, str]:
+        """Each owned club's opponent this gameweek; absent means a blank."""
+        try:
+            fixtures = self.client.get_fixtures(gameweek)
+        except FPLAPIError as e:
+            logger.warning(f"Skipping FPL fixtures: {e}")
+            return {}
+        by_club: dict[str, str] = {}
+        for club in {p.team for p in players}:
+            matches = [m for f in fixtures if (m := f.opponent_of(club))]
+            if matches:
+                by_club[club] = ", ".join(
+                    f"{'vs' if home else 'at'} {opponent} ({difficulty})" for opponent, difficulty, home in matches
+                )
+        return by_club
 
     # ── context ─────────────────────────────────────────────────────
 

@@ -28,7 +28,7 @@ from the_front_office.config.logging import setup_logging
 from the_front_office.config.settings import PROJECT_ROOT, settings
 from the_front_office.config.telemetry import setup_telemetry
 from the_front_office.domain.errors import FrontOfficeError
-from the_front_office.domain.models import ScoutReport, TradeVerdict
+from the_front_office.domain.models import ScoutReport, Summary, TradeVerdict
 from the_front_office.domain.ports import ChatSession
 
 logger = logging.getLogger(__name__)
@@ -302,6 +302,15 @@ def _register_routes(app: FastAPI) -> None:
         first row rather than being taught each sport's columns.
         """
         return data.build_provider(sport).roster_rows(league_id)
+
+    @app.get("/api/{sport}/leagues/{league_id}/summary", response_model=Summary)
+    def summary(sport: str, league_id: str) -> Summary:
+        """Where the team stands, before any report is asked for.
+
+        The page would otherwise be blank for as long as a model call takes,
+        showing nothing the app already knows.
+        """
+        return data.build_provider(sport).summary(league_id)
 
     @app.post("/api/{sport}/leagues/{league_id}/scout", response_model=Analysis)
     def scout(sport: str, league_id: str) -> Analysis:

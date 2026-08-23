@@ -86,6 +86,12 @@ async function main() {
       await rail.click();
       await page.waitForTimeout(500);
 
+      if (wanted("arrival")) {
+        // Before running anything: what the page shows the moment you open it.
+        await page.getByRole("button", { name: "Scout", exact: true }).click();
+        await page.waitForTimeout(700);
+        await shoot(`${sport.toLowerCase()}-arrival`);
+      }
       if (wanted("scout")) {
         // Explicit: switching sport keeps whichever view you were on, so after
         // the first pass this would otherwise still be showing My team.

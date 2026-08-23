@@ -411,3 +411,41 @@ def test_the_matchup_is_fetched_once_for_both_the_prompt_and_the_header() -> Non
     assert client.matchup_fetches == 1
     assert "OPPONENT:" in context.situation
     assert any(s.label == "Opponent" for s in context.headline)
+
+
+# ── the summary, before any report ──────────────────────────────────────
+
+
+def test_the_summary_carries_the_lineup_and_the_changes() -> None:
+    """Every figure in it is already known, so the page need not wait on a model."""
+    summary = _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).summary("L1")
+
+    assert [spot.slot for spot in summary.lineup] == ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF"]
+    assert any(stat.label == "Week" for stat in summary.headline)
+
+
+def test_a_player_with_no_game_is_flagged_while_others_have_one() -> None:
+    summary = _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).summary("L1")
+    benched = {spot.player: spot for spot in summary.lineup + summary.bench}
+
+    assert benched["Star QB"].tone == "neutral"  # has an opponent
+
+
+def test_a_week_nobody_is_scheduled_for_does_not_flag_the_whole_roster() -> None:
+    """Before the season opens Sleeper publishes no fixtures, and warning on
+    every player turns the page amber over a date rather than a decision."""
+    preseason = {pid: _proj(pid, proj.name, proj.position, 0.0, opp="") for pid, proj in DEFAULT_PROJECTIONS.items()}
+    summary = _provider(FakeSleeper(projections=preseason)).summary("L1")
+
+    assert all(spot.tone == "neutral" for spot in summary.lineup if spot.player != "—")
+    assert all("not scheduled yet" in spot.detail for spot in summary.lineup if spot.player != "—")
+
+
+def test_the_summary_does_not_ask_for_the_waiver_pool() -> None:
+    """It is the expensive half of a report and nothing in the header uses it."""
+    client = FakeSleeper(projections=DEFAULT_PROJECTIONS)
+    client.get_trending = lambda *a, **k: pytest.fail("summary must not fetch trending")  # type: ignore[method-assign]
+
+    client_summary = _provider(client).summary("L1")
+
+    assert client_summary.headline

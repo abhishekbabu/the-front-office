@@ -11,7 +11,7 @@ from typing import Protocol, TypedDict, TypeVar, runtime_checkable
 
 from pydantic import BaseModel
 
-from the_front_office.domain.models import SportContext, TradeProposal
+from the_front_office.domain.models import SportContext, Summary, TradeProposal
 
 TModel = TypeVar("TModel", bound=BaseModel)
 
@@ -102,6 +102,21 @@ class SportProvider(Protocol):
 
         Cheaper than build_context — a roster listing should not pull
         projections and a waiver pool.
+        """
+        ...
+
+    def summary(self, league_id: str) -> Summary:
+        """Where this team stands, without producing an analysis.
+
+        The same figures a finished report carries in its header, available
+        before one is asked for — a page that shows nothing until a model has
+        been called is empty for the whole time it takes to call one, and every
+        number here is already known.
+
+        Cheaper than build_context: no candidate pool, no market, no model.
+
+        Raises:
+            FrontOfficeError: the league or the user's team within it is missing.
         """
         ...
 

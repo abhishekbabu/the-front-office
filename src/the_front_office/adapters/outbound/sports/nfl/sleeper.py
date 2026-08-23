@@ -9,6 +9,7 @@ is the only configuration.
 """
 
 import logging
+from dataclasses import dataclass
 
 from the_front_office.adapters.outbound.platforms.sleeper.client import NFL, SleeperClient
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
@@ -19,6 +20,8 @@ from the_front_office.adapters.outbound.platforms.sleeper.types import (
 )
 from the_front_office.adapters.outbound.sports.names import NameIndex
 from the_front_office.adapters.outbound.sports.nfl.lineup import (
+    LineupChange,
+    LineupSlot,
     current_lineup,
     lineup_changes,
     lineup_points,
@@ -28,10 +31,30 @@ from the_front_office.adapters.outbound.sports.trades import resolve_sides
 from the_front_office.config.constants import NFL_SCOUT_PROMPT, NFL_TRADE_PROMPT
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import LeagueNotFoundError, SleeperAPIError
-from the_front_office.domain.models import SportContext, Stat, TradeProposal
+from the_front_office.domain.models import SportContext, Spot, Stat, Summary, Swap, Tone, TradeProposal
 from the_front_office.domain.ports import LeagueRef
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class _Week:
+    """One week's state, gathered once and read by both callers."""
+
+    league: SleeperLeague
+    roster: SleeperRoster
+    week: int
+    season: str
+    projections: dict[str, WeeklyProjection]
+    players: dict[str, PlayerMeta]
+    projected: list[WeeklyProjection]
+    lineup: list[LineupSlot]
+    best: list[LineupSlot]
+    changes: list[LineupChange]
+    current_points: float
+    best_points: float
+    on_bench: float
+
 
 SCORING_LABELS = {
     "pts_ppr": "Full PPR (1 point per reception)",
@@ -169,30 +192,114 @@ class SleeperNFLProvider:
         state = self.client.get_state(NFL)
         return max(1, state.week if state.is_regular_season else 1)
 
-    def build_context(self, league_id: str) -> SportContext:
+    def _week(self, league_id: str) -> _Week:
+        """Everything both the header and the prompt are derived from.
+
+        Gathered once because the two would otherwise fetch the same
+        projections and re-run the same lineup solve, and could then disagree
+        about the totals by a rounding.
+        """
         league = self._league(league_id)
         roster = self._my_roster(league_id)
-        state = self.client.get_nfl_state()
-
-        week, season = self._current_week(), state.season
+        week, season = self._current_week(), self.client.get_state(NFL).season
 
         projections = self.client.get_projections(season, week, league.scoring_format)
         players = self.client.get_players()
-
-        projected = [self._projection_for(pid, projections, players) for pid in roster.player_ids]
-        projected = [p for p in projected if p is not None]  # type: ignore[misc]
+        projected = [p for p in (self._projection_for(pid, projections, players) for pid in roster.player_ids) if p]
 
         slots = league.starting_slots
-        # What is set now, versus the best legal lineup. The prompt shows the
-        # current one; the difference between them is the recommendation.
-        lineup = current_lineup(slots, roster.starter_ids, projected)  # type: ignore[arg-type]
-        best = optimal_lineup(slots, projected)  # type: ignore[arg-type]
-        changes = lineup_changes(slots, roster.starter_ids, projected)  # type: ignore[arg-type]
+        lineup = current_lineup(slots, roster.starter_ids, projected)
+        best = optimal_lineup(slots, projected)
+        current_points = round(lineup_points(lineup), 1)
+        best_points = round(lineup_points(best), 1)
 
-        roster_lines = {
-            p.name: self._player_line(p)
-            for p in sorted(projected, key=lambda x: -x.points)  # type: ignore[union-attr]
-        }
+        return _Week(
+            league=league,
+            roster=roster,
+            week=week,
+            season=season,
+            projections=projections,
+            players=players,
+            projected=projected,
+            lineup=lineup,
+            best=best,
+            changes=lineup_changes(slots, roster.starter_ids, projected),
+            current_points=current_points,
+            best_points=best_points,
+            on_bench=round(best_points - current_points, 1),
+        )
+
+    def summary(self, league_id: str) -> Summary:
+        """The standing, the lineup and the changes it implies. No model."""
+        state = self._week(league_id)
+        _, matchup_stats = self._matchup(state.league, state.roster, league_id, state.week)
+        starters = {slot.player.player_id for slot in state.lineup if slot.player}
+        # Before the season opens Sleeper publishes no fixtures at all, and
+        # flagging every player for having no game turns the page amber over a
+        # date rather than a decision. It only means something when others do.
+        scheduled = any(p.opponent for p in state.projected)
+
+        return Summary(
+            headline=self._headline(state.roster, state.week, state.current_points, state.best_points, state.on_bench)
+            + matchup_stats,
+            lineup=[
+                Spot(
+                    slot=slot.slot,
+                    player=slot.player.name if slot.player else "—",
+                    detail=self._spot_detail(slot.player, scheduled) if slot.player else "empty",
+                    value=f"{slot.points:.1f}" if slot.player else "0.0",
+                    tone=self._spot_tone(slot.player, scheduled),
+                )
+                for slot in state.lineup
+            ],
+            bench=[
+                Spot(
+                    player=p.name,
+                    detail=self._spot_detail(p, scheduled),
+                    value=f"{p.points:.1f}",
+                    tone=self._spot_tone(p, scheduled),
+                )
+                for p in sorted((p for p in state.projected if p.player_id not in starters), key=lambda p: -p.points)
+            ],
+            swaps=[
+                Swap(
+                    start=f"{change.start.name} ({change.slot})",
+                    out=change.bench.name if change.bench else "",
+                    gain=f"+{change.gain:.1f} proj pts",
+                )
+                for change in state.changes
+            ],
+        )
+
+    @staticmethod
+    def _spot_detail(projection: WeeklyProjection, scheduled: bool) -> str:
+        if projection.opponent:
+            opponent = f"vs {projection.opponent}"
+        else:
+            opponent = "no game" if scheduled else "not scheduled yet"
+        return f"{projection.position} · {projection.team} {opponent}"
+
+    @staticmethod
+    def _spot_tone(projection: WeeklyProjection | None, scheduled: bool) -> Tone:
+        """A player who will not play is a zero, not a small number.
+
+        Unless nobody is playing, in which case the week simply has not been
+        published and there is nothing to notice about any single player.
+        """
+        if projection is None:
+            return "warning"
+        if projection.is_questionable:
+            return "warning"
+        return "warning" if scheduled and not projection.opponent else "neutral"
+
+    def build_context(self, league_id: str) -> SportContext:
+        state = self._week(league_id)
+        league, roster, week = state.league, state.roster, state.week
+        projections, players, projected = state.projections, state.players, state.projected
+        lineup, changes = state.lineup, state.changes
+
+        slots = league.starting_slots
+        roster_lines = {p.name: self._player_line(p) for p in sorted(projected, key=lambda x: -x.points)}
         starter_ids = {s.player.player_id for s in lineup if s.player}
         lineup_str = "".join(
             f"- {slot.slot}: {slot.player.name} ({slot.player.position}, {slot.player.team}) "
@@ -201,10 +308,7 @@ class SleeperNFLProvider:
             else f"- {slot.slot}: (empty)\n"
             for slot in lineup
         )
-        bench_str = (
-            "".join(self._player_line(p) for p in projected if p.player_id not in starter_ids)  # type: ignore[union-attr]
-            or "- (none)\n"
-        )
+        bench_str = "".join(self._player_line(p) for p in projected if p.player_id not in starter_ids) or "- (none)\n"
         changes_str = (
             "".join(
                 f"- START {c.start.name} ({c.start.position}) in {c.slot} for "
@@ -219,11 +323,7 @@ class SleeperNFLProvider:
         trending_str = self._trending(projections, players)
 
         situation, matchup_stats = self._matchup(league, roster, league_id, week)
-        # Derived from the same rounded figures that are printed, so the three
-        # numbers in the prompt agree.
-        current_points = round(lineup_points(lineup), 1)
-        best_points = round(lineup_points(best), 1)
-        on_bench = round(best_points - current_points, 1)
+        current_points, best_points, on_bench = state.current_points, state.best_points, state.on_bench
         constraints = (
             f"LINEUP SLOTS: {', '.join(slots)}\n"
             f"- Current lineup projects {current_points:.1f} points.\n"

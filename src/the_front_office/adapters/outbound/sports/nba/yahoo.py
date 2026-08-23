@@ -24,7 +24,7 @@ from the_front_office.adapters.outbound.sports.trades import resolve_sides
 from the_front_office.config.constants import NBA_SCOUT_PROMPT, NBA_TRADE_PROMPT
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import FrontOfficeError, LeagueNotFoundError
-from the_front_office.domain.models import SportContext, Stat, TradeProposal
+from the_front_office.domain.models import SportContext, Stat, Summary, TradeProposal
 from the_front_office.domain.ports import LeagueRef
 
 logger = logging.getLogger(__name__)
@@ -91,6 +91,26 @@ class YahooNBAProvider:
         if league is not self.league:
             self.league = league
             self.yahoo = YahooClient(league)
+
+    def summary(self, league_id: str) -> Summary:
+        """The header, without the free-agent pool or the model.
+
+        Only the roster and the add budget: the matchup block is prose Yahoo
+        hands back already rendered, so there is nothing structured to lift out
+        of it without parsing what the model is meant to read.
+        """
+        my_team = self.yahoo.get_user_team()
+        used = my_team.roster_adds.value
+        limit = settings.yahoo_max_weekly_adds
+        remaining = max(0, limit - used)
+        return Summary(
+            headline=[
+                Stat(label="Team", value=str(my_team.name)),
+                Stat(label="Roster", value=str(len(list(my_team.players())))),
+                Stat(label="Adds used", value=f"{used}/{limit}"),
+                Stat(label="Adds left", value=str(remaining), tone="good" if remaining else "warning"),
+            ]
+        )
 
     def build_context(self, league_id: str = "") -> SportContext:
         """Gather league state and render the scouting prompt."""

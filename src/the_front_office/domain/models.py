@@ -42,6 +42,11 @@ class Move(BaseModel):
     replaces_rationale: str = Field(default="", description="Why that counterpart is the right one to move.")
 
 
+Tone = Literal["neutral", "good", "warning"]
+"""Whether a figure should pull the eye. Named so a provider computing one can
+say so in its signature rather than returning a bare string."""
+
+
 class Stat(BaseModel):
     """One headline figure: where the team stands before any reading happens.
 
@@ -51,13 +56,50 @@ class Stat(BaseModel):
 
     label: str = Field(description="Short name in the league's own vocabulary: 'Bank', 'Free transfers'.")
     value: str = Field(description="Already formatted for display, with its unit: '£2.5m', '340,112', '0-0'.")
-    tone: Literal["neutral", "good", "warning"] = Field(
+    tone: Tone = Field(
         default="neutral",
         description=(
             "Whether this figure should pull the eye. 'warning' for something costing points now — "
             "points left on the bench, an expiring allowance — and 'good' for headroom worth spending."
         ),
     )
+
+
+class Spot(BaseModel):
+    """One place in a lineup, or one player on a bench.
+
+    Sport-neutral on purpose: a slot is "FLEX" in football and "" in FPL, where
+    a formation has positions but not named places, and both render the same.
+    """
+
+    slot: str = Field(default="", description="Named place in the lineup, where the sport has them.")
+    player: str
+    detail: str = Field(description="Position, club and opponent, as that sport words it.")
+    value: str = Field(description="The forward-looking number, with its unit.")
+    tone: Tone = "neutral"
+
+
+class Swap(BaseModel):
+    """A change the numbers already imply, before anyone has judged them."""
+
+    start: str
+    out: str = Field(default="", description="Who comes out. Empty when a place was unfilled.")
+    gain: str
+
+
+class Summary(BaseModel):
+    """Where a team stands, with no analysis in it.
+
+    Everything here is read or computed from league state, so it is available
+    the moment a page opens rather than after a model has answered.
+    """
+
+    headline: list[Stat] = Field(default_factory=list)
+    lineup: list[Spot] = Field(default_factory=list)
+    bench: list[Spot] = Field(default_factory=list)
+    swaps: list[Swap] = Field(default_factory=list)
+    """Changes the projections imply. Exact, and the report's job is to endorse
+    or overrule them rather than to find them."""
 
 
 class ScoutReport(BaseModel):

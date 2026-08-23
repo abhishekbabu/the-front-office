@@ -426,3 +426,21 @@ def test_the_header_names_the_gameweek_and_when_it_locks() -> None:
 
     assert labels["Gameweek"] == "5"
     assert labels["Deadline"].endswith("UTC")
+
+
+def test_the_summary_marks_the_captain_and_the_doubts() -> None:
+    """Starting a ruled-out player is the mistake the page exists to surface."""
+    summary = provider().summary(LEAGUE_ID)
+    spots = {spot.player.replace(" (C)", ""): spot for spot in summary.lineup}
+
+    assert any(spot.player.endswith("(C)") for spot in summary.lineup)
+    assert spots["P7"].tone == "neutral"
+    assert summary.swaps  # P15 is the strongest forward and starts on the bench
+
+
+def test_the_summary_reports_a_blank_gameweek_on_the_player_not_just_the_club() -> None:
+    """A club with no fixture means every one of its players scores zero."""
+    summary = provider(fixtures=[]).summary(LEAGUE_ID)
+
+    assert all("no fixture" in spot.detail for spot in summary.lineup)
+    assert all(spot.tone == "warning" for spot in summary.lineup)
