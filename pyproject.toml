@@ -27,7 +27,8 @@ dependencies = [
     # two instrumentations config/telemetry.py enables; without them logfire
     # imports fine and then raises at instrument_* time.
     "logfire[google-genai,requests]>=4.41.0,<5",
-    "streamlit>=1.40.0,<2",
+    "fastapi>=0.118.0,<1",
+    "uvicorn[standard]>=0.34.0,<1",
     "pyreadline3>=3.4,<4; sys_platform == 'win32'",
     # zoneinfo reads the OS tz database, which Windows does not ship. Without
     # this, ZoneInfo("America/Los_Angeles") raises ZoneInfoNotFoundError there.
@@ -45,6 +46,8 @@ dev = [
     "ruff>=0.15.0,<1",
     "pre-commit>=4.0.0,<5",
     "pandas-stubs>=2.2.0,<3",
+    # starlette's TestClient deprecated the httpx 0.x backend; httpx2 is what it wants now.
+    "httpx2>=2.0.0,<3",
 ]
 
 [tool.setuptools.packages.find]
@@ -104,9 +107,6 @@ omit = [
     "*/adapters/inbound/cli/repl.py",
     "*/adapters/inbound/cli/output.py",
     "*/__main__.py",
-    # app.py's page functions wire Streamlit widgets together; its render and
-    # data helpers are tested directly in tests/test_ui_render.py.
-    "*/adapters/inbound/web/app.py",
 ]
 
 [tool.coverage.report]

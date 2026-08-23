@@ -1,0 +1,120 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Alternate palettes. The default lives in `src/index.css` under `@theme`;
+   each block here is a full override selected by the `data-theme` attribute on
+   <html>, which the palette picker and the pre-paint script set.
+
+   To add one:
+     1. Copy a block below and rename it.
+     2. Give every token a `light-dark(<light>, <dark>)` pair, or a single value
+        where both modes agree. The active `.dark` class drives `color-scheme`,
+        which picks the arm — nothing else to wire.
+     3. Add a matching entry to `src/themes/registry.ts`.
+
+   `html[data-theme="…"]` out-specifies `:root`, so these win over the @theme
+   defaults regardless of import order.
+
+   Status tokens (`ok`, `warn`) and the difficulty ramp are intentionally NOT
+   overridden here. They encode meaning rather than taste, and they are tuned
+   for colour-blind legibility; re-picking them per palette would trade that
+   away for visual consistency that nobody asked for.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* Floodlight — this app's own. A cool near-black ground under a warm amber,
+   the colour temperature of a stadium at night. The amber is the only hue in
+   the palette, so anything wearing it is either focused or the primary action. */
+html[data-theme="floodlight"] {
+  --color-background: light-dark(#fafaf7, #0c0e0d);
+  --color-foreground: light-dark(#16181a, #edeeea);
+  --color-card: light-dark(#ffffff, #121514);
+  --color-card-foreground: light-dark(#16181a, #edeeea);
+  --color-popover: light-dark(#ffffff, #121514);
+  --color-popover-foreground: light-dark(#16181a, #edeeea);
+  --color-primary: light-dark(#8a6d00, #f5b700);
+  --color-primary-foreground: light-dark(#fffdf5, #16130a);
+  --color-secondary: light-dark(#f0efe8, #1c201e);
+  --color-secondary-foreground: light-dark(#16181a, #edeeea);
+  --color-muted: light-dark(#f4f3ec, #161918);
+  --color-muted-foreground: light-dark(#63665f, #9aa09c);
+  --color-accent: light-dark(#f5efdc, #221f16);
+  --color-accent-foreground: light-dark(#8a6d00, #f5b700);
+  --color-destructive: light-dark(#a9302a, #ef6a61);
+  --color-destructive-foreground: light-dark(#fffaf9, #16130a);
+  --color-border: light-dark(#e3e2db, #26292a);
+  --color-input: light-dark(#cfcec5, #3a3e3d);
+  --color-ring: light-dark(#8a6d00, #f5b700);
+}
+
+/* Nord — arctic blue-grey. Low contrast by design; the tonal bases are the
+   point, so `muted-foreground` is pushed darker than the source palette
+   suggests to keep secondary text at WCAG AA. */
+html[data-theme="nord"] {
+  --color-background: light-dark(#eceff4, #2e3440);
+  --color-foreground: light-dark(#2e3440, #eceff4);
+  --color-card: light-dark(#e5e9f0, #343b49);
+  --color-card-foreground: light-dark(#2e3440, #eceff4);
+  --color-popover: light-dark(#e5e9f0, #3b4252);
+  --color-popover-foreground: light-dark(#2e3440, #eceff4);
+  --color-primary: light-dark(#4c6f96, #88c0d0);
+  --color-primary-foreground: light-dark(#eceff4, #2e3440);
+  --color-secondary: light-dark(#dfe4ec, #434c5e);
+  --color-secondary-foreground: light-dark(#2e3440, #eceff4);
+  --color-muted: light-dark(#e5e9f0, #363d4b);
+  --color-muted-foreground: light-dark(#515a6b, #b6c1d2);
+  --color-accent: light-dark(#d8dee9, #434c5e);
+  --color-accent-foreground: light-dark(#4c6f96, #88c0d0);
+  --color-destructive: light-dark(#98333c, #bf616a);
+  --color-destructive-foreground: light-dark(#eceff4, #2e3440);
+  --color-border: light-dark(#d8dee9, #434c5e);
+  --color-input: light-dark(#c2cad8, #4c566a);
+  --color-ring: light-dark(#4c6f96, #88c0d0);
+}
+
+/* Solarized — Ethan Schoonover's fixed relationships. Both modes share the
+   accent set and differ only in which end of the base ramp is the ground. */
+html[data-theme="solarized"] {
+  --color-background: light-dark(#fdf6e3, #002b36);
+  --color-foreground: light-dark(#586e75, #93a1a1);
+  --color-card: light-dark(#eee8d5, #073642);
+  --color-card-foreground: light-dark(#586e75, #93a1a1);
+  --color-popover: light-dark(#eee8d5, #073642);
+  --color-popover-foreground: light-dark(#586e75, #93a1a1);
+  --color-primary: light-dark(#1f6f9e, #268bd2);
+  --color-primary-foreground: #fdf6e3;
+  --color-secondary: light-dark(#eee8d5, #073642);
+  --color-secondary-foreground: light-dark(#586e75, #93a1a1);
+  --color-muted: light-dark(#eee8d5, #073642);
+  /* base00 / base0 rather than base1 / base01, so secondary text clears AA on
+     these tonal grounds. */
+  --color-muted-foreground: light-dark(#657b83, #839496);
+  --color-accent: light-dark(#e7e0c8, #08404f);
+  --color-accent-foreground: light-dark(#1f6f9e, #2aa198);
+  --color-destructive: light-dark(#b52824, #dc322f);
+  --color-destructive-foreground: #fdf6e3;
+  --color-border: light-dark(#ddd6bf, #0a3f4d);
+  --color-input: light-dark(#cfc8ae, #0b4554);
+  --color-ring: light-dark(#1f6f9e, #268bd2);
+}
+
+/* Ember — warm neutrals with an orange primary, for when the monochrome
+   default feels too cold to sit in front of for an hour. */
+html[data-theme="ember"] {
+  --color-background: light-dark(#fdf9f6, #1a1411);
+  --color-foreground: light-dark(#231a15, #f5ece4);
+  --color-card: light-dark(#ffffff, #221a16);
+  --color-card-foreground: light-dark(#231a15, #f5ece4);
+  --color-popover: light-dark(#ffffff, #221a16);
+  --color-popover-foreground: light-dark(#231a15, #f5ece4);
+  --color-primary: light-dark(#a5480a, #fb923c);
+  --color-primary-foreground: light-dark(#fff8f3, #1a1411);
+  --color-secondary: light-dark(#f6ece4, #2c221c);
+  --color-secondary-foreground: light-dark(#231a15, #f5ece4);
+  --color-muted: light-dark(#faf1ea, #241c17);
+  --color-muted-foreground: light-dark(#6d5d52, #b3a396);
+  --color-accent: light-dark(#fbe8d8, #33251b);
+  --color-accent-foreground: light-dark(#a5480a, #fb923c);
+  --color-destructive: light-dark(#ab2e21, #f87171);
+  --color-destructive-foreground: light-dark(#fff8f3, #1a1411);
+  --color-border: light-dark(#eddfd3, #3a2c24);
+  --color-input: light-dark(#d9c6b6, #4b382e);
+  --color-ring: light-dark(#a5480a, #fb923c);
+}

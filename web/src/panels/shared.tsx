@@ -1,0 +1,153 @@
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { api, type Move } from "@/lib/api";
+import { moveTone } from "@/lib/tone";
+import { splitMetric } from "@/lib/metric";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+
+export function PageHeader({
+  title,
+  meta,
+  children,
+}: {
+  title: string;
+  meta?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-border px-5 py-4">
+      <div>
+        <h1 className="font-display text-[21px] font-semibold leading-tight tracking-tight">{title}</h1>
+        {meta && <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">{meta}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * One recommendation.
+ *
+ * Three columns rather than a stack: the action reads as a chip on the left,
+ * the reasoning takes the middle at prose width, and the number is right-aligned
+ * so the figures form a column you scan down instead of hunting for.
+ */
+export function MoveRow({ move }: { move: Move }) {
+  return (
+    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-start gap-4 border-t border-border px-4 py-3.5">
+      <Badge variant={moveTone(move.action)} appearance="pill">
+        {move.action}
+      </Badge>
+
+      <div className="min-w-0">
+        <div className="font-display text-base font-semibold leading-snug tracking-tight">{move.player}</div>
+        <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+          {[move.position, move.team].filter(Boolean).join(" · ")}
+        </div>
+        <p className="mt-1.5 max-w-[54ch] text-[13.5px] leading-relaxed text-muted-foreground">{move.rationale}</p>
+        {move.replaces && (
+          <div className="mt-2 rounded-md bg-muted px-2.5 py-1.5 text-[12.5px] text-muted-foreground">
+            <b className="font-semibold text-foreground">{move.replaces}</b>
+            {move.replaces_rationale && ` · ${move.replaces_rationale}`}
+          </div>
+        )}
+      </div>
+
+      <MetricValue metric={move.metric} />
+    </div>
+  );
+}
+
+function MetricValue({ metric }: { metric: string }) {
+  const parsed = splitMetric(metric);
+  if (parsed.figure === null) {
+    return <div className="max-w-[9rem] text-right font-mono text-[11px] text-muted-foreground">{parsed.text}</div>;
+  }
+  return (
+    <div className="text-right">
+      <div className="font-display text-[19px] font-semibold tracking-tight tabular-nums text-ok">{parsed.figure}</div>
+      {parsed.unit && (
+        <div className="mt-0.5 max-w-[9rem] font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+          {parsed.unit}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Chips({ items, className }: { items: string[]; className?: string }) {
+  if (!items.length) return null;
+  return (
+    <div className={cn("flex flex-wrap gap-1.5", className)}>
+      {items.map((item) => (
+        <Badge key={item} variant="muted" appearance="label">
+          {item}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
+export function ErrorNote({ error }: { error: unknown }) {
+  return (
+    <div className="m-5 rounded-md border border-destructive/30 bg-destructive/8 px-4 py-3 text-[13.5px] text-destructive">
+      {error instanceof Error ? error.message : "Something went wrong."}
+    </div>
+  );
+}
+
+/** Follow-up conversation about a report that is already on screen. */
+export function Chat({ chatId }: { chatId: string }) {
+  const [turns, setTurns] = useState<{ role: "you" | "model"; text: string }[]>([]);
+  const [draft, setDraft] = useState("");
+
+  const ask = useMutation({
+    mutationFn: (message: string) => api.ask(chatId, message),
+    onSuccess: (reply) => setTurns((t) => [...t, { role: "model", text: reply.answer }]),
+    onError: (e: Error) => setTurns((t) => [...t, { role: "model", text: e.message }]),
+  });
+
+  function send(e: React.FormEvent) {
+    e.preventDefault();
+    const message = draft.trim();
+    if (!message || ask.isPending) return;
+    setTurns((t) => [...t, { role: "you", text: message }]);
+    setDraft("");
+    ask.mutate(message);
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <span>Ask a follow-up</span>
+        {ask.isPending && <span className="normal-case tracking-normal">Thinking…</span>}
+      </CardHeader>
+      <div className="flex flex-col gap-3 p-4">
+        {turns.map((turn, i) => (
+          <div key={i} className={cn("max-w-[62ch] text-[13.5px] leading-relaxed", turn.role === "you" && "self-end")}>
+            <div className="mb-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+              {turn.role}
+            </div>
+            <div className={cn(turn.role === "you" ? "rounded-md bg-muted px-3 py-2" : "text-foreground")}>
+              {turn.text}
+            </div>
+          </div>
+        ))}
+        <form onSubmit={send} className="flex gap-2">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Why that drop?"
+            className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-[13.5px] placeholder:text-muted-foreground"
+          />
+          <Button type="submit" variant="primary" disabled={!draft.trim() || ask.isPending}>
+            Ask
+          </Button>
+        </form>
+      </div>
+    </Card>
+  );
+}

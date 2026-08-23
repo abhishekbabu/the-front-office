@@ -1,7 +1,6 @@
 """Tests for the UI data layer."""
 
 from datetime import datetime
-from typing import Any
 
 import pytest
 
@@ -61,59 +60,3 @@ def test_a_configured_sport_is_built(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # ── situation parsing ───────────────────────────────────────────────────
-
-SITUATION = """
-CURRENT MATCHUP: Playing against Their Team
-MATCHUP SCORE: You 5 - 4 Opponent
-
-CATEGORY BREAKDOWN (Us vs Opponent):
-- FG%: .482 vs .461
-- BLK: 12 vs 17
-- TO: 41 vs 38
-OPPONENT KEY PLAYERS: Star Player (PG)
-"""
-
-
-def test_rows_are_parsed_from_the_situation_block() -> None:
-    """Reuses the context already built for the AI rather than re-querying."""
-    assert data.situation_rows(SITUATION) == [
-        {"Category": "FG%", "You": ".482", "Opponent": ".461"},
-        {"Category": "BLK", "You": "12", "Opponent": "17"},
-        {"Category": "TO", "You": "41", "Opponent": "38"},
-    ]
-
-
-def test_non_table_lines_are_ignored() -> None:
-    rows = data.situation_rows(SITUATION)
-    assert all(r["Category"] not in ("CURRENT MATCHUP", "OPPONENT KEY PLAYERS") for r in rows)
-
-
-def test_empty_situation_yields_no_rows() -> None:
-    assert data.situation_rows("") == []
-
-
-def test_a_situation_without_a_breakdown_yields_no_rows() -> None:
-    """Football situations carry no category table at all."""
-    assert data.situation_rows("LEAGUE: Huge Euge RR FF (14 teams)\nWEEK: 1") == []
-
-
-def test_nba_client_is_constructed(monkeypatch: pytest.MonkeyPatch) -> None:
-    import the_front_office.adapters.inbound.web.data as mod
-
-    built: list[bool] = []
-    monkeypatch.setattr(mod, "NBAStatsClient", lambda: built.append(True))
-    data.nba_client()
-    assert built == [True]
-
-
-def test_roster_rows_shape_is_shared_across_sports() -> None:
-    """The team view renders whatever the provider returns, so the columns must
-    agree between sports."""
-    import inspect
-
-    from the_front_office.adapters.outbound.sports.nfl.sleeper import SleeperNFLProvider
-
-    for provider in (YahooNBAProvider, SleeperNFLProvider):
-        assert "roster_rows" in dir(provider)
-        sig: Any = inspect.signature(provider.roster_rows)
-        assert "league_id" in sig.parameters

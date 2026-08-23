@@ -1,0 +1,109 @@
+@import "tailwindcss";
+@import "./themes/themes.css";
+
+/* Dark mode is a class on <html>, set by the pre-paint script in index.html and
+   by useTheme. The same class drives `color-scheme` below, which is what selects
+   the arm of every `light-dark()` token — so the utility variant and the token
+   values can never disagree about which mode is active. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Three roles, deliberately distinct at a glance: Archivo carries names and
+     figures at display sizes, Instrument Sans carries prose, and Geist Mono
+     carries every number, label and table header. Almost all of this UI is
+     numeric, so the mono is load-bearing rather than decorative. */
+  --font-display: "Archivo", system-ui, sans-serif;
+  --font-sans: "Instrument Sans", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Default palette. Monochrome by construction: `primary` is the foreground,
+     so a primary button is black on white and white on black, and the blue is
+     spent only on focus rings and links. With this much data on screen, colour
+     that carries no meaning is noise — every hue below either encodes status or
+     marks focus. */
+  --color-background: light-dark(#ffffff, #000000);
+  --color-foreground: light-dark(#171717, #ededed);
+  --color-card: light-dark(#fafafa, #0a0a0a);
+  --color-card-foreground: light-dark(#171717, #ededed);
+  --color-popover: light-dark(#ffffff, #0a0a0a);
+  --color-popover-foreground: light-dark(#171717, #ededed);
+  --color-primary: light-dark(#171717, #ededed);
+  --color-primary-foreground: light-dark(#ffffff, #000000);
+  --color-secondary: light-dark(#f2f2f2, #1a1a1a);
+  --color-secondary-foreground: light-dark(#171717, #ededed);
+  --color-muted: light-dark(#fafafa, #111111);
+  --color-muted-foreground: light-dark(#666666, #a1a1a1);
+  --color-accent: light-dark(#ebebeb, #242424);
+  --color-accent-foreground: light-dark(#0070f3, #52a8ff);
+  --color-destructive: light-dark(#c5292e, #ff6369);
+  --color-destructive-foreground: light-dark(#ffffff, #000000);
+  --color-border: light-dark(#eaeaea, #2e2e2e);
+  --color-input: light-dark(#d4d4d4, #454545);
+  --color-ring: light-dark(#0070f3, #52a8ff);
+
+  /* Status colours are SHARED by every palette rather than re-themed, and are
+     picked to survive red-green colour blindness: `ok` is a cool bluish-green
+     and `destructive` stays a warm red, so pass-versus-fail reads as a warm/cool
+     contrast rather than a hue difference that CVD collapses. `warn` amber sits
+     between them by lightness. Every value clears WCAG AA against its own ground.
+     Alternate palettes deliberately do not override these. */
+  --color-ok: light-dark(#00745a, #2dd4a7);
+  --color-warn: light-dark(#946300, #e3b341);
+
+  /* Fixture and matchup difficulty, 1 (easiest) to 5 (hardest). The obvious
+     ramp is green to red, which is exactly the axis CVD flattens — so lightness
+     falls monotonically across the five as well, and every component that uses
+     these also prints the number. The colour is reinforcement, never the only
+     carrier of the value. */
+  --color-fdr-1: light-dark(#0b5d4a, #0b5d4a);
+  --color-fdr-2: light-dark(#3d8a6b, #35785d);
+  --color-fdr-3: light-dark(#8b8f7e, #6f7364);
+  --color-fdr-4: light-dark(#b8724a, #9c5c38);
+  --color-fdr-5: light-dark(#a83228, #8f2a21);
+  --color-fdr-1-foreground: #eafff8;
+  --color-fdr-2-foreground: #f2fffb;
+  --color-fdr-3-foreground: #fbfbf7;
+  --color-fdr-4-foreground: #fff6f0;
+  --color-fdr-5-foreground: #fff0ee;
+
+  --radius-lg: 0.75rem;
+  --radius-md: 0.5rem;
+  --radius-sm: 0.375rem;
+
+  --container-page: 96rem;
+}
+
+/* The load-bearing line for theming. `color-scheme` tells the browser to render
+   native controls, scrollbars and focus rings in the matching mode, and selects
+   which arm every `light-dark()` token resolves to — so flipping one class
+   re-themes everything with no JavaScript recolouring. */
+:root { color-scheme: light; }
+.dark { color-scheme: dark; }
+
+/* Suppress easing for the single frame a palette or mode swap paints in.
+   Without it, ~40 tokens ease independently and the swap reads as a smear. */
+.theme-switching, .theme-switching * {
+  transition: none !important;
+  animation: none !important;
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Digits line up in columns nearly everywhere in this app, so tabular figures
+   are the default for the mono face rather than something each table opts into. */
+.font-mono, code, kbd, samp, pre { font-variant-numeric: tabular-nums; }
+
+:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

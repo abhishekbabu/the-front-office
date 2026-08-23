@@ -64,6 +64,46 @@ jobs:
       - name: Tests and coverage floor
         run: uvx --from rust-just just coverage-gate
 
+  web:
+    name: web
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v4
+        with:
+          # Read from web/package.json's packageManager field, so the version
+          # here cannot drift from the one the lockfile was resolved with.
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: web/.node-version
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        # --frozen-lockfile fails if the lockfile is stale relative to
+        # package.json, matching what `uv sync --locked` does for Python.
+        run: pnpm install --frozen-lockfile
+        working-directory: web
+
+      - name: Type check
+        run: pnpm exec tsc -b
+        working-directory: web
+
+      - name: Tests
+        run: pnpm test
+        working-directory: web
+
+      - name: Build
+        # Catches anything only the production build sees — a bad import path,
+        # a Tailwind class that resolves to nothing.
+        run: pnpm build
+        working-directory: web
+
   hygiene:
     name: hygiene
     runs-on: ubuntu-latest

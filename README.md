@@ -28,6 +28,11 @@ bootstrap.py  the composition root: the only module naming a concrete
 No adapter is named anywhere in `domain/` or `application/`; the engines take an
 `AnalysisModel` port rather than a vendor client.
 
+**Inbound adapters** — a slash-command CLI, and a FastAPI service that returns the
+domain models directly: `ScoutReport` *is* a route's response schema, so there is no
+second representation of a report to keep in step. It also serves the built UI from
+`web/dist`, so one process on one port covers both.
+
 **Outbound adapters** (`src/the_front_office/adapters/outbound/`)
 - **Yahoo Fantasy** via `yahoofantasy` — OAuth2, rosters, matchups, and hand-built player queries that sort free agents by an individual stat category
 - **NBA.com** via `nba_api` — one full-season `LeagueGameLog` call bucketed by player for recent form (L5/L10/L15), cached in `.nba_cache.json`, with `tenacity` retries classified by error type
@@ -44,8 +49,16 @@ app already does is bridged, so cache hits and retry warnings arrive as events o
 the span that caused them. Without `LOGFIRE_TOKEN` nothing is exported and no
 network call is made.
 
-**Tooling** — `ruff`, `pyrefly`, `pytest`, `pre-commit`, `just`. Every recipe and
-hook runs tools through `uv run`, so the same commands work on macOS, Linux and Windows.
+**Web UI** (`web/`) — React 19, Vite, Tailwind v4 and Radix primitives, served by
+FastAPI. Colour is themed in two orthogonal dimensions: a palette (`data-theme` on
+`<html>`) and light/dark (`color-scheme`, driven by a class), so every token is a
+single `light-dark(light, dark)` declaration and no component branches on either.
+Status colours are shared across palettes rather than re-themed, and chosen so
+pass/fail reads as a warm/cool contrast that survives red-green colour blindness.
+
+**Tooling** — `ruff`, `pyrefly`, `pytest`, `pre-commit`, `just` for Python;
+`tsc`, `vitest` and `pnpm` for the UI. Every Python recipe runs through `uv run`,
+so the same commands work on macOS, Linux and Windows.
 
 ## Setup
 
@@ -106,8 +119,15 @@ value fails at startup naming the field, not mid-report.
 ## Usage
 
 ```bash
-just ui     # web UI at http://localhost:8501
+just ui     # build the UI and serve it at http://localhost:8000
 just run    # interactive CLI
+```
+
+For UI work, run the two halves separately so the front end hot-reloads:
+
+```bash
+just api    # FastAPI on :8000, reloading on change
+just web    # Vite on :5173, proxying /api to the above
 ```
 
 First run opens a browser for the Yahoo OAuth2 handshake; the token is cached in
@@ -136,7 +156,8 @@ afterwards; press Enter on an empty line to move on.
 
 ```bash
 just doctor             # what this machine is configured for; flags typo'd .env keys
-just check              # lint + format + types + tests + 95% coverage floor
+just check              # lint + format + types + tests + 95% coverage floor (Python)
+just check-web          # typecheck + tests (UI)
 just fmt                # auto-fix lint findings, then format
 just test               # hermetic suite (args pass through: just test "-k scout")
 just coverage           # coverage report
@@ -155,7 +176,9 @@ too — one source of truth, discovered by each tool at the path it expects.
 CI runs the same `just` recipes on Linux, macOS and Windows for every push and
 PR, on the Python version `.python-version` pins plus one newer leg, with
 `uv sync --locked` so a dependency change that skipped `just lock` cannot land.
-If `just check` passes locally it passes in CI.
+A separate `web` job typechecks, tests and builds the UI with
+`pnpm install --frozen-lockfile`, the same guarantee on that side.
+If `just check` and `just check-web` pass locally they pass in CI.
 
 Tests are hermetic — no network, no credentials, no cache file on disk. Engines
 take their collaborators by keyword, so `tests/conftest.py` fakes stand in for
@@ -174,6 +197,7 @@ the-front-office/
 │   │   └── outbound/      # driven: llm/, platforms/, sports/
 │   ├── bootstrap.py       # composition root: sport registry + engine wiring
 │   └── config/            # validated settings + prompt templates
+├── web/                   # React UI: src/{components,panels,themes,lib}
 ├── tests/                 # hermetic pytest suite
 ├── AGENTS.md              # agent-facing rules (CLAUDE.md symlinks to it)
 ├── .agents/skills/        # shared agent skills

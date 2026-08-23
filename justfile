@@ -84,9 +84,30 @@ hooks:
 run:
     uv run python -m the_front_office
 
-# Start the web UI (http://localhost:8501)
-ui:
-    uv run streamlit run src/the_front_office/adapters/inbound/web/app.py
+# Build the UI and serve everything from one process (http://localhost:8000)
+ui: web-build
+    uv run python -m the_front_office.adapters.inbound.web.api
+
+# API only, reloading on change. Pair with `just web` in a second terminal.
+api:
+    uv run uvicorn the_front_office.adapters.inbound.web.api:app --reload --port 8000
+
+# UI dev server with hot reload (http://localhost:5173), proxying /api to `just api`
+web:
+    cd web && pnpm dev
+
+# Install front-end dependencies
+web-install:
+    cd web && pnpm install
+
+# Compile the UI into web/dist, which `ui` then serves
+web-build: web-install
+    cd web && pnpm build
+
+# Typecheck and test the front end
+check-web: web-install
+    cd web && pnpm exec tsc -b
+    cd web && pnpm test
 
 # ============================================================================
 # Housekeeping

@@ -97,11 +97,19 @@ scripts in `scripts/` instead.
 **Secrets.** Never commit `.env`, `.yahoofantasy`, or `.nba_cache.json`. Read
 config through the `settings` singleton, never `os.getenv` at a call site.
 
-**UI.** Streamlit reruns the whole script on every interaction, so anything
-expensive or side-effecting must be cached (`st.cache_resource` for clients,
-`st.cache_data` for values). Put computation in the web adapter's `data.py`
-where it is testable; the app module only lays out widgets. Keep `main()` behind the
-`__name__ == "__main__"` guard so the module stays importable.
+**UI.** The API returns the domain models themselves — never define a parallel
+response type for something `domain/models.py` already models, or the two drift.
+Provider access lives in the web adapter's `data.py`, free of any web framework,
+so it is testable with no server running.
+
+In `web/`, colour comes only from semantic tokens (`bg-card`, `text-muted-foreground`,
+`border-border`) — never a raw Tailwind palette utility, which cannot follow a
+palette change. Every token is one `light-dark(light, dark)` pair; adding a palette
+is a `themes.css` block plus a `registry.ts` entry and no component change. Status
+colours (`ok`, `warn`, `destructive`) and the difficulty ramp are shared across
+palettes deliberately: they encode meaning, are tuned for colour-blind legibility,
+and every value clears WCAG AA against its own ground. Anything that encodes state
+in colour must also carry it in text or shape.
 
 **Extract on the second instance.** This app is deliberately shaped so sports
 and platforms differ only where they genuinely differ; everything else is
@@ -156,7 +164,9 @@ New code needs tests in the same commit. Coverage is gated at 95%.
 ## CI
 
 CI runs the same `just` recipes you run locally on Linux, macOS and Windows, so
-adding a gate to the `justfile` extends CI too. `.python-version` pins 3.10 —
+adding a gate to the `justfile` extends CI too. The UI is a separate `web` job:
+`just check-web` locally, `pnpm install --frozen-lockfile` there, so a
+`package.json` change that skipped a lockfile update cannot land. `.python-version` pins 3.10 —
 the floor in `requires-python`, and what pyrefly and ruff target — with one
 extra leg on 3.13 for forward compatibility.
 
