@@ -30,6 +30,17 @@ def _print_help(entries: list[SportEntry]) -> None:
     print()
 
 
+def _match_sport(entries: list[SportEntry], token: str) -> SportEntry | None:
+    """The entry in `entries` a user's sport token names, if any.
+
+    Matched within the list passed in rather than through the registry: the
+    caller's list is the authority on what is available, and consulting the
+    registry first lets the two disagree.
+    """
+    key = token.lower().lstrip("/")
+    return next((entry for entry in entries if entry.sport == key), None)
+
+
 def _resolve_sports(args: list[str], entries: list[SportEntry]) -> list[SportEntry]:
     """Which sports a command should run for.
 
@@ -39,14 +50,10 @@ def _resolve_sports(args: list[str], entries: list[SportEntry]) -> list[SportEnt
     if not args:
         return entries
 
-    key = args[0].lower().lstrip("/")
-    # Match within the configured set first; the registry is only consulted to
-    # tell an unknown sport apart from an unconfigured one.
-    for entry in entries:
-        if entry.sport == key:
-            return [entry]
+    if (chosen := _match_sport(entries, args[0])) is not None:
+        return [chosen]
 
-    known = find(key)
+    known = find(args[0])
     if known is None:
         print(f"  ❓ Unknown sport: {args[0]}")
     else:
@@ -117,13 +124,8 @@ def _trade_sport(tradeable: list[SportEntry], args: list[str]) -> tuple[SportEnt
     every sport is meaningless. With one trade-capable sport there is nothing to
     disambiguate; with several the sport must be given rather than guessed.
     """
-    # Matched within the list passed in, not via the registry: the two can
-    # disagree, and the caller's list is the authority on what is available.
-    if args:
-        key = args[0].lower().lstrip("/")
-        for entry in tradeable:
-            if entry.sport == key:
-                return entry, args[1:]
+    if args and (chosen := _match_sport(tradeable, args[0])) is not None:
+        return chosen, args[1:]
 
     if len(tradeable) == 1:
         return tradeable[0], args

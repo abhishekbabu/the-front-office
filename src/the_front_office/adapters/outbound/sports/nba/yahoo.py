@@ -20,9 +20,10 @@ from the_front_office.adapters.outbound.platforms.nba_stats.client import NBASta
 from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
 from the_front_office.adapters.outbound.sports.nba.context import PlayerContextBuilder
 from the_front_office.adapters.outbound.sports.nba.projections import ProjectionIndex
+from the_front_office.adapters.outbound.sports.trades import resolve_sides
 from the_front_office.config.constants import NBA_SCOUT_PROMPT, NBA_TRADE_PROMPT
 from the_front_office.config.settings import settings
-from the_front_office.domain.errors import FrontOfficeError, LeagueNotFoundError, PlayerNotFoundError
+from the_front_office.domain.errors import FrontOfficeError, LeagueNotFoundError
 from the_front_office.domain.models import SportContext, TradeProposal
 from the_front_office.domain.ports import LeagueRef
 
@@ -102,7 +103,7 @@ class YahooNBAProvider:
         """Price both sides of a trade against the current roster."""
         self._select_into(league_id)
 
-        giving, receiving = self._resolve_sides(proposal)
+        giving, receiving = resolve_sides(proposal, self._find_player)
         giving_str = self.context_builder.build_context_for_players(giving)
         receiving_str = self.context_builder.build_context_for_players(receiving)
 
@@ -127,45 +128,22 @@ class YahooNBAProvider:
         )
         return SportContext(prompt=prompt, situation=matchup.context)
 
-    def _resolve_sides(self, proposal: TradeProposal) -> tuple[list[Player], list[Player]]:
-        """Resolve both sides, reporting every failure together.
+    def _find_player(self, name: str) -> Player | None:
+        """The Yahoo player a name refers to, or None."""
+        players = self.yahoo.search_players(name)
 
-        Raises:
-            PlayerNotFoundError: naming every unresolved player, so the user
-                fixes one message rather than finding them one re-run at a time.
-                Silently dropping one would evaluate a different trade than they
-                described.
-        """
-        giving, missing_giving = self._resolve_side(proposal.giving)
-        receiving, missing_receiving = self._resolve_side(proposal.receiving)
+        if not players:
+            # The surname alone tolerates casing and first-name spelling
+            # differences ("Lebron" vs "LeBron").
+            parts = name.split()
+            if len(parts) > 1:
+                players = self.yahoo.search_players(parts[-1])
 
-        unresolved = missing_giving + missing_receiving
-        if unresolved:
-            raise PlayerNotFoundError(unresolved)
-        return giving, receiving
-
-    def _resolve_side(self, player_names: list[str]) -> tuple[list[Player], list[str]]:
-        """Resolve one side, returning what matched and what did not."""
-        resolved: list[Player] = []
-        unresolved: list[str] = []
-        for name in player_names:
-            clean_name = name.strip()
-            players = self.yahoo.search_players(clean_name)
-
-            if not players:
-                # Fall back to the surname alone, which tolerates casing and
-                # first-name spelling differences ("Lebron" vs "LeBron").
-                parts = clean_name.split()
-                if len(parts) > 1:
-                    players = self.yahoo.search_players(parts[-1])
-
-            if players:
-                if len(players) > 1:
-                    logger.warning(f"{len(players)} matches for {clean_name!r}; using {players[0].name.full!r}")
-                resolved.append(players[0])
-            else:
-                unresolved.append(clean_name)
-        return resolved, unresolved
+        if not players:
+            return None
+        if len(players) > 1:
+            logger.warning(f"{len(players)} matches for {name!r}; using {players[0].name.full!r}")
+        return players[0]
 
     def roster_rows(self, league_id: str = "") -> list[dict[str, str]]:
         """The user's roster as table rows, for a team view."""

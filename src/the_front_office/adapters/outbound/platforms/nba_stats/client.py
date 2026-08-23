@@ -14,15 +14,8 @@ from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 import pandas as pd
-import requests
 from nba_api.stats.endpoints import leaguegamelog, scheduleleaguev2  # type: ignore[import-untyped]
-from tenacity import (
-    Retrying,
-    before_sleep_log,
-    retry_if_exception,
-    stop_after_attempt,
-    wait_exponential,
-)
+from tenacity import Retrying
 
 from the_front_office.adapters.outbound.platforms.nba_stats.stats import extract_nine_cat
 from the_front_office.adapters.outbound.platforms.nba_stats.types import (
@@ -33,6 +26,7 @@ from the_front_office.adapters.outbound.platforms.nba_stats.types import (
     PlayerStats,
     ScheduleCache,
 )
+from the_front_office.adapters.outbound.platforms.retry import build_retry, is_transient
 from the_front_office.config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -45,52 +39,30 @@ RETRY_MULTIPLIER = 5.0
 RETRY_MIN_WAIT = 5.0
 RETRY_MAX_WAIT = 40.0
 
+
 # nba_api wraps requests; these are the transient failures worth a second try.
 # stats.nba.com rate-limits by stalling the connection, so timeouts dominate.
-_RETRYABLE_NETWORK_EXCEPTIONS = (
-    requests.exceptions.Timeout,
-    requests.exceptions.ConnectionError,
-    requests.exceptions.ChunkedEncodingError,
-)
-
-
 def _is_nba_retryable_error(exc: BaseException) -> bool:
-    """Decide whether an nba_api failure is transient.
+    """Whether an nba_api failure is transient.
 
-    Retries on: network timeouts/connection drops, 5xx, and the invalid-JSON
-    response nba_api raises when stats.nba.com serves a rate-limit stub.
-
-    Does NOT retry on: 4xx client errors, or the KeyError/TypeError that means
-    the response shape changed — retrying those just burns the rate-limit budget
-    on a request that will fail identically.
+    Adds the bare Exception nba_api raises for a non-JSON body, which is what a
+    throttled response from stats.nba.com looks like.
     """
-    if isinstance(exc, _RETRYABLE_NETWORK_EXCEPTIONS):
+    if is_transient(exc):
         return True
-    if isinstance(exc, requests.exceptions.HTTPError):
-        response = exc.response
-        return response is not None and response.status_code >= 500
-    # nba_api raises a bare Exception for a non-JSON body, which is what a
-    # throttled response looks like.
     return type(exc) is Exception and "InvalidResponse" in str(exc)
 
 
 def _nba_retry() -> Retrying:
-    """Build a tenacity Retrying instance for nba_api calls."""
-    return Retrying(
-        stop=stop_after_attempt(RETRY_MAX_ATTEMPTS),
-        wait=wait_exponential(
-            multiplier=RETRY_MULTIPLIER,
-            min=RETRY_MIN_WAIT,
-            max=RETRY_MAX_WAIT,
-        ),
-        retry=retry_if_exception(_is_nba_retryable_error),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
-        reraise=True,
+    return build_retry(
+        attempts=RETRY_MAX_ATTEMPTS,
+        multiplier=RETRY_MULTIPLIER,
+        min_wait=RETRY_MIN_WAIT,
+        max_wait=RETRY_MAX_WAIT,
+        predicate=_is_nba_retryable_error,
     )
 
 
-# The NBA schedules by US Pacific time, so the boundaries are anchored there
-# rather than to the machine's own zone.
 PACIFIC = ZoneInfo("America/Los_Angeles")
 
 PLAYER_STATS_INVALIDATION_TIMES = [

@@ -16,15 +16,10 @@ from pathlib import Path
 from typing import Any
 
 import requests
-from tenacity import (
-    Retrying,
-    before_sleep_log,
-    retry_if_exception,
-    stop_after_attempt,
-    wait_exponential,
-)
+from tenacity import Retrying
 
 from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
+from the_front_office.adapters.outbound.platforms.retry import build_retry, is_transient
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
     GameProjection,
     PlayerMeta,
@@ -63,37 +58,20 @@ STATE_TTL = timedelta(hours=1)
 
 RETRY_MAX_ATTEMPTS = 3
 
-_RETRYABLE_NETWORK_EXCEPTIONS = (
-    requests.exceptions.Timeout,
-    requests.exceptions.ConnectionError,
-    requests.exceptions.ChunkedEncodingError,
-)
+# Sleeper documents 429 for rate limiting; everything else transient is common.
+RETRYABLE_STATUS = frozenset({429})
 
 
 def _is_retryable(exc: BaseException) -> bool:
     """Whether a Sleeper failure is transient.
 
-    Retries network errors, 5xx, and 429 (Sleeper's documented rate-limit code).
     A 404 means the league or user does not exist and will never succeed.
     """
-    if isinstance(exc, _RETRYABLE_NETWORK_EXCEPTIONS):
-        return True
-    if isinstance(exc, requests.exceptions.HTTPError):
-        response = exc.response
-        if response is None:
-            return False
-        return response.status_code == 429 or response.status_code >= 500
-    return False
+    return is_transient(exc, RETRYABLE_STATUS)
 
 
 def _retry() -> Retrying:
-    return Retrying(
-        stop=stop_after_attempt(RETRY_MAX_ATTEMPTS),
-        wait=wait_exponential(multiplier=2, min=2, max=20),
-        retry=retry_if_exception(_is_retryable),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
-        reraise=True,
-    )
+    return build_retry(attempts=RETRY_MAX_ATTEMPTS, multiplier=2, min_wait=2, max_wait=20, predicate=_is_retryable)
 
 
 class SleeperClient:

@@ -20,8 +20,10 @@ def _provider(yahoo: FakeYahoo) -> YahooNBAProvider:
 
 
 def _resolve(yahoo: FakeYahoo, names: list[str]) -> Any:
-    """Resolve one side through the pair-resolving entry point."""
-    giving, _ = _provider(yahoo)._resolve_sides(TradeProposal(giving=names, receiving=[]))
+    """Resolve one side through the shared trade-resolution policy."""
+    from the_front_office.adapters.outbound.sports.trades import resolve_sides
+
+    giving, _ = resolve_sides(TradeProposal(giving=names, receiving=[]), _provider(yahoo)._find_player)
     return giving
 
 
@@ -55,9 +57,11 @@ def test_an_unresolved_name_raises_rather_than_being_dropped() -> None:
 
 def test_every_unresolved_name_is_reported_at_once() -> None:
     """Across both sides, so one message covers the whole trade."""
+    from the_front_office.adapters.outbound.sports.trades import resolve_sides
+
     proposal = TradeProposal(giving=["Ghost One"], receiving=["Ghost Two"])
     with pytest.raises(PlayerNotFoundError) as excinfo:
-        _provider(FakeYahoo())._resolve_sides(proposal)
+        resolve_sides(proposal, _provider(FakeYahoo())._find_player)
     assert excinfo.value.names == ["Ghost One", "Ghost Two"]
 
 

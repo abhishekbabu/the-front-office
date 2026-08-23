@@ -91,6 +91,22 @@ expensive or side-effecting must be cached (`st.cache_resource` for clients,
 where it is testable; the app module only lays out widgets. Keep `main()` behind the
 `__name__ == "__main__"` guard so the module stays importable.
 
+**Extract on the second instance.** This app is deliberately shaped so sports
+and platforms differ only where they genuinely differ; everything else is
+shared. When you find yourself writing something a second time, extract it then
+— not on the third. Existing seams:
+
+- `adapters/outbound/platforms/` — infrastructure every platform needs:
+  `retry.py` (transient-failure policy), `cache.py` (TTL'd disk cache).
+- `adapters/outbound/sports/` — policy every sport needs: `names.py`
+  (cross-platform player matching), `trades.py` (resolving a proposal).
+- `domain/` — rules that hold regardless of sport or platform.
+
+**Prefer composition to a base class.** The outbound clients share behaviours,
+not a shape: one does raw HTTP and three go through different vendor SDKs, and
+each caches differently. Shared behaviour is a function you call or a
+collaborator you are given, so a client adopts only the parts that apply.
+
 **Layering.** Dependencies point inward only: `domain` imports nothing else in
 the package; `application` imports only `domain`; adapters implement ports;
 `bootstrap.py` is the one module allowed to name a concrete implementation.

@@ -24,9 +24,10 @@ from the_front_office.adapters.outbound.sports.nfl.lineup import (
     lineup_points,
     optimal_lineup,
 )
+from the_front_office.adapters.outbound.sports.trades import resolve_sides
 from the_front_office.config.constants import NFL_SCOUT_PROMPT, NFL_TRADE_PROMPT
 from the_front_office.config.settings import settings
-from the_front_office.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError
+from the_front_office.domain.errors import LeagueNotFoundError, SleeperAPIError
 from the_front_office.domain.models import SportContext, TradeProposal
 from the_front_office.domain.ports import LeagueRef
 
@@ -123,7 +124,7 @@ class SleeperNFLProvider:
         players = self.client.get_players()
         index = self._name_index(projections, players)
 
-        giving, receiving = self._resolve_sides(proposal, index)
+        giving, receiving = resolve_sides(proposal, index.lookup)
 
         rostered = [self._projection_for(pid, projections, players) for pid in roster.player_ids]
         roster_lines = {
@@ -160,34 +161,6 @@ class SleeperNFLProvider:
             if name and player_id not in projections and meta.get("position"):
                 index.add(name, SleeperNFLProvider._zero_projection(player_id, meta))
         return index
-
-    @staticmethod
-    def _resolve_sides(
-        proposal: TradeProposal, index: NameIndex[WeeklyProjection]
-    ) -> tuple[list[WeeklyProjection], list[WeeklyProjection]]:
-        """Resolve both sides, reporting every failure together.
-
-        Raises:
-            PlayerNotFoundError: naming every unresolved player, so the user
-                fixes one message rather than finding them one re-run at a time.
-                Silently dropping one would evaluate a different trade than they
-                described.
-        """
-        sides: list[list[WeeklyProjection]] = []
-        unresolved: list[str] = []
-        for names in (proposal.giving, proposal.receiving):
-            resolved = []
-            for name in names:
-                match = index.lookup(name.strip())
-                if match:
-                    resolved.append(match)
-                else:
-                    unresolved.append(name.strip())
-            sides.append(resolved)
-
-        if unresolved:
-            raise PlayerNotFoundError(unresolved)
-        return sides[0], sides[1]
 
     # ── context ─────────────────────────────────────────────────────
 

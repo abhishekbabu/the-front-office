@@ -87,6 +87,21 @@ name (`adapters/outbound/sports/nba/projections.py` is the worked example):
 - An unmatched player carries no data rather than borrowing someone else's.
 - Measure the match rate against live data before trusting it.
 
+## Reuse before you write
+
+Check these before implementing anything a sport "needs":
+
+| Need | Use |
+|------|-----|
+| Match a player name across platforms | `sports/names.py` — `NameIndex`, `normalise_name` |
+| Resolve the players in a trade | `sports/trades.py` — `resolve_sides` |
+| Retry a flaky platform call | `platforms/retry.py` — `build_retry`, `is_transient` |
+| Cache a platform response | `platforms/cache.py` — `JsonDiskCache` |
+
+If a second sport needs something the first already does, extract it into one of
+those modules rather than copying it. Extract on the second instance, not the
+third.
+
 ## Trades
 
 Trade support is separate: implement `TradeProvider.build_trade_context` and set
