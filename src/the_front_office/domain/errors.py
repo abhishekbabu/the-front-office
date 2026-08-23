@@ -27,26 +27,25 @@ class YahooAPIError(FrontOfficeError):
 
 
 class YahooAuthError(FrontOfficeError):
-    """Yahoo accepted the token and refused the request.
+    """Yahoo authenticated the token and refused the Fantasy Sports API.
 
-    Distinct from a bad token: the handshake succeeded, so re-authorising alone
-    changes nothing. It means the developer app itself was never granted the
-    Fantasy Sports scope, and every endpoint refuses identically.
+    Not a credential problem and not a scope problem, both of which look
+    identical from here. Yahoo reviews each application before granting access
+    to this API, and an unapproved one gets a valid token that every Fantasy
+    endpoint refuses — including endpoints needing no user permission at all,
+    which is what distinguishes it from a consent that went wrong.
     """
 
     def __init__(self) -> None:
         super().__init__(
-            "Yahoo accepted the token and granted it nothing — every endpoint returns 403, "
-            "including ones needing no permission at all, and the authorisation completes "
-            "without ever showing a consent screen. That means the app itself carries no API "
-            "permission, whatever the developer console displays. In order: (1) at "
-            "https://developer.yahoo.com/apps/ press Update on the app and confirm Fantasy "
-            "Sports → Read persists across a reload; (2) remove the app under Apps connected "
-            "to your account at https://login.yahoo.com/account/security so the next "
-            "authorisation has no stored grant to reuse; (3) failing both, create a new app "
-            "with the permission set at creation — a permission added to an existing Yahoo "
-            "app is unreliable — and put its Client ID and Secret in Settings. Then run "
-            "`just yahoo-login --force`."
+            "Yahoo refused the Fantasy Sports API for this application. The token is valid — "
+            "an invalid one returns 401, not 403 — and even endpoints needing no user "
+            "permission are refused, so this is about the app rather than the login. Yahoo "
+            "reviews every application before granting access to this API; creating the app "
+            "and ticking Fantasy Sports → Read is necessary but not sufficient. Apply at "
+            "https://sports.yahoo.com/developer/access/ (personal, single-league use is an "
+            "accepted category) and run `just yahoo-login --force` once approved. NFL and FPL "
+            "are unaffected."
         )
 
 

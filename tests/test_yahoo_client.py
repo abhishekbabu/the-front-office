@@ -425,7 +425,7 @@ def test_a_403_names_the_permission_that_is_actually_missing() -> None:
     error = translate(_http(403))
 
     assert isinstance(error, YahooAuthError)
-    assert "granted it nothing" in str(error)
+    assert "reviews every application" in str(error)
     assert "yahoo-login --force" in str(error)
 
 
@@ -527,7 +527,7 @@ def test_a_token_that_authenticates_but_grants_nothing_is_caught(
 
     monkeypatch.setattr(YahooClient, "get_context", classmethod(lambda cls: SimpleNamespace(make_request=_refuse)))
 
-    with pytest.raises(YahooAuthError, match="granted it nothing"):
+    with pytest.raises(YahooAuthError, match="reviews every application"):
         YahooClient.verify()
 
 

@@ -156,7 +156,15 @@ authenticates and carries no grant, so every endpoint returns 403 instead of
 callback is served with — that is expected, and Yahoo only accepts an `https`
 redirect.
 
-Your Yahoo app must have **API Permissions → Fantasy Sports → Read**, *saved*.
+**Yahoo reviews every application before granting Fantasy Sports API access.**
+Creating the app and ticking Fantasy Sports → Read is necessary but not
+sufficient; apply at [sports.yahoo.com/developer/access](https://sports.yahoo.com/developer/access/),
+where personal single-league use is an accepted category. Until approved, the
+login succeeds and every Fantasy endpoint returns 403 — including ones needing
+no user permission, which is how this is told apart from a consent problem. An
+invalid token would return 401.
+
+Your Yahoo app must also have **API Permissions → Fantasy Sports → Read**, *saved*.
 Yahoo fixes a token's grant at the moment you authorise, from whatever
 permissions were saved then — so a token minted before that is accepted and
 permitted nothing, answering 403 (not 401) on every endpoint including ones
