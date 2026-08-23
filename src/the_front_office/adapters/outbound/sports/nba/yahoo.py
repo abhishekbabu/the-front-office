@@ -16,9 +16,9 @@ if TYPE_CHECKING:
 
 from yahoofantasy import League, Player  # type: ignore[import-untyped]
 
-from the_front_office.adapters.outbound.platforms.nba_stats.client import NBAStatsClient
 from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
 from the_front_office.adapters.outbound.sports.nba.context import PlayerContextBuilder
+from the_front_office.adapters.outbound.sports.nba.form import SleeperNBAForm
 from the_front_office.adapters.outbound.sports.nba.projections import ProjectionIndex
 from the_front_office.adapters.outbound.sports.trades import resolve_sides
 from the_front_office.config.constants import NBA_SCOUT_PROMPT, NBA_TRADE_PROMPT
@@ -66,7 +66,7 @@ bad line rather than an absent one."""
 
 
 def _recent(stats: object, key: str) -> str:
-    """One recent-form figure, or a dash when nba_stats has nothing.
+    """One recent-form figure, or a dash when there is no line to show.
 
     Out of season, and for a player who has not featured, there is no line to
     show — and a zero would read as a bad one rather than an absent one.
@@ -95,19 +95,19 @@ class YahooNBAProvider:
         league: League,
         *,
         all_leagues: list[League] | None = None,
-        nba: NBAStatsClient | None = None,
+        nba: SleeperNBAForm | None = None,
         yahoo: YahooClient | None = None,
         sleeper: "SleeperClient | None" = None,
     ):
         """Collaborators default to real clients; pass them in to test or reuse."""
         self.league = league
         self._all_leagues = all_leagues or [league]
-        self.nba = nba or NBAStatsClient()
+        self.nba = nba or SleeperNBAForm()
         self.yahoo = yahoo or YahooClient(league)
         self.context_builder = PlayerContextBuilder(self.nba)
-        # Sleeper is the projection source. It is separate from the Yahoo league
-        # and the nba_api box scores: Yahoo says who is on the roster, nba_api
-        # says what they have done, Sleeper says what they are expected to do.
+        # Two questions, one platform: Yahoo says who is on the roster, and
+        # Sleeper says both what they have been doing and what they are
+        # expected to do. That used to be three platforms and two name joins.
         self._sleeper = sleeper
 
     def list_leagues(self) -> list[LeagueRef]:
@@ -262,7 +262,7 @@ class YahooNBAProvider:
         return players[0]
 
     def roster(self, league_id: str = "") -> list[PlayerCard]:
-        """The user's roster, with recent form where nba_stats has it."""
+        """The user's roster, with recent form where Sleeper has it."""
         return self._cards(self.yahoo.get_user_team().players())
 
     def teams(self, league_id: str) -> list[TeamRef]:
@@ -345,7 +345,7 @@ class YahooNBAProvider:
         return cards
 
     def player(self, league_id: str, player_id: str) -> PlayerDetail:
-        """One player, with their last-fifteen line where nba_stats has it."""
+        """One player, with their last-fifteen line where Sleeper has it."""
         player = next(
             (p for p in self.yahoo.get_user_team().players() if str(p.player_key) == player_id),
             None,

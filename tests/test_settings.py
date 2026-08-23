@@ -15,7 +15,6 @@ def test_defaults_match_the_documented_values() -> None:
     s = _settings()
     assert s.yahoo_max_weekly_adds == 3
     assert s.log_level == "INFO"
-    assert s.nba_api_delay == 4.0
     assert s.yahoo_redirect_uri == "https://localhost:8080"
 
 
@@ -46,7 +45,7 @@ def test_missing_credentials_are_none_not_crashes() -> None:
     assert s.yahoo_client_id is None
 
 
-def test_zero_api_delay_is_allowed_but_negative_is_not() -> None:
-    assert _settings(nba_api_delay=0.0).nba_api_delay == 0.0
+def test_a_negative_add_budget_is_refused() -> None:
+    assert _settings(yahoo_max_weekly_adds=0).yahoo_max_weekly_adds == 0
     with pytest.raises(ValidationError):
-        _settings(nba_api_delay=-1.0)
+        _settings(yahoo_max_weekly_adds=-1)

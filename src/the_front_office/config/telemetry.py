@@ -1,7 +1,7 @@
 """OpenTelemetry tracing, exported to Logfire.
 
 Everything worth measuring in this app happens inside a library: the outbound
-HTTP to Yahoo, Sleeper, nba_api and FPL, and the Gemini calls. Both have
+HTTP to Yahoo, Sleeper and FPL, and the Gemini calls. Both have
 auto-instrumentation, so tracing is configured here and nowhere else — no span
 is opened by hand, and neither `domain/` nor `application/` learns that
 telemetry exists. That is the whole reason this stays a config concern rather

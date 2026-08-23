@@ -2,8 +2,7 @@ from datetime import date
 
 from yahoofantasy import Player  # type: ignore[import-untyped]
 
-from the_front_office.adapters.outbound.platforms.nba_stats.client import NBAStatsClient
-from the_front_office.adapters.outbound.platforms.nba_stats.types import NineCatStats, PlayerStats
+from the_front_office.adapters.outbound.sports.nba.form import NineCatStats, PlayerStats, SleeperNBAForm
 from the_front_office.adapters.outbound.sports.nba.projections import ProjectionIndex
 
 
@@ -13,7 +12,7 @@ class PlayerContextBuilder:
     by combining Yahoo data with NBA stats and schedule info.
     """
 
-    def __init__(self, nba_client: NBAStatsClient):
+    def __init__(self, nba_client: SleeperNBAForm):
         self.nba = nba_client
 
     def _format_stats(self, stats_dict: PlayerStats) -> str:

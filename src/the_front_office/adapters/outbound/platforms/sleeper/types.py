@@ -225,3 +225,32 @@ class Transaction:
     drops: dict[str, int]
     when: int = 0
     """Epoch milliseconds, which is a number until somebody formats it."""
+
+
+# The nine-category box score, as Sleeper keys it. Absent means zero: no key
+# here is ever published as an explicit 0, and the minimum published value is
+# 1 — verified across a full week of real game logs.
+NBA_STAT_KEYS = ("pts", "reb", "ast", "stl", "blk", "to", "tpm", "fgm", "fga", "ftm", "fta")
+
+# Sleeper files team totals in the same feed as players, under a prefixed id.
+TEAM_ROW_PREFIX = "TEAM_"
+
+
+@dataclass(frozen=True)
+class NBAGameLog:
+    """One player's line from one basketball game.
+
+    Per game rather than per week, which is what makes a "last ten" window
+    mean ten games rather than three weeks of uneven ones.
+    """
+
+    player_id: str
+    date: str
+    """ISO date of the game, and what a run of games is ordered by."""
+
+    opponent: str
+    stats: dict[str, float]
+
+    def get(self, key: str) -> float:
+        """A category, treating an absent key as the nought it stands for."""
+        return self.stats.get(key, 0.0)
