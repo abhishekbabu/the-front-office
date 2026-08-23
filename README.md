@@ -146,6 +146,16 @@ It is separate because the handshake blocks on a browser click, which a web
 request handler cannot do — so every non-interactive path reports a missing
 token instead of trying to obtain one.
 
+The handshake is implemented in
+[`platforms/yahoo/oauth.py`](src/the_front_office/adapters/outbound/platforms/yahoo/oauth.py)
+rather than delegated to the `yahoofantasy` CLI, which exchanges the code
+against `redirect_uri="oob"` after authorising against a different one. RFC 6749
+requires the two to match; Yahoo answers the mismatch with a token that
+authenticates and carries no grant, so every endpoint returns 403 instead of
+401. The browser will warn about the self-signed localhost certificate the
+callback is served with — that is expected, and Yahoo only accepts an `https`
+redirect.
+
 Your Yahoo app must have **API Permissions → Fantasy Sports → Read**, *saved*.
 Yahoo fixes a token's grant at the moment you authorise, from whatever
 permissions were saved then — so a token minted before that is accepted and

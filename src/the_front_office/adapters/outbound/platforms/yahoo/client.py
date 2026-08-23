@@ -1,8 +1,6 @@
 """Yahoo Fantasy league data: rosters, matchups and player queries."""
 
 import logging
-import subprocess
-import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -10,6 +8,7 @@ from typing import Any
 from yahoofantasy import Context, League, Player, Team, Week
 from yahoofantasy.api.parse import as_list, from_response_object, parse_response
 
+from the_front_office.adapters.outbound.platforms.yahoo import oauth
 from the_front_office.adapters.outbound.platforms.yahoo.constants import SCOUT_CATEGORIES, STAT_CATEGORIES
 from the_front_office.adapters.outbound.platforms.yahoo.types import (
     MatchupInfo,
@@ -76,46 +75,20 @@ class YahooClient:
 
     @classmethod
     def login(cls, force: bool = False) -> None:
-        """Run the yahoofantasy OAuth2 login flow.
-
-        Interactive: opens a browser and waits. Only call this from a terminal.
+        """Run the OAuth2 handshake. Interactive: opens a browser and waits.
 
         Raises:
-            YahooLoginRequiredError: the flow could not be completed.
             YahooAPIError: credentials are missing.
+            YahooLoginRequiredError: the handshake did not complete.
         """
         if cls._token_exists() and not force:
             return
 
-        logger.info(f"Starting Yahoo OAuth2 login, redirect URI {settings.yahoo_redirect_uri}")
-
-        # Bound locally so the type checker can see them narrowed to str.
         client_id, client_secret = settings.yahoo_client_id, settings.yahoo_client_secret
         if not client_id or not client_secret:
             raise YahooAPIError("YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET must be set before logging in.")
 
-        python_dir = Path(sys.executable).parent
-        yahoofantasy_bin_path = python_dir / "yahoofantasy.exe"
-        yahoofantasy_bin = str(yahoofantasy_bin_path) if yahoofantasy_bin_path.exists() else "yahoofantasy"
-
-        cmd = [
-            yahoofantasy_bin,
-            "login",
-            "--redirect-uri",
-            settings.yahoo_redirect_uri,
-            "--client-id",
-            client_id,
-            "--client-secret",
-            client_secret,
-            "--listen-port",
-            "8080",
-        ]
-
-        try:
-            subprocess.run(cmd, check=True)
-        except (subprocess.CalledProcessError, OSError) as e:
-            logger.error(f"Yahoo login failed: {e}")
-            raise YahooLoginRequiredError() from e
+        oauth.authorise(client_id, client_secret, settings.yahoo_redirect_uri)
         logger.info("Yahoo login complete; token cached.")
 
     @classmethod

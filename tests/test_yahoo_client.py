@@ -279,10 +279,11 @@ def test_existing_token_skips_the_login_flow(monkeypatch: pytest.MonkeyPatch) ->
     import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
     monkeypatch.setattr(YahooClient, "_token_exists", classmethod(lambda cls: True))
-    ran: list[Any] = []
-    monkeypatch.setattr(mod.subprocess, "run", lambda *a, **k: ran.append(a))
+    monkeypatch.setattr(
+        mod.oauth, "authorise", lambda *a, **k: pytest.fail("must not re-authorise with a token cached")
+    )
+
     YahooClient.login()
-    assert ran == []
 
 
 def test_force_relogins_even_with_a_token(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -291,27 +292,28 @@ def test_force_relogins_even_with_a_token(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(YahooClient, "_token_exists", classmethod(lambda cls: True))
     monkeypatch.setattr(mod.settings, "yahoo_client_id", "id")
     monkeypatch.setattr(mod.settings, "yahoo_client_secret", "secret")
-    calls: list[list[str]] = []
-    monkeypatch.setattr(mod.subprocess, "run", lambda cmd, **k: calls.append(cmd))
+    calls: list[tuple[Any, ...]] = []
+    monkeypatch.setattr(mod.oauth, "authorise", lambda *a, **k: calls.append(a))
+
     YahooClient.login(force=True)
-    assert calls and calls[0][1] == "login"
+
+    assert len(calls) == 1
 
 
-def test_login_passes_credentials_and_redirect_uri(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_login_passes_credentials_and_the_registered_redirect_uri(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The redirect URI has to be the one registered on the Yahoo app, and the
+    same one the token exchange later quotes back."""
     import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
     monkeypatch.setattr(YahooClient, "_token_exists", classmethod(lambda cls: False))
     monkeypatch.setattr(mod.settings, "yahoo_client_id", "the-id")
     monkeypatch.setattr(mod.settings, "yahoo_client_secret", "the-secret")
-    calls: list[list[str]] = []
-    monkeypatch.setattr(mod.subprocess, "run", lambda cmd, **k: calls.append(cmd))
+    calls: list[tuple[Any, ...]] = []
+    monkeypatch.setattr(mod.oauth, "authorise", lambda *a, **k: calls.append(a))
 
     YahooClient.login()
-    cmd = calls[0]
-    assert "the-id" in cmd
-    assert "the-secret" in cmd
-    assert mod.settings.yahoo_redirect_uri in cmd
-    assert "8080" in cmd
+
+    assert calls[0] == ("the-id", "the-secret", mod.settings.yahoo_redirect_uri)
 
 
 def test_missing_credentials_raise_rather_than_exit(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -327,19 +329,17 @@ def test_missing_credentials_raise_rather_than_exit(monkeypatch: pytest.MonkeyPa
         YahooClient.login()
 
 
-def test_a_failed_login_subprocess_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    import subprocess as real_subprocess
-
+def test_a_failed_handshake_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     import the_front_office.adapters.outbound.platforms.yahoo.client as mod
 
     monkeypatch.setattr(YahooClient, "_token_exists", classmethod(lambda cls: False))
     monkeypatch.setattr(mod.settings, "yahoo_client_id", "id")
     monkeypatch.setattr(mod.settings, "yahoo_client_secret", "secret")
 
-    def _fail(cmd: Any, **kwargs: Any) -> None:
-        raise real_subprocess.CalledProcessError(1, cmd)
+    def _fail(*args: Any, **kwargs: Any) -> None:
+        raise YahooLoginRequiredError()
 
-    monkeypatch.setattr(mod.subprocess, "run", _fail)
+    monkeypatch.setattr(mod.oauth, "authorise", _fail)
 
     with pytest.raises(YahooLoginRequiredError):
         YahooClient.login()
