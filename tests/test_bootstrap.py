@@ -91,7 +91,7 @@ def test_the_nba_entry_discovers_leagues_and_wraps_them(monkeypatch: pytest.Monk
     import the_front_office.adapters.outbound.platforms.yahoo.client as yahoo_mod
 
     leagues = [SimpleNamespace(id="1", name="One", league_type="head"), SimpleNamespace(id="2", name="Two")]
-    monkeypatch.setattr(yahoo_mod.YahooClient, "login", classmethod(lambda cls, force=False: None))
+    monkeypatch.setattr(yahoo_mod.YahooClient, "ensure_authorised", classmethod(lambda cls: None))
     monkeypatch.setattr(
         yahoo_mod.YahooClient,
         "get_context",
@@ -110,7 +110,7 @@ def test_no_nba_leagues_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -> Non
     import the_front_office.adapters.outbound.platforms.yahoo.client as yahoo_mod
     from the_front_office.domain.errors import LeagueNotFoundError
 
-    monkeypatch.setattr(yahoo_mod.YahooClient, "login", classmethod(lambda cls, force=False: None))
+    monkeypatch.setattr(yahoo_mod.YahooClient, "ensure_authorised", classmethod(lambda cls: None))
     monkeypatch.setattr(
         yahoo_mod.YahooClient,
         "get_context",

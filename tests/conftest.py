@@ -5,6 +5,7 @@ NBA and Gemini without any network, credentials or monkeypatching.
 """
 
 from datetime import date
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -159,7 +160,7 @@ class FakeAI:
 
 
 @pytest.fixture(autouse=True)
-def _isolate_from_local_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def _isolate_from_local_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Blank every credential-derived setting for the duration of a test.
 
     `settings` is built from the developer's .env at import time. Without this a
@@ -181,6 +182,11 @@ def _isolate_from_local_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "logfire_token",
     ):
         monkeypatch.setattr(settings, field, None)
+
+    # Point the Yahoo token at a path that cannot exist, so a suite run does not
+    # depend on whether this machine has been through the OAuth flow. A test
+    # that wants an authorised client says so by pointing this somewhere real.
+    monkeypatch.setattr(settings, "yahoo_token_file", str(tmp_path / "no-token"))
 
 
 @pytest.fixture
