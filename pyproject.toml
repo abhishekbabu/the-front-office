@@ -43,7 +43,6 @@ dev = [
     "pytest-cov>=6.0.0,<8",
     "ruff>=0.15.0,<1",
     "pre-commit>=4.0.0,<5",
-    "pandas-stubs>=2.2.0,<3",
     # starlette's TestClient deprecated the httpx 0.x backend; httpx2 is what it wants now.
     "httpx2>=2.0.0,<3",
 ]

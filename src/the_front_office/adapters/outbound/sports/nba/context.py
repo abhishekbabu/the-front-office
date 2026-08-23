@@ -1,3 +1,12 @@
+"""Assembling what a category league needs to know about one player.
+
+Three readings meet here, and they answer different questions: Yahoo says who
+holds the player, Sleeper's box scores say what they have been doing, and
+Sleeper's projections say what they are expected to do over the games left in
+the matchup period. A line without the games remaining is a rate with no
+quantity behind it, which is why they are built together.
+"""
+
 from datetime import date
 
 from yahoofantasy import Player  # type: ignore[import-untyped]
@@ -7,9 +16,10 @@ from the_front_office.adapters.outbound.sports.nba.projections import Projection
 
 
 class PlayerContextBuilder:
-    """
-    Service to build rich context strings for players (rostered or free agents)
-    by combining Yahoo data with NBA stats and schedule info.
+    """One player as a block of prompt text, rostered or on the wire.
+
+    The same shape for both, so the model compares like with like rather than
+    reading two formats and inferring which is which.
     """
 
     def __init__(self, nba_client: SleeperNBAForm):

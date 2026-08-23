@@ -363,8 +363,12 @@ class TradeVerdict(BaseModel):
 
 @dataclass
 class TradeProposal:
-    """
-    Represents a trade proposal parsed from natural language.
+    """Two lists of names, as a person described the trade.
+
+    Names rather than identifiers because this is what somebody typed, and
+    resolving them to players is a separate step that can fail — one side of a
+    trade naming a player who is not in the league is a thing to say, not a
+    thing to guess at.
     """
 
     giving: list[str] = field(default_factory=list)
@@ -372,6 +376,7 @@ class TradeProposal:
 
     @property
     def is_valid(self) -> bool:
+        """A trade needs both halves. One-sided is a drop, and not this."""
         return bool(self.giving) and bool(self.receiving)
 
 

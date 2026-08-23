@@ -26,12 +26,13 @@ Only inbound adapters render errors. `raise ... from e`, and log before raising
 through a module-level `logger = logging.getLogger(__name__)`.
 
 **Dates and times.** Never naive `datetime.now()` or `date.today()` for anything
-persisted or compared — store aware UTC, convert at the comparison. NBA schedule
-logic anchors to `PACIFIC`, because the league schedules by Pacific and a local
-clock shifts the boundaries. `datetime.fromisoformat` rejects a trailing `Z` on
-3.10 and every NBA and FPL timestamp has one, so parse via `_parse_timestamp` /
-`_parse_deadline`. Keep `GameRecord["date"]` (a label, for window tests) distinct
-from `GameRecord["tipoff_utc"]` (an instant, for has-it-started tests).
+persisted or compared — store aware UTC, convert at the comparison. Basketball
+anchors to `PACIFIC`, because the league schedules by Pacific and a local clock
+shifts the day boundary. `datetime.fromisoformat` rejects a trailing `Z` on 3.10
+and FPL timestamps have one, so parse via `_parse_deadline`. Keep a date label
+(`ScheduledGame.date`, for window tests) distinct from an instant: Sleeper
+publishes no tip-off time, so whether a game has happened is settled by its date
+against today, and only a game today reads its `status`.
 
 **Naming.** `<Platform>Client` for API clients, `<Platform><Sport>Provider` for
 providers, `<Verb>Engine` for use cases, `<What>Error` for domain errors.
@@ -63,11 +64,10 @@ callers use `ensure_authorized`.
 generation prompt, and say what was left out.
 
 **Player identity across platforms.** Yahoo and Sleeper share no identifier, so
-the NBA projection join is by normalized name (`adapters/outbound/sports/nba/
-projections.py`).
-Never guess: an ambiguous surname must resolve to nothing rather than to
-whichever player was indexed first, and an unmatched player carries no
-projection rather than borrowing someone else's.
+basketball joins by normalized name — twice, in `sports/nba/projections.py` and
+`sports/nba/form.py`. Never guess: an ambiguous surname must resolve to nothing
+rather than to whichever player was indexed first, and an unmatched player
+carries no line rather than borrowing someone else's.
 
 **AI calls.** `gemini-2.5-pro` for analysis, `gemini-2.5-flash` for parsing and
 structuring. Never a `-preview` model. Reports come back as Pydantic models via
