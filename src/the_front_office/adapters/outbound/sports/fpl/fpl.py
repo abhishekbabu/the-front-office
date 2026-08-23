@@ -19,6 +19,7 @@ from datetime import datetime
 
 from the_front_office.adapters.outbound.platforms.fpl.client import FPLClient, free_transfers
 from the_front_office.adapters.outbound.platforms.fpl.types import (
+    Chip,
     Gameweek,
     LiveStat,
     MiniLeague,
@@ -473,6 +474,7 @@ class FPLProvider:
         squad, players, starters, bench = self._squad(entry_id, week)
 
         captain_id = next((pick.element for pick in squad.picks if pick.is_captain), None)
+        vice_id = next((pick.element for pick in squad.picks if pick.is_vice_captain), None)
         captain = next((p for p in starters if p.id == captain_id), None)
         best = best_lineup(players)
         entry = self.client.get_entry(entry_id)
@@ -495,8 +497,10 @@ class FPLProvider:
                 name=entry.name,
                 detail=f"GW{week}",
                 points=_total(starters, captain_id, live),
-                lineup=[self._spot(p, fixtures, live, captain=p.id == captain_id) for p in starters],
-                bench=[self._spot(p, fixtures, live) for p in bench],
+                lineup=[
+                    self._spot(p, fixtures, live, captain=p.id == captain_id, vice=p.id == vice_id) for p in starters
+                ],
+                bench=[self._spot(p, fixtures, live, vice=p.id == vice_id) for p in bench],
             ),
             opponent=self._opponent(league_id, entry_id, week, fixtures, live),
             swaps=[
@@ -508,8 +512,46 @@ class FPLProvider:
                 for change in lineup_changes(starters, best)
             ],
             fixtures=self._warnings(players, fixtures),
+            boosts=self._chips(entry_id, week),
             window=_window(current or upcoming, live=any(s.has_played for s in live.values())),
         )
+
+    def _chips(self, entry_id: int, gameweek: int) -> StatGroup | None:
+        """What is left of the season's chips, and what has become of the rest.
+
+        The game issues a set per half, so the same chip appears twice with
+        different windows — one grouped row per name, showing the first window
+        that has not closed, because that is the one still worth a decision.
+
+        A chip whose windows have all passed is still listed: an unplayed Free
+        Hit is a thing that was lost, and a row saying so is worth more than a
+        row quietly missing.
+        """
+        try:
+            issued = self.client.get_chips()
+            played = {c.name: c.event for c in self.client.get_chips_played(entry_id)}
+        except FPLAPIError as e:
+            logger.warning(f"Continuing without chips: {e}")
+            return None
+        if not issued:
+            return None
+
+        stats: list[Stat] = []
+        for name in dict.fromkeys(c.name for c in issued):
+            windows = sorted((c for c in issued if c.name == name), key=lambda c: c.start_event)
+            live = next((c for c in windows if c.stop_event >= gameweek), None)
+            stats.append(self._chip_stat(windows[0].label, live, played.get(name), gameweek))
+        return StatGroup(title="Chips", stats=stats)
+
+    @staticmethod
+    def _chip_stat(label: str, live: Chip | None, played: int | None, gameweek: int) -> Stat:
+        if played is not None:
+            return Stat(label=label, value=f"played GW{played}")
+        if live is None:
+            return Stat(label=label, value="gone unplayed", tone="warning")
+        if live.covers(gameweek):
+            return Stat(label=label, value="available", tone="good")
+        return Stat(label=label, value=f"from GW{live.start_event}")
 
     def _live_points(self, gameweek: int) -> dict[int, LiveStat]:
         """What the squad has actually scored, or nothing before a ball is kicked.
@@ -581,6 +623,7 @@ class FPLProvider:
 
         their_fixtures = self._fixtures_by_club(players, gameweek)
         their_captain = next((pick.element for pick in squad.picks if pick.is_captain), None)
+        their_vice = next((pick.element for pick in squad.picks if pick.is_vice_captain), None)
         return Side(
             name=match.opponent_name,
             detail=f"GW{gameweek}",
@@ -588,7 +631,7 @@ class FPLProvider:
             # accounts for auto-subs, which a squad list cannot show.
             points=f"{match.opponent_points} pts",
             lineup=[self._spot(p, their_fixtures, live, captain=p.id == their_captain) for p in starters],
-            bench=[self._spot(p, their_fixtures, live) for p in bench],
+            bench=[self._spot(p, their_fixtures, live, vice=p.id == their_vice) for p in bench],
         )
 
     def _spot(
@@ -597,6 +640,7 @@ class FPLProvider:
         fixtures: dict[str, str],
         live: dict[int, LiveStat],
         captain: bool = False,
+        vice: bool = False,
     ) -> Spot:
         """One row of a lineup, showing what happened where anything has.
 
@@ -607,11 +651,12 @@ class FPLProvider:
         """
         flag = player.availability
         stat = live.get(player.id)
+        armband = " (C)" if captain else " (V)" if vice else ""
         played = stat is not None and stat.has_played
         points = (stat.points * 2 if captain else stat.points) if stat and played else None
         return Spot(
             player_id=str(player.id),
-            player=player.name + (" (C)" if captain else ""),
+            player=player.name + armband,
             detail=f"{player.position} · {player.team} {fixtures.get(player.team, 'no fixture')}"
             + (f" · {flag}" if flag else ""),
             # Points once they exist, the projection until then. A player whose

@@ -66,6 +66,8 @@ export type Summary = {
   opponent: Side | null;
   swaps: Swap[];
   fixtures: Stat[];
+  /** One-time advantages the manager can spend; null in a sport with none. */
+  boosts: StatGroup | null;
   /** When this week actually is, already formatted. A week with no dates on it
       is a number, and the number is the one thing already known. */
   window: string;

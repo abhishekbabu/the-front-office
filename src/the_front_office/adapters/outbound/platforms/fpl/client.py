@@ -25,6 +25,8 @@ from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
 from the_front_office.adapters.outbound.platforms.fpl.types import (
     MAX_FREE_TRANSFERS,
     POSITIONS,
+    Chip,
+    ChipPlay,
     Entry,
     Fixture,
     Gameweek,
@@ -394,6 +396,31 @@ class FPLClient:
             )
             for row in rows
             if row.get("event") is not None
+        ]
+
+    def get_chips(self) -> list[Chip]:
+        """Every chip the game issues this season, with the window for each.
+
+        Published on the same bootstrap call everything else reads, so this
+        costs nothing extra.
+        """
+        return [
+            Chip(
+                name=str(c.get("name") or ""),
+                start_event=int(c.get("start_event") or 0),
+                stop_event=int(c.get("stop_event") or 0),
+            )
+            for c in self._get_bootstrap().get("chips") or []
+            if c.get("name")
+        ]
+
+    def get_chips_played(self, entry_id: int) -> list[ChipPlay]:
+        """The chips this manager has already spent, and when."""
+        data = self._api.cached(f"history_{entry_id}", f"{BASE_URL}/entry/{entry_id}/history/", HISTORY_TTL)
+        return [
+            ChipPlay(name=str(c.get("name") or ""), event=int(c.get("event") or 0))
+            for c in (data or {}).get("chips") or []
+            if c.get("name")
         ]
 
     def get_h2h_match(self, league_id: int, entry_id: int, gameweek: int) -> H2HMatch | None:

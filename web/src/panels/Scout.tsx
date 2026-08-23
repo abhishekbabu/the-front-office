@@ -8,6 +8,7 @@ import { StatStrip } from "@/components/ui/stat";
 import { LineupCard, SideCard } from "@/components/ui/lineup";
 import { PlayerPanel } from "@/components/ui/player";
 import { ErrorNote, PageHeader } from "@/panels/shared";
+import { cn } from "@/lib/utils";
 
 /**
  * The week: where you stand, what you are fielding, and who against.
@@ -74,6 +75,38 @@ export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) 
                   <span className="ml-auto font-mono text-[12px] text-ok">{swap.gain}</span>
                 </div>
               ))}
+            </Card>
+          )}
+
+          {week.data.boosts && week.data.boosts.stats.length > 0 && (
+            <Card>
+              <CardHeader>
+                <span>{week.data.boosts.title}</span>
+                <span>
+                  {week.data.boosts.stats.filter((s) => s.tone === "good").length} available
+                </span>
+              </CardHeader>
+              {/* A grid rather than a strip: these are four parallel answers to
+                  the same question, and reading down a column beats hunting. */}
+              <div className="grid grid-cols-2 gap-x-4 px-4 py-1 sm:grid-cols-4">
+                {week.data.boosts.stats.map((boost) => (
+                  <div key={boost.label} className="flex flex-col gap-0.5 py-2.5">
+                    <span className="truncate font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                      {boost.label}
+                    </span>
+                    <span
+                      className={cn(
+                        "truncate text-[13px]",
+                        boost.tone === "good" && "font-medium text-ok",
+                        boost.tone === "warning" && "text-warn",
+                        boost.tone === "neutral" && "text-muted-foreground",
+                      )}
+                    >
+                      {boost.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </Card>
           )}
 
