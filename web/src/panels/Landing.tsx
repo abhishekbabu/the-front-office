@@ -2,6 +2,7 @@ import { useQueries } from "@tanstack/react-query";
 import { ChevronRight, Trophy } from "lucide-react";
 import { api, type League, type Sport } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { ExternalLink } from "@/components/ui/external-link";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { m } from "motion/react";
@@ -127,6 +128,9 @@ export function Landing({
                       no trades
                     </Badge>
                   )}
+                  {/* Straight to the platform, for when you already know what
+                      you came to do and this app is not it. */}
+                  <ExternalLink href={league.url} label={`Open ${league.name} on the platform`} />
                   <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                 </button>
               ))}

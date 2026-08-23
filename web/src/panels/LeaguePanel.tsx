@@ -7,6 +7,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Empty, Loading } from "@/components/ui/state";
 import { RosterTable } from "@/components/ui/roster-table";
 import { PlayerPanel } from "@/components/ui/player";
+import { ExternalLink } from "@/components/ui/external-link";
 import { ErrorNote, PageHeader } from "@/panels/shared";
 import { list, listItem, rise } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -54,7 +55,11 @@ export function LeaguePanel({ sport, league }: { sport: Sport; league: League })
 
   return (
     <>
-      <PageHeader title={league.name} meta={league.detail}>
+      <PageHeader
+        title={league.name}
+        meta={league.detail}
+        href={league.url}
+        hrefLabel={`Open ${league.name} on the platform`}>
         {available.length > 1 && (
           <div className="flex items-center gap-1" role="tablist">
             {available.map((t) => (
@@ -195,7 +200,10 @@ function Rosters({
       {selected && (
         <Card>
           <CardHeader>
-            <span>{selected.name}</span>
+            <span className="flex items-center gap-1">
+              {selected.name}
+              <ExternalLink href={selected.url} label={`Open ${selected.name} on the platform`} />
+            </span>
             <span>{selected.detail}</span>
           </CardHeader>
           {roster.isLoading && <Loading lines={5} />}

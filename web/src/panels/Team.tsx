@@ -23,7 +23,11 @@ export function TeamPanel({ sport, league }: { sport: Sport; league: League }) {
 
   return (
     <>
-      <PageHeader title={league.name} meta={league.detail} />
+      <PageHeader
+        title={league.name}
+        meta={league.detail}
+        href={league.url}
+        hrefLabel={`Open ${league.name} on the platform`} />
 
       {roster.isError && <ErrorNote error={roster.error} />}
       {roster.isLoading && <Loading lines={5} />}

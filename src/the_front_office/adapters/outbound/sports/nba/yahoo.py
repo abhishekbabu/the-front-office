@@ -51,6 +51,12 @@ NINE_CAT = ("PTS", "REB", "AST", "STL", "BLK", "3PTM", "FG%", "FT%", "TO")
 # Enough to find somebody, few enough to read — and one Yahoo request rather
 # than the eight the category scout makes.
 AVAILABLE_BROWSE_LIMIT = 100
+
+# Where the moves are actually made. Unlike the other two platforms these
+# cannot be checked from here — the sport is behind an approval this app does
+# not have — so they follow Yahoo's documented shape rather than a probe.
+LEAGUE_URL = "https://basketball.fantasysports.yahoo.com/nba/{league_id}"
+TEAM_URL = "https://basketball.fantasysports.yahoo.com/nba/{league_id}/{team_id}"
 """What a nine-category league is actually scored on, in the order it is read."""
 
 
@@ -112,6 +118,7 @@ class YahooNBAProvider:
                 name=str(lg.name),
                 sport=self.sport,
                 detail=str(getattr(lg, "league_type", "")),
+                url=LEAGUE_URL.format(league_id=lg.id),
             )
             for lg in self._all_leagues
         ]
@@ -268,11 +275,25 @@ class YahooNBAProvider:
                 team_id=str(getattr(team, "team_key", "")),
                 name=str(getattr(team, "name", "")),
                 detail=self._record(getattr(getattr(team, "team_standings", None), "outcome_totals", None)),
+                url=self._team_url(str(getattr(team, "team_key", ""))),
                 is_mine=getattr(team, "team_key", None) == my_key,
             )
             for team in self.yahoo.league.teams()
         ]
         return sorted([r for r in refs if r.team_id], key=lambda ref: (not ref.is_mine, ref.name.lower()))
+
+    @staticmethod
+    def _team_url(team_key: str) -> str:
+        """A team's page on Yahoo, addressed the way Yahoo addresses it.
+
+        A team key is `nba.l.<league>.t.<team>` and the URL wants the two
+        numbers, not the key — so a key in an unexpected shape yields no link
+        rather than a broken one.
+        """
+        parts = team_key.split(".")
+        if len(parts) != 5 or parts[3] != "t":
+            return ""
+        return TEAM_URL.format(league_id=parts[2], team_id=parts[4])
 
     def roster_of(self, league_id: str, team_id: str) -> list[PlayerCard]:
         """Another manager's roster, in the same columns as your own."""

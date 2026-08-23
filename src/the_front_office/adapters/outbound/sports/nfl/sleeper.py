@@ -158,6 +158,11 @@ SCORING_LABELS = {
 # rest of the API uses, with no key and no lookup.
 PORTRAIT_URL = "https://sleepercdn.com/content/nfl/players/{player_id}.jpg"
 
+# Where the moves are actually made. Sleeper routes on these — an invented
+# path 404s — so they are addresses rather than guesses.
+LEAGUE_URL = "https://sleeper.com/leagues/{league_id}"
+PLAYER_URL = "https://sleeper.com/players/nfl/{player_id}"
+
 SPLIT_LABELS = (
     ("pass_yd", "Passing yards"),
     ("pass_td", "Passing TDs"),
@@ -281,6 +286,7 @@ class SleeperNFLProvider:
                 name=lg.name,
                 sport=self.sport,
                 detail=f"{lg.total_rosters}-team · {SCORING_LABELS.get(lg.scoring_format, lg.scoring_format)}",
+                url=LEAGUE_URL.format(league_id=lg.league_id),
             )
             for lg in leagues
         ]
@@ -461,6 +467,7 @@ class SleeperNFLProvider:
             headline_label=self._headline_label(projection, scheduled, state.week),
             note=str(meta.get("injury_notes") or injury),
             image_url=PORTRAIT_URL.format(player_id=player_id),
+            url=PLAYER_URL.format(player_id=player_id),
             tables=[table] if (table := self._season_table(player_id, state)) else [],
             tone="warning" if injury else "neutral",
             groups=groups,

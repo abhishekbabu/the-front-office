@@ -78,6 +78,8 @@ class League(BaseModel):
     league_id: str
     name: str
     detail: str
+    url: str = ""
+    """This league on its own platform, so a view can offer the way across."""
 
 
 class TradeRequest(BaseModel):
@@ -331,7 +333,7 @@ def _register_routes(app: FastAPI) -> None:
     @app.get("/api/{sport}/leagues", response_model=list[League])
     def list_leagues(sport: str) -> list[League]:
         provider = data.build_provider(sport)
-        return [League(league_id=r.league_id, name=r.name, detail=r.detail) for r in provider.list_leagues()]
+        return [League(league_id=r.league_id, name=r.name, detail=r.detail, url=r.url) for r in provider.list_leagues()]
 
     @app.get("/api/{sport}/leagues/{league_id}/roster", response_model=list[PlayerCard])
     def roster(sport: str, league_id: str) -> list[PlayerCard]:

@@ -1047,3 +1047,19 @@ def test_nothing_published_yet_reads_differently_from_not_featuring() -> None:
 
     assert "not published yet" in unpublished.headline_label
     assert "Not projected to feature" in benched.headline_label
+
+
+# ── the way across to the platform ──────────────────────────────────────
+
+
+def test_a_league_links_to_itself_on_sleeper() -> None:
+    """Reading it is this app; the moves are made there."""
+    refs = _provider(_league_client()).list_leagues()
+
+    assert refs[0].url == "https://sleeper.com/leagues/L1"
+
+
+def test_a_player_links_to_their_own_page() -> None:
+    detail = _provider(_league_client()).player("L1", "qb1")
+
+    assert detail.url == "https://sleeper.com/players/nfl/qb1"
