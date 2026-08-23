@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 from yahoofantasy import League, Player  # type: ignore[import-untyped]
 
 from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
+from the_front_office.adapters.outbound.sports import paging
 from the_front_office.adapters.outbound.sports.nba.context import PlayerContextBuilder
 from the_front_office.adapters.outbound.sports.nba.form import SleeperNBAForm
 from the_front_office.adapters.outbound.sports.nba.projections import ProjectionIndex
@@ -33,6 +34,8 @@ from the_front_office.domain.models import (
     LeagueSchedule,
     PlayerCard,
     PlayerDetail,
+    PlayerPage,
+    PlayerQuery,
     SportContext,
     StandingRow,
     Stat,
@@ -303,7 +306,7 @@ class YahooNBAProvider:
             raise TeamNotFoundError(team_id)
         return self._cards(team.players())
 
-    def free_agents(self, league_id: str) -> list[PlayerCard]:
+    def free_agents(self, league_id: str, query: PlayerQuery) -> PlayerPage:
         """The best players nobody in the league holds.
 
         Sorted by Yahoo's own season rank rather than by a category: a wire
@@ -311,7 +314,8 @@ class YahooNBAProvider:
         read when you just want to see who is out there.
         """
         self._select_into(league_id)
-        return self._cards(self.yahoo.fetch_available(AVAILABLE_BROWSE_LIMIT), slot_column=False)
+        ranked = self._cards(self.yahoo.fetch_available(AVAILABLE_BROWSE_LIMIT), slot_column=False)
+        return paging.page(ranked, query)
 
     def _cards(self, players: Any, slot_column: bool = True) -> list[PlayerCard]:
         """One table shape for every list of players this sport shows."""

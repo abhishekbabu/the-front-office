@@ -90,6 +90,35 @@ class Side(BaseModel):
     bench: list[Spot] = Field(default_factory=list)
 
 
+class PlayerQuery(BaseModel):
+    """How much of a player list to return, in what order, and which of it.
+
+    A football league's free-agent pool is four thousand players, so the list
+    is a window onto a ranking rather than the ranking itself — which means
+    the sort has to happen where the whole list is, not in the browser holding
+    one page of it.
+    """
+
+    offset: int = Field(default=0, ge=0)
+    limit: int = Field(default=50, ge=1, le=200)
+    sort: str = Field(default="", description="Column to order by. Empty means the sport's own ranking.")
+    descending: bool = True
+    position: str = Field(default="", description="Keep only this position. Empty keeps all.")
+    search: str = Field(default="", description="Substring match across a row's own values.")
+
+
+class PlayerPage(BaseModel):
+    """One window onto a player list, and how much there is to page through."""
+
+    players: list["PlayerCard"] = Field(default_factory=list)
+    total: int = Field(default=0, description="Rows matching the filters, before the window.")
+    offset: int = 0
+    positions: list[str] = Field(
+        default_factory=list,
+        description="Every position in the unfiltered pool, so a filter can be offered without guessing.",
+    )
+
+
 class PlayerCard(BaseModel):
     """A player as a row in a roster table.
 
@@ -101,6 +130,15 @@ class PlayerCard(BaseModel):
 
     player_id: str
     columns: dict[str, str]
+    values: dict[str, float] = Field(
+        default_factory=dict,
+        description=(
+            "The number behind a formatted column, for the columns that have one — "
+            "'Price' reads '£15.5m' and sorts as 15.5. Sorting the string instead puts "
+            "£9.0m above £15.5m, and parsing it back means teaching every client each "
+            "sport's units."
+        ),
+    )
     tone: Tone = "neutral"
 
 

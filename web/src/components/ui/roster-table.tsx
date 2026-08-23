@@ -1,4 +1,5 @@
-import { DataTable } from "@/components/ui/data-table";
+import { useState } from "react";
+import { DataTable, type SortState } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Empty } from "@/components/ui/state";
 import type { PlayerCard } from "@/lib/api";
@@ -31,6 +32,30 @@ function statusTone(value: string): "fail" | "warn" {
 }
 
 /**
+ * Order a complete list in place.
+ *
+ * Uses the number behind a formatted column where the provider supplied one —
+ * "£15.5m" sorted as text sits below "£9.0m" — and rows with nothing to sort
+ * on stay last in both directions.
+ */
+function sortRows(players: PlayerCard[], sort: SortState | null): PlayerCard[] {
+  if (!sort) return players;
+  const value = (p: PlayerCard) => p.values?.[sort.column];
+  const numeric = players.some((p) => value(p) !== undefined);
+  const has = (p: PlayerCard) => (numeric ? value(p) !== undefined : Boolean(p.columns[sort.column]));
+
+  const present = players.filter(has);
+  const missing = players.filter((p) => !has(p));
+  const direction = sort.descending ? -1 : 1;
+  present.sort((a, b) =>
+    numeric
+      ? ((value(a) ?? 0) - (value(b) ?? 0)) * direction
+      : (a.columns[sort.column] ?? "").localeCompare(b.columns[sort.column] ?? "") * direction,
+  );
+  return [...present, ...missing];
+}
+
+/**
  * A list of players, however it was arrived at.
  *
  * Your squad, somebody else's, and the wire are the same table with different
@@ -41,16 +66,30 @@ export function RosterTable({
   players,
   empty,
   onOpen,
+  sort,
+  onSort,
 }: {
   players: PlayerCard[];
   empty: { title: string; detail?: string };
   onOpen?: (playerId: string) => void;
+  /** Supplied by a caller that sorts server-side; omitted to sort in place. */
+  sort?: SortState | null;
+  onSort?: (next: SortState) => void;
 }) {
+  const [local, setLocal] = useState<SortState | null>(null);
+  // A complete list sorts itself; a page of a longer one has to ask the
+  // server, because reordering the rows in hand is a different answer.
+  const controlled = Boolean(onSort);
+  const active = controlled ? sort ?? null : local;
+  const rows = controlled ? players : sortRows(players, local);
+
   if (players.length === 0) return <Empty title={empty.title} detail={empty.detail} />;
   return (
     <DataTable
-      rows={players}
+      rows={rows}
       numeric={NUMERIC}
+      sort={active}
+      onSort={onSort ?? setLocal}
       onSelect={onOpen && ((row) => onOpen(row.player_id))}
       render={(column, value) =>
         column === "Status" && value ? (

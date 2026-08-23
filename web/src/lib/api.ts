@@ -117,7 +117,31 @@ export type Setting = {
 };
 export type Evaluation = { verdict: TradeVerdict; chat_id: string };
 /** A player as a table row: the sport's own columns, plus what a column cannot be. */
-export type PlayerCard = { player_id: string; columns: Record<string, string>; tone: Tone };
+export type PlayerCard = {
+  player_id: string;
+  columns: Record<string, string>;
+  /** The number behind a formatted column, for the columns that have one. */
+  values: Record<string, number>;
+  tone: Tone;
+};
+
+/** What to ask for: the sport's own ranking unless a column is named. */
+export type FreeAgentQuery = {
+  offset?: number;
+  limit?: number;
+  sort?: string;
+  descending?: boolean;
+  position?: string;
+  search?: string;
+};
+
+/** One window onto a player list, and how much there is to page through. */
+export type PlayerPage = {
+  players: PlayerCard[];
+  total: number;
+  offset: number;
+  positions: string[];
+};
 
 /** A handful of related figures under a heading. */
 export type StatGroup = { title: string; stats: Stat[] };
@@ -261,8 +285,13 @@ export const api = {
   summary: (sport: string, league: string) => request<Summary>(`/api/${sport}/leagues/${league}/summary`),
   schedule: (sport: string, league: string) =>
     request<LeagueSchedule>(`/api/${sport}/leagues/${league}/schedule`),
-  freeAgents: (sport: string, league: string) =>
-    request<PlayerCard[]>(`/api/${sport}/leagues/${league}/free-agents`),
+  freeAgents: (sport: string, league: string, query: FreeAgentQuery = {}) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== "" && value !== undefined) params.set(key, String(value));
+    }
+    return request<PlayerPage>(`/api/${sport}/leagues/${league}/free-agents?${params}`);
+  },
   teams: (sport: string, league: string) => request<TeamRef[]>(`/api/${sport}/leagues/${league}/teams`),
   teamRoster: (sport: string, league: string, team: string) =>
     request<PlayerCard[]>(`/api/${sport}/leagues/${league}/teams/${encodeURIComponent(team)}/roster`),

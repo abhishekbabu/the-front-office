@@ -28,6 +28,7 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
     Squad,
     as_millions,
 )
+from the_front_office.adapters.outbound.sports import paging
 from the_front_office.adapters.outbound.sports.dates import at_time
 from the_front_office.adapters.outbound.sports.fpl import league, prompt
 from the_front_office.adapters.outbound.sports.fpl.squad import (
@@ -48,6 +49,8 @@ from the_front_office.domain.models import (
     LeagueSchedule,
     PlayerCard,
     PlayerDetail,
+    PlayerPage,
+    PlayerQuery,
     Side,
     SportContext,
     Spot,
@@ -87,10 +90,6 @@ HAUL = 10
 BLANK = 2
 
 MARKET_LIMIT = 20
-
-# Enough to find a transfer, few enough to read. The prompt's own shortlist is
-# far shorter; this is a list somebody scrolls.
-MARKET_BROWSE_LIMIT = 100
 """Top available players shown per report, across all positions."""
 
 TRANSFER_LIMIT = 10
@@ -397,7 +396,7 @@ class FPLProvider:
             raise TeamNotFoundError(team_id)
         return self._squad_cards(int(team_id))
 
-    def free_agents(self, league_id: str) -> list[PlayerCard]:
+    def free_agents(self, league_id: str, query: PlayerQuery) -> PlayerPage:
         """The transfer market: everyone you do not already own.
 
         FPL has no waiver wire — every player is buyable at a price — so the
@@ -412,7 +411,7 @@ class FPLProvider:
 
         market = [p for p in self.client.get_players().values() if p.id not in owned and p.is_available]
         market.sort(key=lambda p: (-p.expected_points, -p.form))
-        return [self._market_card(p) for p in market[:MARKET_BROWSE_LIMIT]]
+        return paging.page([self._market_card(p) for p in market], query)
 
     def _squad_cards(self, entry_id: int) -> list[PlayerCard]:
         """One table shape for any manager's fifteen."""
@@ -432,6 +431,7 @@ class FPLProvider:
                         **self._market_columns(player),
                         "Slot": ("C" if player.id == captain else "XI") if pick.is_starting else "BN",
                     },
+                    values=self._market_values(player),
                 )
             )
         return cards
@@ -441,7 +441,21 @@ class FPLProvider:
             player_id=str(player.id),
             tone="warning" if player.availability else "neutral",
             columns=self._market_columns(player),
+            values=self._market_values(player),
         )
+
+    @staticmethod
+    def _market_values(player: Player) -> dict[str, float]:
+        """The numbers behind the formatted columns, so any of them can be
+        sorted on. "£15.5m" sorted as text sits below "£9.0m"."""
+        return {
+            "Price": player.cost / 10,
+            "xPts": player.expected_points,
+            "Form": player.form,
+            "Points": float(player.total_points),
+            "xGI": player.expected_goal_involvements,
+            "Owned": player.selected_by,
+        }
 
     @staticmethod
     def _market_columns(player: Player) -> dict[str, str]:

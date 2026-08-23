@@ -26,6 +26,7 @@ from the_front_office.adapters.outbound.platforms.sleeper.types import (
 )
 from the_front_office.adapters.outbound.sports.nfl.sleeper import SleeperNFLProvider
 from the_front_office.domain.errors import LeagueNotFoundError, SleeperAPIError, TeamNotFoundError
+from the_front_office.domain.models import PlayerQuery
 
 MY_ID = SLEEPER_USER_ID
 
@@ -199,7 +200,7 @@ def test_free_agents_exclude_everyone_already_rostered() -> None:
         "free1": PlayerMeta(player_id="free1", name="Waiver WR", position="WR", team="NYJ"),
     }
 
-    agents = _provider(client).free_agents("L1")
+    agents = _provider(client).free_agents("L1", PlayerQuery()).players
 
     assert [c.columns["Player"] for c in agents] == ["Waiver WR"]
 
@@ -212,7 +213,7 @@ def test_a_position_a_fantasy_league_does_not_score_is_left_out() -> None:
         "free1": PlayerMeta(player_id="free1", name="Waiver WR", position="WR", team="NYJ"),
     }
 
-    agents = _provider(client).free_agents("L1")
+    agents = _provider(client).free_agents("L1", PlayerQuery()).players
 
     assert [c.columns["Player"] for c in agents] == ["Waiver WR"]
 
@@ -222,7 +223,7 @@ def test_free_agents_have_no_lineup_column() -> None:
     client = _league_client()
     client.players_catalog = {"free1": PlayerMeta(player_id="free1", name="Waiver WR", position="WR", team="NYJ")}
 
-    assert "Slot" not in _provider(client).free_agents("L1")[0].columns
+    assert "Slot" not in _provider(client).free_agents("L1", PlayerQuery()).players[0].columns
 
 
 # ── the one figure a player is judged on ────────────────────────────────
@@ -285,3 +286,41 @@ def test_a_failed_trending_lookup_says_so_rather_than_failing_the_report() -> No
     client = FakeSleeper(projections=DEFAULT_PROJECTIONS, trending_error=SleeperAPIError("down"))
 
     assert "(unavailable)" in _provider(client).build_context("L1").prompt
+
+
+def test_a_player_on_no_nfl_roster_is_not_a_signing() -> None:
+    """The catalog never forgets anybody — Reggie Wayne retired in 2014 and is
+    still in it, unsigned. The default ranking hid him because he has no
+    projection; sorting by experience put him on the first page."""
+    client = _league_client()
+    client.players_catalog = {
+        "signed": PlayerMeta(player_id="signed", name="On A Team", position="WR", team="NYJ"),
+        "retired": PlayerMeta(player_id="retired", name="Long Retired", position="WR", team="FA"),
+    }
+
+    agents = _provider(client).free_agents("L1", PlayerQuery()).players
+
+    assert [c.columns["Player"] for c in agents] == ["On A Team"]
+
+
+def test_a_page_reports_the_whole_pool_not_the_window() -> None:
+    """Otherwise there is no way to know a second page exists."""
+    client = _league_client()
+    client.players_catalog = {
+        f"p{i}": PlayerMeta(player_id=f"p{i}", name=f"Player {i}", position="WR", team="NYJ") for i in range(120)
+    }
+
+    page = _provider(client).free_agents("L1", PlayerQuery(limit=50))
+
+    assert len(page.players) == 50
+    assert page.total == 120
+
+
+def test_a_free_agent_carries_the_numbers_behind_its_columns() -> None:
+    """Sorting "22.3" as text is the bug this exists to prevent."""
+    client = _league_client()
+    client.players_catalog = {"a": PlayerMeta(player_id="a", name="A", position="WR", team="NYJ", years_exp=7)}
+
+    card = _provider(client).free_agents("L1", PlayerQuery()).players[0]
+
+    assert card.values["Exp"] == 7.0
