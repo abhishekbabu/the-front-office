@@ -528,7 +528,8 @@ def test_a_player_carries_their_week_and_their_depth() -> None:
     labels = {stat.label: stat.value for group in detail.groups for stat in group.stats}
 
     assert detail.name == "Star QB"
-    assert detail.headline == "22.0 proj pts"
+    assert detail.headline == "22.0"
+    assert detail.headline_label == "projected for week 3"
     assert labels["Opponent"] == "vs MIA"
 
 
@@ -1021,3 +1022,28 @@ def test_free_agents_have_no_lineup_column() -> None:
     client.players_catalog = {"free1": PlayerMeta(player_id="free1", name="Waiver WR", position="WR", team="NYJ")}
 
     assert "Slot" not in _provider(client).free_agents("L1")[0].columns
+
+
+# ── the one figure a player is judged on ────────────────────────────────
+
+
+def test_a_player_with_no_projection_has_no_figure_at_all() -> None:
+    """Not the string "no projection", which renders as though the absence of
+    a number were the number."""
+    client = FakeSleeper(projections={})
+
+    detail = _provider(client).player("L1", "qb1")
+
+    assert detail.headline == ""
+
+
+def test_nothing_published_yet_reads_differently_from_not_featuring() -> None:
+    """A reader can act on the difference: the league has not posted week 3,
+    versus it has and this player is not in it."""
+    unpublished = _provider(FakeSleeper(projections={})).player("L1", "qb1")
+
+    scheduled = FakeSleeper(projections={"rb1": _proj("rb1", "Good RB", "RB", 18.0)})
+    benched = _provider(scheduled).player("L1", "qb1")
+
+    assert "not published yet" in unpublished.headline_label
+    assert "Not projected to feature" in benched.headline_label

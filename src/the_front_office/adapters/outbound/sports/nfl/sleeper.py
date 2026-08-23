@@ -391,6 +391,19 @@ class SleeperNFLProvider:
         return cards
 
     @staticmethod
+    def _headline_label(projection: WeeklyProjection | None, scheduled: bool, week: int) -> str:
+        """What the figure is, or why there is not one.
+
+        The two reasons differ and a reader can act on the difference: nothing
+        is published yet, versus published and this player is not in it.
+        """
+        if projection:
+            return f"projected for week {week}"
+        if not scheduled:
+            return f"Week {week} projections are not published yet"
+        return f"Not projected to feature in week {week}"
+
+    @staticmethod
     def _opponent_label(projection: WeeklyProjection | None, scheduled: bool) -> str:
         if projection and projection.opponent:
             return f"vs {projection.opponent}"
@@ -444,7 +457,8 @@ class SleeperNFLProvider:
             name=str(meta.get("name") or player_id),
             position=str(meta.get("position") or ""),
             team=str(meta.get("team") or "FA"),
-            headline=f"{projection.points:.1f} proj pts" if projection else "no projection",
+            headline=f"{projection.points:.1f}" if projection else "",
+            headline_label=self._headline_label(projection, scheduled, state.week),
             note=str(meta.get("injury_notes") or injury),
             image_url=PORTRAIT_URL.format(player_id=player_id),
             tables=[table] if (table := self._season_table(player_id, state)) else [],

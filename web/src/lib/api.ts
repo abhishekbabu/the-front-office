@@ -189,7 +189,10 @@ export type PlayerDetail = {
   name: string;
   position: string;
   team: string;
+  /** The bare figure, empty when there is none — which is not zero. */
   headline: string;
+  /** What that figure is, or why there is not one. */
+  headline_label: string;
   note: string;
   image_url: string;
   tone: Tone;

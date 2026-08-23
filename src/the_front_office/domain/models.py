@@ -153,7 +153,21 @@ class PlayerDetail(BaseModel):
     name: str
     position: str
     team: str
-    headline: str = Field(default="", description="The one number this player is judged on.")
+    headline: str = Field(
+        default="",
+        description=(
+            "The one figure this player is judged on, bare — '22.3', not '22.3 proj pts'. "
+            "Empty when there is none, which is not the same as zero."
+        ),
+    )
+    headline_label: str = Field(
+        default="",
+        description=(
+            "What that figure is: 'projected this week', 'xPts this week'. When `headline` is "
+            "empty this stands alone and says why there is no figure, so it reads as a sentence "
+            "rather than as a number that failed to arrive."
+        ),
+    )
     note: str = Field(default="", description="Injury or availability news, in the platform's words.")
     image_url: str = Field(
         default="",
