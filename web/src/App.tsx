@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Moon, Settings, Sun, Trophy } from "lucide-react";
+import { AnimatePresence, m } from "motion/react";
 import { api, type League, type Sport } from "@/lib/api";
 import { useTheme } from "@/lib/useTheme";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { Tooltip } from "@/components/ui/tooltip";
+import { rise } from "@/lib/motion";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScoutPanel } from "@/panels/Scout";
@@ -93,12 +96,8 @@ export default function App() {
               key={s.key}
               active={s.key === active?.key}
               disabled={!s.ready}
-              title={
-                s.ready
-                  ? undefined
-                  : s.configured
-                    ? s.blocked_reason
-                    : `Not configured — set ${s.requires} in .env`
+              tooltip={
+                s.ready ? "" : s.configured ? s.blocked_reason : `Not configured — set ${s.requires} in .env`
               }
               onClick={() => {
                 setSport(s.key);
@@ -147,19 +146,19 @@ export default function App() {
                 Settings
               </span>
             </RailItem>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={mode === "dark" ? "Switch to light" : "Switch to dark"}
+            <IconButton
+              label={mode === "dark" ? "Switch to light" : "Switch to dark"}
+              side="top"
+              icon={mode === "dark" ? <Sun /> : <Moon />}
               onClick={() => setMode(mode === "dark" ? "light" : "dark")}
-            >
-              {mode === "dark" ? <Sun /> : <Moon />}
-            </Button>
+            />
           </div>
         </div>
       </nav>
 
       <main className="min-w-0">
+        {/* Keyed on the view so switching one animates the new panel in;
+            without a key React reuses the tree and nothing transitions. */}
         {view === "settings" ? (
           <SettingsPanel onBack={() => setView(sport ? "scout" : "home")} />
         ) : sports.isSuccess && usable.length === 0 ? (
@@ -184,15 +183,19 @@ export default function App() {
           // panel keeps the report it already fetched, and the previous sport's
           // analysis renders under the new league's name — a stale FPL report
           // headed "Huge Euge RR FF", with FPL's figures in the strip.
-          current === "scout" ? (
-            <ScoutPanel key={panelKey} sport={active} league={league} />
-          ) : current === "team" ? (
-            <TeamPanel key={panelKey} sport={active} league={league} />
-          ) : current === "report" ? (
-            <ReportPanel key={panelKey} sport={active} league={league} />
-          ) : (
-            <TradePanel key={panelKey} sport={active} league={league} />
-          )
+          <AnimatePresence mode="wait">
+            <m.div key={`${panelKey}:${current}`} variants={rise} initial="hidden" animate="shown">
+              {current === "scout" ? (
+                <ScoutPanel sport={active} league={league} />
+              ) : current === "team" ? (
+                <TeamPanel sport={active} league={league} />
+              ) : current === "report" ? (
+                <ReportPanel sport={active} league={league} />
+              ) : (
+                <TradePanel sport={active} league={league} />
+              )}
+            </m.div>
+          </AnimatePresence>
         ) : (
           <div className="p-6">
             {leagues.isError ? (
@@ -224,10 +227,11 @@ function RailItem({
   active,
   disabled,
   className,
+  tooltip,
   children,
   ...props
-}: React.ComponentProps<"button"> & { active?: boolean }) {
-  return (
+}: React.ComponentProps<"button"> & { active?: boolean; tooltip?: string }) {
+  const button = (
     <button
       disabled={disabled}
       className={cn(
@@ -240,6 +244,15 @@ function RailItem({
     >
       {children}
     </button>
+  );
+  // A disabled control cannot be hovered in every browser, so the reason is
+  // wrapped rather than attached — and Radix keeps it reachable by keyboard.
+  return tooltip ? (
+    <Tooltip label={tooltip} side="right">
+      <span className={cn(disabled && "cursor-not-allowed")}>{button}</span>
+    </Tooltip>
+  ) : (
+    button
   );
 }
 

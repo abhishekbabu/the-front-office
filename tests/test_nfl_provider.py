@@ -486,13 +486,38 @@ def test_a_bye_is_reported_once_per_club_not_once_per_player() -> None:
 
 def test_a_player_carries_their_week_and_their_depth() -> None:
     detail = _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).player("L1", "qb1")
-    labels = {stat.label: stat.value for stat in detail.stats}
+    labels = {stat.label: stat.value for group in detail.groups for stat in group.stats}
 
     assert detail.name == "Star QB"
     assert detail.headline == "22.0 proj pts"
-    assert labels["Week 3"] == "vs MIA"
+    assert labels["Opponent"] == "vs MIA"
 
 
 def test_an_unknown_player_is_refused() -> None:
     with pytest.raises(PlayerNotFoundError):
         _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).player("L1", "nobody")
+
+
+def test_a_projection_is_broken_out_into_the_line_behind_it() -> None:
+    """The total is what a lineup is chosen on; this is what makes it believable."""
+    projections = {
+        "qb1": WeeklyProjection(
+            player_id="qb1",
+            name="Star QB",
+            position="QB",
+            team="BUF",
+            opponent="MIA",
+            points=22.0,
+            stats={"pass_yd": 271.0, "pass_td": 1.8, "rush_yd": 18.0, "rec": 0.0},
+        )
+    }
+    groups = {g.title: g for g in _provider(FakeSleeper(projections=projections)).player("L1", "qb1").groups}
+
+    line = {s.label: s.value for s in groups["Projected line"].stats}
+    assert line["Pass yards"] == "271"
+    assert "Receptions" not in line  # a zero for a quarterback is noise
+
+
+def test_a_player_with_no_projection_has_no_line_to_break_out() -> None:
+    titles = [g.title for g in _provider(FakeSleeper()).player("L1", "qb1").groups]
+    assert "Projected line" not in titles

@@ -99,6 +99,32 @@ class Player:
     """Percentage, or None when the game has published no doubt."""
 
     minutes: int = 0
+    starts: int = 0
+    goals: int = 0
+    assists: int = 0
+    clean_sheets: int = 0
+    goals_conceded: int = 0
+    saves: int = 0
+    bonus: int = 0
+    bonus_points: int = 0
+    """BPS: the raw score bonus is awarded from, and a better form signal than
+    bonus itself, which is capped at three per match."""
+
+    yellow_cards: int = 0
+    red_cards: int = 0
+
+    penalties_order: int | None = None
+    corners_order: int | None = None
+    freekicks_order: int | None = None
+    """Set-piece duty. None means not on them, which for an attacking returner
+    is most of the difference between a good price and a bad one."""
+
+    price_change: int = 0
+    """This gameweek's move, in tenths of a million."""
+
+    transfers_in: int = 0
+    transfers_out: int = 0
+
     expected_goals: float = 0.0
     expected_assists: float = 0.0
     expected_goal_involvements: float = 0.0

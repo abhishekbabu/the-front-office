@@ -114,6 +114,9 @@ export type Evaluation = { verdict: TradeVerdict; chat_id: string };
 /** A player as a table row: the sport's own columns, plus what a column cannot be. */
 export type PlayerCard = { player_id: string; columns: Record<string, string>; tone: Tone };
 
+/** A handful of related figures under a heading. */
+export type StatGroup = { title: string; stats: Stat[] };
+
 export type PlayerDetail = {
   player_id: string;
   name: string;
@@ -122,7 +125,7 @@ export type PlayerDetail = {
   headline: string;
   note: string;
   tone: Tone;
-  stats: Stat[];
+  groups: StatGroup[];
 };
 
 /**

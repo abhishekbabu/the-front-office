@@ -37,7 +37,17 @@ from the_front_office.adapters.outbound.sports.fpl.squad import (
 from the_front_office.config.constants import FPL_SCOUT_PROMPT
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import FPLAPIError, LeagueNotFoundError, PlayerNotFoundError
-from the_front_office.domain.models import PlayerCard, PlayerDetail, Side, SportContext, Spot, Stat, Summary, Swap
+from the_front_office.domain.models import (
+    PlayerCard,
+    PlayerDetail,
+    Side,
+    SportContext,
+    Spot,
+    Stat,
+    StatGroup,
+    Summary,
+    Swap,
+)
 from the_front_office.domain.ports import LeagueRef
 
 logger = logging.getLogger(__name__)
@@ -131,10 +141,12 @@ class FPLProvider:
         )
 
     def player(self, league_id: str, player_id: str) -> PlayerDetail:
-        """One player, with the numbers FPL actually judges them on.
+        """One player, grouped the way a manager actually weighs them.
 
-        Expected goals and assists come from the same payload as the price, so
-        this costs nothing beyond the catalog every other call already reads.
+        Everything here comes from the catalog every other call already reads,
+        so depth costs nothing: Opta's expected numbers, the season return, the
+        set-piece duty that separates a good price from a bad one, and the
+        market moving under the price.
         """
         catalog = self.client.get_players()
         player = catalog.get(int(player_id)) if player_id.isdigit() else None
@@ -142,7 +154,8 @@ class FPLProvider:
             raise PlayerNotFoundError([player_id])
 
         upcoming = self.client.upcoming_gameweek()
-        fixture = self._fixtures_by_club([player], upcoming.id).get(player.team, "no fixture")
+        keeper_or_defender = player.position in ("GKP", "DEF")
+
         return PlayerDetail(
             player_id=str(player.id),
             name=player.full_name or player.name,
@@ -151,23 +164,94 @@ class FPLProvider:
             headline=f"{player.expected_points:.1f} xPts",
             note=player.news,
             tone="warning" if player.availability else "neutral",
-            stats=[
-                Stat(label="Price", value=as_millions(player.cost)),
-                Stat(label=f"GW{upcoming.id}", value=fixture),
-                Stat(label="Form", value=f"{player.form:.1f}"),
-                Stat(label="Points", value=str(player.total_points)),
-                Stat(label="Per game", value=f"{player.points_per_game:.1f}"),
-                Stat(label="Minutes", value=f"{player.minutes:,}"),
-                Stat(label="Owned by", value=f"{player.selected_by:.1f}%"),
-                # Opta's expected numbers, which are why FPL needs no second
-                # stats provider — they arrive with the price.
-                Stat(label="xG", value=f"{player.expected_goals:.2f}"),
-                Stat(label="xA", value=f"{player.expected_assists:.2f}"),
-                Stat(label="xGI", value=f"{player.expected_goal_involvements:.2f}"),
-                Stat(label="xGC", value=f"{player.expected_goals_conceded:.2f}"),
-                Stat(label="ICT", value=f"{player.ict_index:.1f}"),
+            groups=[
+                StatGroup(
+                    title="This week",
+                    stats=[
+                        Stat(label="Fixture", value=self._fixture_line(player, upcoming.id)),
+                        Stat(label="Expected", value=f"{player.expected_points:.1f} xPts"),
+                        Stat(label="Form", value=f"{player.form:.1f}"),
+                        Stat(
+                            label="Availability",
+                            value=player.availability or "fit",
+                            tone="warning" if player.availability else "good",
+                        ),
+                    ],
+                ),
+                StatGroup(
+                    title="Season",
+                    stats=[
+                        Stat(label="Points", value=str(player.total_points)),
+                        Stat(label="Per game", value=f"{player.points_per_game:.1f}"),
+                        Stat(label="Starts", value=f"{player.starts}"),
+                        Stat(label="Minutes", value=f"{player.minutes:,}"),
+                        Stat(label="Goals", value=str(player.goals)),
+                        Stat(label="Assists", value=str(player.assists)),
+                        *(
+                            [
+                                Stat(label="Clean sheets", value=str(player.clean_sheets)),
+                                Stat(label="Conceded", value=str(player.goals_conceded)),
+                            ]
+                            if keeper_or_defender
+                            else []
+                        ),
+                        *([Stat(label="Saves", value=str(player.saves))] if player.position == "GKP" else []),
+                        Stat(label="Bonus", value=str(player.bonus)),
+                        # The raw score bonus is awarded from, and the better
+                        # signal — bonus itself is capped at three a match.
+                        Stat(label="BPS", value=str(player.bonus_points)),
+                        Stat(label="Cards", value=f"{player.yellow_cards}Y / {player.red_cards}R"),
+                    ],
+                ),
+                StatGroup(
+                    title="Underlying",
+                    stats=[
+                        Stat(label="xG", value=f"{player.expected_goals:.2f}"),
+                        Stat(label="xA", value=f"{player.expected_assists:.2f}"),
+                        Stat(label="xGI", value=f"{player.expected_goal_involvements:.2f}"),
+                        Stat(label="xGC", value=f"{player.expected_goals_conceded:.2f}"),
+                        Stat(label="ICT", value=f"{player.ict_index:.1f}"),
+                    ],
+                ),
+                StatGroup(title="Set pieces", stats=self._set_pieces(player)),
+                StatGroup(
+                    title="Market",
+                    stats=[
+                        Stat(label="Price", value=as_millions(player.cost)),
+                        Stat(
+                            label="This week",
+                            value=f"{'+' if player.price_change > 0 else ''}{player.price_change / 10:.1f}m",
+                            tone="good" if player.price_change > 0 else "neutral",
+                        ),
+                        Stat(label="Owned by", value=f"{player.selected_by:.1f}%"),
+                        Stat(label="Transfers in", value=f"{player.transfers_in:,}"),
+                        Stat(label="Transfers out", value=f"{player.transfers_out:,}"),
+                    ],
+                ),
             ],
         )
+
+    def _fixture_line(self, player: Player, gameweek: int) -> str:
+        return self._fixtures_by_club([player], gameweek).get(player.team, "no fixture")
+
+    @staticmethod
+    def _set_pieces(player: Player) -> list[Stat]:
+        """Whose duty it is, which is most of the gap between two similar prices.
+
+        Only listed when they are on them: "not on penalties" for every player
+        who is not would be nineteen rows of nothing.
+        """
+        duties = [
+            ("Penalties", player.penalties_order),
+            ("Corners", player.corners_order),
+            ("Free kicks", player.freekicks_order),
+        ]
+        taken = [
+            Stat(label=name, value=f"#{order}", tone="good" if order == 1 else "neutral")
+            for name, order in duties
+            if order is not None
+        ]
+        return taken or [Stat(label="Set pieces", value="none")]
 
     def roster(self, league_id: str) -> list[PlayerCard]:
         """The squad in full, with the season numbers a week view leaves out."""

@@ -1,8 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
+import { AnimatePresence, m } from "motion/react";
+import { fade, list, listItem, slideOver } from "@/lib/motion";
+import { IconButton } from "@/components/ui/icon-button";
+import { Loading } from "@/components/ui/state";
 import { api, type PlayerDetail } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -29,72 +32,94 @@ export function PlayerPanel({
   });
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex justify-end bg-foreground/20"
-      onClick={onClose}
-      role="presentation"
-    >
-      <aside
-        className="flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-border bg-popover shadow-lg"
-        onClick={(e) => e.stopPropagation()}
-        aria-label="Player detail"
+    <AnimatePresence>
+      <m.div
+        variants={fade}
+        initial="hidden"
+        animate="shown"
+        exit="gone"
+        className="fixed inset-0 z-50 flex justify-end bg-foreground/20"
+        onClick={onClose}
+        role="presentation"
       >
-        <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
-          <div className="min-w-0">
-            {player.data ? (
-              <>
-                <h2 className="font-display text-xl font-semibold tracking-tight">{player.data.name}</h2>
-                <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">
-                  {[player.data.position, player.data.team].filter(Boolean).join(" · ")}
-                </p>
-              </>
-            ) : (
-              <Skeleton className="h-6 w-40" />
-            )}
-          </div>
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
-            <X />
-          </Button>
-        </div>
-
-        {player.isError && (
-          <p className="m-5 text-[13.5px] leading-relaxed text-destructive">{player.error.message}</p>
-        )}
-
-        {player.data && (
-          <div className="flex flex-col gap-5 px-5 py-4">
-            <div>
-              <div
-                className={cn(
-                  "font-display text-3xl font-semibold tracking-tight tabular-nums",
-                  player.data.tone === "warning" && "text-warn",
-                )}
-              >
-                {player.data.headline}
-              </div>
-              {player.data.note && (
-                <Badge variant="warn" appearance="status" className="mt-2">
-                  {player.data.note}
-                </Badge>
+        <m.aside
+          variants={slideOver}
+          initial="hidden"
+          animate="shown"
+          exit="gone"
+          className="flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-border bg-popover shadow-lg"
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Player detail"
+        >
+          <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-border bg-popover px-5 py-4">
+            <div className="min-w-0">
+              {player.data ? (
+                <>
+                  <h2 className="font-display text-xl font-semibold tracking-tight">{player.data.name}</h2>
+                  <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">
+                    {[player.data.position, player.data.team].filter(Boolean).join(" · ")}
+                  </p>
+                </>
+              ) : (
+                <Skeleton className="h-6 w-40" />
               )}
             </div>
-
-            <dl className="grid grid-cols-2 gap-x-4">
-              {player.data.stats.map((stat) => (
-                <div
-                  key={stat.label}
-                  className="flex items-baseline justify-between gap-3 border-b border-border/45 py-2"
-                >
-                  <dt className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-                    {stat.label}
-                  </dt>
-                  <dd className="font-mono text-[13px] tabular-nums">{stat.value}</dd>
-                </div>
-              ))}
-            </dl>
+            <IconButton label="Close" side="left" icon={<X />} onClick={onClose} />
           </div>
-        )}
-      </aside>
-    </div>
+
+          {player.isLoading && <Loading lines={4} />}
+          {player.isError && (
+            <p className="m-5 text-[13.5px] leading-relaxed text-destructive">{player.error.message}</p>
+          )}
+
+          {player.data && (
+            <m.div variants={list} initial="hidden" animate="shown" className="flex flex-col gap-5 px-5 py-4">
+              <m.div variants={listItem}>
+                <div
+                  className={cn(
+                    "font-display text-3xl font-semibold tracking-tight tabular-nums",
+                    player.data.tone === "warning" && "text-warn",
+                  )}
+                >
+                  {player.data.headline}
+                </div>
+                {player.data.note && (
+                  <Badge variant="warn" appearance="status" className="mt-2">
+                    {player.data.note}
+                  </Badge>
+                )}
+              </m.div>
+
+              {player.data.groups.map((group) => (
+                <m.section key={group.title} variants={listItem}>
+                  <h3 className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    {group.title}
+                  </h3>
+                  <dl>
+                    {group.stats.map((stat) => (
+                      <div
+                        key={stat.label}
+                        className="flex items-baseline justify-between gap-3 border-b border-border/45 py-1.5 last:border-b-0"
+                      >
+                        <dt className="text-[13px] text-muted-foreground">{stat.label}</dt>
+                        <dd
+                          className={cn(
+                            "font-mono text-[13px] tabular-nums",
+                            stat.tone === "good" && "text-ok",
+                            stat.tone === "warning" && "text-warn",
+                          )}
+                        >
+                          {stat.value}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </m.section>
+              ))}
+            </m.div>
+          )}
+        </m.aside>
+      </m.div>
+    </AnimatePresence>
   );
 }

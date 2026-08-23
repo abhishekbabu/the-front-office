@@ -223,6 +223,11 @@ class SleeperClient:
                 injury_status=str(p.get("injury_status") or ""),
                 depth_chart_order=int(p.get("depth_chart_order") or 0),
                 years_exp=int(p.get("years_exp") or 0),
+                age=int(p.get("age") or 0),
+                college=str(p.get("college") or ""),
+                number=int(p.get("number") or 0),
+                injury_body_part=str(p.get("injury_body_part") or ""),
+                injury_notes=str(p.get("injury_notes") or ""),
             )
         self._api.cache_set(f"players_{sport}", trimmed)
         logger.debug(f"Cached {len(trimmed)} {sport} players from Sleeper")
@@ -256,6 +261,7 @@ class SleeperClient:
                 opponent=str(row.get("opponent") or ""),
                 points=float(points),
                 injury_status=str(player.get("injury_status") or ""),
+                stats={k: float(v) for k, v in stats.items() if isinstance(v, int | float)},
             )
         return projections
 

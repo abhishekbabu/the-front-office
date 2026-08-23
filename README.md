@@ -50,7 +50,11 @@ the span that caused them. Without `LOGFIRE_TOKEN` nothing is exported and no
 network call is made.
 
 **Web UI** (`web/`) — React 19, Vite, Tailwind v4 and Radix primitives, served by
-FastAPI. Color is themed in two orthogonal dimensions: a palette (`data-theme` on
+FastAPI. Shared pieces live in `components/ui/`: cards, badges, a table that
+reads its columns off the data, one loading vocabulary, and `IconButton`, whose
+single required `label` is both tooltip and accessible name. Animation is
+Motion, loaded lazily so the entry bundle stays near 128 kB gzip — `just
+check-web` fails if it grows past 140. Color is themed in two orthogonal dimensions: a palette (`data-theme` on
 `<html>`) and light/dark (`color-scheme`, driven by a class), so every token is a
 single `light-dark(light, dark)` declaration and no component branches on either.
 Status colors are shared across palettes rather than re-themed, and chosen so

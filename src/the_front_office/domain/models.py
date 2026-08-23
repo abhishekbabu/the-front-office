@@ -104,6 +104,17 @@ class PlayerCard(BaseModel):
     tone: Tone = "neutral"
 
 
+class StatGroup(BaseModel):
+    """A handful of related figures under a heading.
+
+    Twenty numbers in one list is a wall; the same twenty under "This week",
+    "Season" and "Set pieces" can be read without looking for anything.
+    """
+
+    title: str
+    stats: list[Stat] = Field(default_factory=list)
+
+
 class PlayerDetail(BaseModel):
     """Everything worth knowing about one player, on demand.
 
@@ -119,7 +130,7 @@ class PlayerDetail(BaseModel):
     headline: str = Field(default="", description="The one number this player is judged on.")
     note: str = Field(default="", description="Injury or availability news, in the platform's words.")
     tone: Tone = "neutral"
-    stats: list[Stat] = Field(default_factory=list)
+    groups: list[StatGroup] = Field(default_factory=list)
 
 
 class Swap(BaseModel):

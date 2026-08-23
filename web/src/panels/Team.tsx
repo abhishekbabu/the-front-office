@@ -2,15 +2,16 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type League, type PlayerCard, type Sport } from "@/lib/api";
 import { Card, CardHeader } from "@/components/ui/card";
-import { Table, Td, Th, Tr } from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Empty, Loading } from "@/components/ui/state";
 import { PlayerPanel } from "@/components/ui/player";
 import { ErrorNote, PageHeader } from "@/panels/shared";
-import { cn } from "@/lib/utils";
 
-/** Columns whose values are figures, so they align right like the numbers they are. */
-const NUMERIC = new Set(["xPts", "Price", "Proj", "Points", "Form", "xGI", "Owned", "Depth", "Exp", "PTS", "REB", "AST"]);
+/** Columns whose values are figures, so they align right like numbers. */
+const NUMERIC = new Set([
+  "xPts", "Price", "Proj", "Points", "Form", "xGI", "Owned", "Depth", "Exp", "PTS", "REB", "AST",
+]);
 
 /**
  * Values that mean "look at this".
@@ -24,10 +25,10 @@ function statusTone(value: string): "fail" | "warn" {
 }
 
 /**
- * The whole squad, in more depth than a week view.
+ * The whole squad, in more depth than the week view.
  *
- * This is where you go to look at your players rather than at this week: the
- * season numbers, the ownership, the depth chart. Any row opens.
+ * This is where you look at your players rather than at this week: the season
+ * numbers, the ownership, the depth chart. Any row opens.
  */
 export function TeamPanel({ sport, league }: { sport: Sport; league: League }) {
   const [open, setOpen] = useState<string | null>(null);
@@ -37,70 +38,44 @@ export function TeamPanel({ sport, league }: { sport: Sport; league: League }) {
     queryFn: () => api.roster(sport.key, league.league_id),
   });
 
-  // The columns are the sport's own vocabulary, read off the data rather than
-  // declared per sport.
-  const columns = roster.data?.[0] ? Object.keys(roster.data[0].columns) : [];
-
   return (
     <>
       <PageHeader title={league.name} meta={league.detail} />
 
       {roster.isError && <ErrorNote error={roster.error} />}
+      {roster.isLoading && <Loading lines={5} />}
 
-      <div className="p-5">
-        <Card>
-          <CardHeader>
-            <span>Squad</span>
-            {roster.data && <span>{roster.data.length} players</span>}
-          </CardHeader>
+      {roster.data && (
+        <div className="p-5">
+          <Card>
+            <CardHeader>
+              <span>Squad</span>
+              <span>{roster.data.length} players</span>
+            </CardHeader>
 
-          {roster.isLoading && <Skeleton className="m-4 h-64" />}
-
-          {roster.data && (
-            <Table>
-              <thead>
-                <tr>
-                  {columns.map((column) => (
-                    <Th key={column} className={cn(NUMERIC.has(column) && "text-right")}>
-                      {column}
-                    </Th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {roster.data.map((card) => (
-                  <Tr
-                    key={card.player_id}
-                    onClick={() => setOpen(card.player_id)}
-                    className="cursor-pointer"
-                    tabIndex={0}
-                    onKeyDown={(e) => e.key === "Enter" && setOpen(card.player_id)}
-                  >
-                    {columns.map((column) => {
-                      const value = card.columns[column] ?? "";
-                      return (
-                        <Td key={column} className={cn(NUMERIC.has(column) && "text-right")}>
-                          {column === "Status" && value ? (
-                            <Badge variant={statusTone(value)} appearance="status">
-                              {value}
-                            </Badge>
-                          ) : column === "Player" ? (
-                            <span className="font-medium">{value}</span>
-                          ) : column === "Slot" ? (
-                            <span className="font-mono text-[11px] text-muted-foreground">{value}</span>
-                          ) : (
-                            value
-                          )}
-                        </Td>
-                      );
-                    })}
-                  </Tr>
-                ))}
-              </tbody>
-            </Table>
-          )}
-        </Card>
-      </div>
+            {roster.data.length === 0 ? (
+              <Empty title="No players yet" detail="This roster is empty for the current season." />
+            ) : (
+              <DataTable
+                rows={roster.data}
+                numeric={NUMERIC}
+                onSelect={(row) => setOpen(row.player_id)}
+                render={(column, value) =>
+                  column === "Status" && value ? (
+                    <Badge variant={statusTone(value)} appearance="status">
+                      {value}
+                    </Badge>
+                  ) : column === "Player" ? (
+                    <span className="font-medium">{value}</span>
+                  ) : column === "Slot" ? (
+                    <span className="font-mono text-[11px] text-muted-foreground">{value}</span>
+                  ) : undefined
+                }
+              />
+            )}
+          </Card>
+        </div>
+      )}
 
       {open && (
         <PlayerPanel

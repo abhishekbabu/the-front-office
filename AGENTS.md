@@ -93,12 +93,18 @@ leave the process — report presence, never contents. `reload_settings` mutates
 the singleton in place; rebinding strands every module that imported it.
 
 **UI.** The API returns the domain models themselves — never a parallel response
-type for something `domain/models.py` already models, or the two drift. Provider
-access lives in `data.py`, free of any web framework, so it is testable with no
-server running. The model is optional: without `GOOGLE_API_KEY` nothing that
-needs one is offered, rather than offered and refused. Never ship a canned
-report in the package — a fabricated one the app can return is a path that
-eventually returns it for real.
+type for something `domain/models.py` already models. Provider access lives in
+`data.py`, free of any web framework, so it is testable with no server running.
+The model is optional: without `GOOGLE_API_KEY` nothing needing one is offered,
+rather than offered and refused. Never ship a canned report in the package.
+
+Reach for `components/ui/` before writing a card, table, loading state or
+control: those existed per panel first and drifted, and waiting should look the
+same everywhere because it means the same thing. Controls are `IconButton`,
+whose one required `label` is both tooltip and accessible name — an icon without
+one is a guess. Motion lives in `lib/motion.ts`, loaded via `LazyMotion` from
+its own module or the whole library lands in the entry bundle, which
+`check-web` budgets.
 
 In `web/`, color comes only from semantic tokens (`bg-card`,
 `text-muted-foreground`) — never a raw Tailwind palette utility, which cannot

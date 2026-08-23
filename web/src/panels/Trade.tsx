@@ -3,9 +3,10 @@ import { useMutation } from "@tanstack/react-query";
 import { api, type Evaluation, type League, type Sport } from "@/lib/api";
 import { verdictTone } from "@/lib/tone";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { ArrowRight } from "lucide-react";
+import { IconButton } from "@/components/ui/icon-button";
+import { Working } from "@/components/ui/state";
 import { Card, CardHeader } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Chat, Chips, ErrorNote, PageHeader } from "@/panels/shared";
 
 export function TradePanel({ sport, league }: { sport: Sport; league: League }) {
@@ -32,13 +33,17 @@ export function TradePanel({ sport, league }: { sport: Sport; league: League }) 
           placeholder="Give <player>, Get <player>"
           className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-[13.5px] placeholder:text-muted-foreground"
         />
-        <Button type="submit" variant="primary" disabled={!text.trim() || run.isPending}>
-          {run.isPending ? "Evaluating…" : "Evaluate"}
-        </Button>
+        <IconButton
+          label={run.isPending ? "Evaluating" : "Evaluate this trade"}
+          variant="primary"
+          type="submit"
+          icon={<ArrowRight />}
+          disabled={!text.trim() || run.isPending}
+        />
       </form>
 
       {run.isError && <ErrorNote error={run.error} />}
-      {run.isPending && <Skeleton className="m-5 h-64" />}
+      {run.isPending && <Working label="Pricing both sides, then weighing them…" />}
 
       {run.data && (
         <div className="flex flex-col gap-4 p-5">

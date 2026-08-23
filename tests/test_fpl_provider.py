@@ -493,7 +493,7 @@ def test_a_player_carries_the_numbers_fpl_judges_them_on() -> None:
     """Expected goals arrive in the same payload as the price, which is why
     this sport needs no second stats provider."""
     detail = provider().player(LEAGUE_ID, "8")
-    labels = {stat.label for stat in detail.stats}
+    labels = {stat.label for group in detail.groups for stat in group.stats}
 
     assert detail.name == "Player 8"
     assert {"xG", "xA", "xGI", "Form", "Owned by", "Price"} <= labels
@@ -501,7 +501,7 @@ def test_a_player_carries_the_numbers_fpl_judges_them_on() -> None:
 
 def test_a_players_fixture_is_for_the_gameweek_still_open() -> None:
     detail = provider().player(LEAGUE_ID, "8")
-    assert any(stat.label == "GW5" for stat in detail.stats)
+    assert any(stat.label == "Fixture" for group in detail.groups for stat in group.stats)
 
 
 def test_a_flagged_player_is_toned_and_carries_the_news() -> None:
@@ -520,3 +520,42 @@ def test_a_flagged_player_is_toned_and_carries_the_news() -> None:
 def test_an_unknown_player_is_refused_by_name() -> None:
     with pytest.raises(PlayerNotFoundError, match="nope"):
         provider().player(LEAGUE_ID, "nope")
+
+
+def test_a_players_numbers_are_grouped_rather_than_listed() -> None:
+    """Twenty figures in one list is a wall; the same twenty under headings can
+    be read without looking for anything."""
+    titles = [group.title for group in provider().player(LEAGUE_ID, "8").groups]
+
+    assert titles == ["This week", "Season", "Underlying", "Set pieces", "Market"]
+
+
+def test_set_pieces_list_only_the_duties_actually_held() -> None:
+    """ "Not on penalties" for every player who is not would be rows of nothing."""
+    fake = FakeFPL()
+    fake.get_players = lambda: {  # type: ignore[method-assign]
+        **SQUAD_PLAYERS,
+        8: player(8, "MID", 8.0, penalties_order=1, corners_order=2),
+        **MARKET,
+    }
+    detail = FPLProvider(ENTRY_ID, client=fake).player(LEAGUE_ID, "8")  # type: ignore[arg-type]
+    pieces = next(g for g in detail.groups if g.title == "Set pieces")
+
+    assert [(s.label, s.value) for s in pieces.stats] == [("Penalties", "#1"), ("Corners", "#2")]
+    assert pieces.stats[0].tone == "good"  # first choice is worth noticing
+
+
+def test_a_player_on_no_set_pieces_says_so_once() -> None:
+    pieces = next(g for g in provider().player(LEAGUE_ID, "8").groups if g.title == "Set pieces")
+    assert [s.value for s in pieces.stats] == ["none"]
+
+
+def test_a_keeper_gets_the_numbers_only_a_keeper_has() -> None:
+    """Saves on an attacker is a zero nobody asked for."""
+    labels = {s.label for g in provider().player(LEAGUE_ID, "1").groups for s in g.stats}
+    assert {"Saves", "Clean sheets", "Conceded"} <= labels
+
+
+def test_an_attacker_is_not_given_a_keepers_line() -> None:
+    labels = {s.label for g in provider().player(LEAGUE_ID, "13").groups for s in g.stats}
+    assert "Saves" not in labels

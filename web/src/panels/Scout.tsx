@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api, type League, type Sport, type Summary } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Loading } from "@/components/ui/state";
 import { StatStrip } from "@/components/ui/stat";
 import { LineupCard, SideCard } from "@/components/ui/lineup";
 import { PlayerPanel } from "@/components/ui/player";
@@ -30,12 +30,7 @@ export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) 
       <PageHeader title={league.name} meta={league.detail} />
       <StatStrip stats={week.data?.headline ?? []} />
 
-      {week.isLoading && (
-        <div className="flex flex-col gap-3 p-5">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-72 w-full" />
-        </div>
-      )}
+      {week.isLoading && <Loading lines={4} />}
       {week.isError && <ErrorNote error={week.error} />}
 
       {week.data && (

@@ -33,6 +33,11 @@ class PlayerMeta(TypedDict, total=False):
     injury_status: str
     depth_chart_order: int
     years_exp: int
+    age: int
+    college: str
+    number: int
+    injury_body_part: str
+    injury_notes: str
 
 
 @dataclass(frozen=True)
@@ -98,6 +103,9 @@ class WeeklyProjection:
     opponent: str
     points: float
     injury_status: str = ""
+    stats: dict[str, float] = field(default_factory=dict)
+    """The projection broken out — passing yards, receptions, targets. The total
+    is what a lineup is chosen on; this is what makes the total believable."""
 
     @property
     def is_questionable(self) -> bool:

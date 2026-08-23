@@ -38,6 +38,7 @@ from the_front_office.domain.models import (
     SportContext,
     Spot,
     Stat,
+    StatGroup,
     Summary,
     Swap,
     Tone,
@@ -46,6 +47,38 @@ from the_front_office.domain.models import (
 from the_front_office.domain.ports import LeagueRef
 
 logger = logging.getLogger(__name__)
+
+# Sleeper's projection keys, in the order a box score reads them. Only the ones
+# a fantasy line is actually made of — the payload carries dozens more, most of
+# which are zero for any given player.
+PROJECTION_LABELS: tuple[tuple[str, str], ...] = (
+    ("pass_att", "Pass att"),
+    ("pass_cmp", "Completions"),
+    ("pass_yd", "Pass yards"),
+    ("pass_td", "Pass TD"),
+    ("pass_int", "Interceptions"),
+    ("rush_att", "Carries"),
+    ("rush_yd", "Rush yards"),
+    ("rush_td", "Rush TD"),
+    ("rec_tgt", "Targets"),
+    ("rec", "Receptions"),
+    ("rec_yd", "Rec yards"),
+    ("rec_td", "Rec TD"),
+    ("fum_lost", "Fumbles lost"),
+)
+
+
+def _projection_lines(stats: dict[str, float]) -> list[Stat]:
+    """The projection broken out, skipping what does not apply.
+
+    A receiver has no passing line, and printing a column of zeroes for one
+    buries the three numbers that matter.
+    """
+    return [
+        Stat(label=label, value=f"{stats[key]:.1f}".rstrip("0").rstrip(".") or "0")
+        for key, label in PROJECTION_LABELS
+        if stats.get(key)
+    ]
 
 
 @dataclass(frozen=True)
@@ -165,7 +198,7 @@ class SleeperNFLProvider:
         return "no game" if scheduled else "—"
 
     def player(self, league_id: str, player_id: str) -> PlayerDetail:
-        """One player, as this week and the depth chart see them."""
+        """One player: the week, what makes the projection, and who they are."""
         state = self._week(league_id)
         meta = state.players.get(player_id)
         if meta is None:
@@ -175,20 +208,47 @@ class SleeperNFLProvider:
         scheduled = any(p.opponent for p in state.projected)
         depth = int(meta.get("depth_chart_order") or 0)
         injury = str(meta.get("injury_status") or "")
+        body = str(meta.get("injury_body_part") or "")
+
+        groups = [
+            StatGroup(
+                title=f"Week {state.week}",
+                stats=[
+                    Stat(label="Opponent", value=self._opponent_label(projection, scheduled)),
+                    Stat(label="Projected", value=f"{projection.points:.1f}" if projection else "—"),
+                    Stat(
+                        label="Status",
+                        value=injury or "active",
+                        tone="warning" if injury else "good",
+                    ),
+                    *([Stat(label="Injury", value=body)] if body else []),
+                ],
+            )
+        ]
+        if projection and projection.stats:
+            groups.append(StatGroup(title="Projected line", stats=_projection_lines(projection.stats)))
+        groups.append(
+            StatGroup(
+                title="Player",
+                stats=[
+                    Stat(label="Depth chart", value=f"{depth}" if depth else "unlisted"),
+                    Stat(label="Experience", value=f"{int(meta.get('years_exp') or 0)} seasons"),
+                    *([Stat(label="Age", value=str(meta["age"]))] if meta.get("age") else []),
+                    *([Stat(label="Number", value=f"#{meta['number']}")] if meta.get("number") else []),
+                    *([Stat(label="College", value=str(meta["college"]))] if meta.get("college") else []),
+                ],
+            )
+        )
+
         return PlayerDetail(
             player_id=player_id,
             name=str(meta.get("name") or player_id),
             position=str(meta.get("position") or ""),
             team=str(meta.get("team") or "FA"),
             headline=f"{projection.points:.1f} proj pts" if projection else "no projection",
-            note=injury,
+            note=str(meta.get("injury_notes") or injury),
             tone="warning" if injury else "neutral",
-            stats=[
-                Stat(label=f"Week {state.week}", value=self._opponent_label(projection, scheduled)),
-                Stat(label="Depth chart", value=f"{depth}" if depth else "unlisted"),
-                Stat(label="Experience", value=f"{int(meta.get('years_exp') or 0)} seasons"),
-                Stat(label="Status", value=str(meta.get("status") or "active")),
-            ],
+            groups=groups,
         )
 
     # ── trades ──────────────────────────────────────────────────────

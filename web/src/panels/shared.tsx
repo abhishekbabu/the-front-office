@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, SendHorizontal } from "lucide-react";
+import { IconButton } from "@/components/ui/icon-button";
 import { ApiError, api, type Move } from "@/lib/api";
 import { moveTone } from "@/lib/tone";
 import { splitMetric } from "@/lib/metric";
@@ -223,9 +224,14 @@ export function Chat({ chatId }: { chatId: string }) {
             placeholder="Why that move?"
             className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-[13.5px] placeholder:text-muted-foreground"
           />
-          <Button type="submit" variant="primary" disabled={!draft.trim() || ask.isPending}>
-            Ask
-          </Button>
+          <IconButton
+            label="Ask"
+            side="left"
+            variant="primary"
+            type="submit"
+            icon={<SendHorizontal />}
+            disabled={!draft.trim() || ask.isPending}
+          />
         </form>
       </div>
     </Card>

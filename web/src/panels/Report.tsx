@@ -1,8 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
 import { api, type Analysis, type League, type Sport } from "@/lib/api";
-import { Button } from "@/components/ui/button";
+import { Play, RotateCw } from "lucide-react";
+import { IconButton } from "@/components/ui/icon-button";
+import { Empty, Working } from "@/components/ui/state";
 import { Card, CardHeader } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Chat, Chips, ErrorNote, MoveRow, PageHeader } from "@/panels/shared";
 
 /**
@@ -20,27 +21,26 @@ export function ReportPanel({ sport, league }: { sport: Sport; league: League })
   return (
     <>
       <PageHeader title="Report" meta={league.name}>
-        <Button variant="primary" onClick={() => run.mutate()} disabled={run.isPending}>
-          {run.isPending ? "Building…" : run.data ? "Run again" : "Run report"}
-        </Button>
+        <IconButton
+          label={run.isPending ? "Building the report" : run.data ? "Run again" : "Run report"}
+          variant="primary"
+          icon={run.data ? <RotateCw /> : <Play />}
+          onClick={() => run.mutate()}
+          disabled={run.isPending}
+        />
       </PageHeader>
 
       {run.isError && <ErrorNote error={run.error} />}
 
-      {run.isPending && (
-        <div className="flex flex-col gap-3 p-5">
-          <Skeleton className="h-4 w-64" />
-          <Skeleton className="h-28 w-full" />
-          <Skeleton className="h-28 w-full" />
-        </div>
-      )}
+      {/* A spinner rather than a placeholder: this is work someone started and
+          is waiting on, and a skeleton implies something is already arriving. */}
+      {run.isPending && <Working label="Reading the league, then asking the model…" />}
 
       {!run.data && !run.isPending && !run.isError && (
-        <p className="max-w-[70ch] p-5 text-[13.5px] leading-relaxed text-muted-foreground">
-          Reads your league as it stands right now, works out what has an exact answer — the best
-          legal lineup, what a transfer costs, how many games are left — and asks the model only for
-          the judgement: which projections to believe, which matchups to discount, what to do.
-        </p>
+        <Empty
+          title="No report yet"
+          detail="Reads your league as it stands, works out what has an exact answer — the best legal lineup, what a transfer costs, how many games are left — and asks the model only for the judgement."
+        />
       )}
 
       {run.data && (

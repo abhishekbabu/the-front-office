@@ -4,6 +4,8 @@ import { api, type League, type Sport } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { m } from "motion/react";
+import { list, listItem } from "@/lib/motion";
 import { YahooLoginButton } from "@/panels/shared";
 
 /**
@@ -47,11 +49,12 @@ export function Landing({
         </div>
       </div>
 
-      <div className="mt-8 flex flex-col gap-4">
+      <m.div variants={list} initial="hidden" animate="shown" className="mt-8 flex flex-col gap-4">
         {configured.map((sport, i) => {
           const result = results[i];
           return (
-            <Card key={sport.key}>
+            <m.div key={sport.key} variants={listItem}>
+            <Card>
               <CardHeader>
                 <span>{sport.label}</span>
                 {sport.ready && result?.isSuccess && (
@@ -128,9 +131,10 @@ export function Landing({
                 </button>
               ))}
             </Card>
+            </m.div>
           );
         })}
-      </div>
+      </m.div>
 
       {sports.some((s) => !s.configured) && (
         <p className="mt-6 text-[13px] text-muted-foreground">

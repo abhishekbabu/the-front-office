@@ -2,9 +2,9 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Setting } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { Loading } from "@/components/ui/state";
 import { Card, CardHeader } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Check, Save } from "lucide-react";
 import { ErrorNote, PageHeader } from "@/panels/shared";
 import { useTheme } from "@/lib/useTheme";
@@ -79,29 +79,30 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
   return (
     <>
       <PageHeader title="Settings" meta="Written to .env and applied immediately">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={onBack}>
-            <ArrowLeft />
-            Back
-          </Button>
-          <Button
-            variant="primary"
+        <div className="flex items-center gap-1">
+          <IconButton label="Back" icon={<ArrowLeft />} onClick={onBack} />
+          {/* The count lives in the label rather than beside the icon: the
+              control does one thing whether one field changed or six, and the
+              rows that changed already say which. */}
+          <IconButton
+            label={
+              save.isPending
+                ? "Saving"
+                : pending
+                  ? `Save ${pending} change${pending === 1 ? "" : "s"}`
+                  : "Nothing to save"
+            }
+            variant={pending ? "primary" : "ghost"}
+            icon={pending ? <Save /> : <Check />}
             disabled={!pending || save.isPending}
             onClick={() => save.mutate(drafts)}
-            // The count belongs on the rows that changed, not on the control:
-            // the button does one thing whether it is saving one field or six.
-            aria-label={pending ? `Save ${pending} changes` : "Saved"}
-            title={pending ? `Save ${pending} change${pending === 1 ? "" : "s"}` : "Nothing to save"}
-          >
-            {pending ? <Save /> : <Check />}
-            {save.isPending ? "Saving…" : "Save"}
-          </Button>
+          />
         </div>
       </PageHeader>
 
       {settings.isError && <ErrorNote error={settings.error} />}
       {save.isError && <ErrorNote error={save.error} />}
-      {settings.isLoading && <Skeleton className="m-5 h-96" />}
+      {settings.isLoading && <Loading lines={6} />}
 
       {settings.data && (
         <div className="flex flex-col gap-4 p-5">

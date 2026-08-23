@@ -95,7 +95,7 @@ async function main() {
         const report = page.getByRole("button", { name: "Report", exact: true });
         if (await report.count()) {
           await report.click();
-          const run = page.getByRole("button", { name: /Run (report|again)/i });
+          const run = page.getByRole("button", { name: /Run report|Run again/i });
           if (await run.count()) {
             await run.click();
             await page.waitForTimeout(1200);

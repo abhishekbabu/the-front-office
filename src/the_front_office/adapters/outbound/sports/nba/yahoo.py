@@ -28,10 +28,22 @@ from the_front_office.domain.errors import (
     LeagueNotFoundError,
     PlayerNotFoundError,
 )
-from the_front_office.domain.models import PlayerCard, PlayerDetail, SportContext, Stat, Summary, TradeProposal
+from the_front_office.domain.models import (
+    PlayerCard,
+    PlayerDetail,
+    SportContext,
+    Stat,
+    StatGroup,
+    Summary,
+    TradeProposal,
+)
 from the_front_office.domain.ports import LeagueRef
 
 logger = logging.getLogger(__name__)
+
+
+NINE_CAT = ("PTS", "REB", "AST", "STL", "BLK", "3PTM", "FG%", "FT%", "TO")
+"""What a nine-category league is actually scored on, in the order it is read."""
 
 
 def _recent(stats: object, key: str) -> str:
@@ -226,7 +238,12 @@ class YahooNBAProvider:
             headline=f"{_recent(stats, 'PTS')} pts over the last 15",
             note=status,
             tone="warning" if status else "neutral",
-            stats=[Stat(label=key, value=_recent(stats, key)) for key in ("PTS", "REB", "AST", "STL", "BLK", "FG%")],
+            groups=[
+                StatGroup(
+                    title="Last 15",
+                    stats=[Stat(label=key, value=_recent(stats, key)) for key in NINE_CAT],
+                )
+            ],
         )
 
     @property

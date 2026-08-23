@@ -80,6 +80,18 @@ def _parse_deadline(value: str) -> datetime:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
+def _order(value: Any) -> int | None:
+    """A set-piece order, or None for a player not on them.
+
+    Zero is not a rank, so it means the same as absent — and a `0` rendered
+    beside "penalties" reads like first choice."""
+    try:
+        rank = int(value)
+    except (TypeError, ValueError):
+        return None
+    return rank or None
+
+
 def _number(value: Any, default: float = 0.0) -> float:
     """Coerce a value the API sends as a string, or as null, to a float.
 
@@ -199,6 +211,22 @@ class FPLClient:
                     None if e.get("chance_of_playing_next_round") is None else int(e["chance_of_playing_next_round"])
                 ),
                 minutes=int(e.get("minutes") or 0),
+                starts=int(e.get("starts") or 0),
+                goals=int(e.get("goals_scored") or 0),
+                assists=int(e.get("assists") or 0),
+                clean_sheets=int(e.get("clean_sheets") or 0),
+                goals_conceded=int(e.get("goals_conceded") or 0),
+                saves=int(e.get("saves") or 0),
+                bonus=int(e.get("bonus") or 0),
+                bonus_points=int(e.get("bps") or 0),
+                yellow_cards=int(e.get("yellow_cards") or 0),
+                red_cards=int(e.get("red_cards") or 0),
+                penalties_order=_order(e.get("penalties_order")),
+                corners_order=_order(e.get("corners_and_indirect_freekicks_order")),
+                freekicks_order=_order(e.get("direct_freekicks_order")),
+                price_change=int(e.get("cost_change_event") or 0),
+                transfers_in=int(e.get("transfers_in_event") or 0),
+                transfers_out=int(e.get("transfers_out_event") or 0),
                 expected_goals=_number(e.get("expected_goals")),
                 expected_assists=_number(e.get("expected_assists")),
                 expected_goal_involvements=_number(e.get("expected_goal_involvements")),
