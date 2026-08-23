@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 import pytest
 
 from the_front_office.adapters.outbound.platforms.fpl.types import (
+    Chip,
+    ChipPlay,
     Entry,
     Fixture,
     Gameweek,
@@ -82,13 +84,31 @@ BENCH_IDS = [2, 12, 14, 15]
 
 
 def _picks() -> list[Pick]:
+    # Every real squad names both, and the vice is the one that matters when
+    # the captain does not play — a fixture without one cannot catch that.
     picks = [
-        Pick(element=pid, position=i, multiplier=2 if pid == 8 else 1, is_captain=pid == 8)
+        Pick(
+            element=pid,
+            position=i,
+            multiplier=2 if pid == 8 else 1,
+            is_captain=pid == 8,
+            is_vice_captain=pid == STARTING_IDS[1],
+        )
         for i, pid in enumerate(STARTING_IDS, start=1)
     ]
     picks += [Pick(element=pid, position=i, multiplier=0) for i, pid in enumerate(BENCH_IDS, start=12)]
     return picks
 
+
+# The game issues a set per half, so each name appears twice.
+DEFAULT_CHIPS = [
+    Chip(name="wildcard", start_event=2, stop_event=19),
+    Chip(name="wildcard", start_event=20, stop_event=38),
+    Chip(name="freehit", start_event=2, stop_event=19),
+    Chip(name="bboost", start_event=1, stop_event=19),
+    Chip(name="3xc", start_event=1, stop_event=19),
+    Chip(name="freehit", start_event=20, stop_event=38),
+]
 
 DEFAULT_H2H_SEASON = {
     1: H2HMatch(opponent_entry=99, opponent_name="Rival FC", my_points=60, opponent_points=44),
@@ -170,6 +190,9 @@ class FakeFPL:
         standings_error: Exception | None = None,
         live: dict[int, LiveStat] | None = None,
         live_error: Exception | None = None,
+        chips: list[Chip] | None = None,
+        chips_played: list[ChipPlay] | None = None,
+        chips_error: Exception | None = None,
     ) -> None:
         self.past_seasons = past_seasons if past_seasons is not None else list(DEFAULT_PAST_SEASONS)
         self.past_seasons_error = past_seasons_error
@@ -211,6 +234,9 @@ class FakeFPL:
         self.standings_error = standings_error
         self.live = live if live is not None else {}
         self.live_error = live_error
+        self.chips = chips if chips is not None else list(DEFAULT_CHIPS)
+        self.chips_played = chips_played or []
+        self.chips_error = chips_error
 
     def upcoming_gameweek(self, now: datetime | None = None) -> Gameweek:
         return Gameweek(
@@ -253,6 +279,16 @@ class FakeFPL:
         if self.fixtures_error:
             raise self.fixtures_error
         return self.fixtures
+
+    def get_chips(self) -> list[Chip]:
+        if self.chips_error:
+            raise self.chips_error
+        return self.chips
+
+    def get_chips_played(self, entry_id: int) -> list[ChipPlay]:
+        if self.chips_error:
+            raise self.chips_error
+        return self.chips_played
 
     def current_gameweek(self) -> Gameweek | None:
         return next((gw for gw in self.get_gameweeks() if gw.is_current), None)
@@ -993,3 +1029,76 @@ def test_a_team_links_to_that_managers_entry() -> None:
 def test_a_player_has_no_link_because_fpl_publishes_no_player_page() -> None:
     """An empty string is honest; a constructed URL that 404s is not."""
     assert provider().player(LEAGUE_ID, "8").url == ""
+
+
+# ── chips, and the armbands ─────────────────────────────────────────────
+
+
+def _chips(**kwargs: object) -> dict[str, str]:
+    boosts = provider(**kwargs).summary(H2H_LEAGUE).boosts
+    assert boosts is not None
+    return {stat.label: stat.value for stat in boosts.stats}
+
+
+def test_the_chips_carry_the_leagues_own_word_for_them() -> None:
+    """The UI knows nothing about football; the title comes with the data."""
+    boosts = provider().summary(H2H_LEAGUE).boosts
+
+    assert boosts is not None
+    assert boosts.title == "Chips"
+
+
+def test_a_chip_inside_its_window_is_available() -> None:
+    assert _chips()["Bench Boost"] == "available"
+
+
+def test_a_chip_whose_window_has_not_opened_says_when_it_does() -> None:
+    """A Wildcard cannot be played in GW1, and the game says so rather than
+    leaving a manager to find that out at the deadline."""
+    assert _chips(upcoming=2)["Wildcard"] == "from GW2"
+
+
+def test_a_chip_already_played_says_which_week_it_went() -> None:
+    played = _chips(chips_played=[ChipPlay(name="bboost", event=3)])
+
+    assert played["Bench Boost"] == "played GW3"
+
+
+def test_a_chip_whose_windows_have_all_closed_is_still_listed() -> None:
+    """An unplayed Free Hit is a thing that was lost, and a row saying so is
+    worth more than a row quietly missing."""
+    gone = _chips(chips=[Chip(name="freehit", start_event=1, stop_event=2)], upcoming=30)
+
+    assert gone["Free Hit"] == "gone unplayed"
+
+
+def test_one_row_per_chip_rather_than_one_per_window() -> None:
+    """The game issues each twice; a manager decides about the chip."""
+    labels = list(_chips())
+
+    assert labels == ["Wildcard", "Free Hit", "Bench Boost", "Triple Captain"]
+
+
+def test_a_failed_chip_lookup_leaves_the_rest_of_the_week() -> None:
+    summary = provider(chips_error=FPLAPIError("down")).summary(H2H_LEAGUE)
+
+    assert summary.boosts is None
+    assert summary.mine is not None
+
+
+def test_the_vice_captain_is_marked_as_well_as_the_captain() -> None:
+    """The vice is the whole point when the captain does not play, so a squad
+    that shows only the armband shows half the decision."""
+    summary = provider().summary(H2H_LEAGUE)
+    marked = [s.player for s in summary.mine.lineup + summary.mine.bench if "(" in s.player]
+
+    assert any(p.endswith("(C)") for p in marked)
+    assert any(p.endswith("(V)") for p in marked)
+
+
+def test_the_opponents_armbands_are_marked_too() -> None:
+    """Both sides are read across, so they have to say the same things."""
+    opponent = provider().summary(H2H_LEAGUE).opponent
+
+    assert opponent is not None
+    assert any("(C)" in s.player for s in opponent.lineup)

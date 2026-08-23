@@ -224,6 +224,15 @@ class Summary(BaseModel):
     fixtures: list[Stat] = Field(default_factory=list)
     """The real-world matches behind the week, one per club in play."""
 
+    boosts: StatGroup | None = Field(
+        default=None,
+        description=(
+            "One-time advantages the manager can spend, and what has become of each — "
+            "carrying its own title, because the league names them: FPL calls them chips. "
+            "None in a sport that has no such thing."
+        ),
+    )
+
     window: str = Field(
         default="",
         description=(

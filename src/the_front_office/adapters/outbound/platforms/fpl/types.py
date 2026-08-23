@@ -352,3 +352,44 @@ class LiveStat:
     @property
     def has_played(self) -> bool:
         return self.minutes > 0
+
+
+# The game's own names for the chips, and what a manager calls them.
+CHIP_NAMES = {
+    "wildcard": "Wildcard",
+    "freehit": "Free Hit",
+    "bboost": "Bench Boost",
+    "3xc": "Triple Captain",
+    "manager": "Assistant Manager",
+}
+
+
+@dataclass(frozen=True)
+class Chip:
+    """One chip, and the window of gameweeks it can be played in.
+
+    FPL splits the season in half and issues a set for each, so the same name
+    appears twice with different windows — a Free Hit unused by GW19 is gone
+    rather than carried forward.
+    """
+
+    name: str
+    """The game's own key: 'freehit', 'bboost', '3xc', 'wildcard'."""
+
+    start_event: int
+    stop_event: int
+
+    @property
+    def label(self) -> str:
+        return CHIP_NAMES.get(self.name, self.name.title())
+
+    def covers(self, gameweek: int) -> bool:
+        return self.start_event <= gameweek <= self.stop_event
+
+
+@dataclass(frozen=True)
+class ChipPlay:
+    """A chip this manager has already spent, and the week they spent it."""
+
+    name: str
+    event: int

@@ -44,12 +44,23 @@ export function PageHeader({
       <div className="flex min-w-0 items-center gap-3">
         {leading}
         <div className="min-w-0">
-          <h1 className="font-display text-[21px] font-semibold leading-tight tracking-tight">{title}</h1>
+          {/* On the name's own line rather than after the block: the meta line
+              is much the longer of the two, so a link placed after both drifts
+              out to the far right and stops reading as belonging to the name. */}
+          <div className="flex min-w-0 items-center gap-1">
+            <h1 className="truncate font-display text-[21px] font-semibold leading-tight tracking-tight">
+              {title}
+            </h1>
+            {href && (
+              <ExternalLink
+                href={href}
+                label={hrefLabel ?? "Open on the platform"}
+                className="h-6 shrink-0 px-1"
+              />
+            )}
+          </div>
           {meta && <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">{meta}</p>}
         </div>
-        {/* Beside the name rather than out with the controls: it is a fact
-            about this league, not an action on the page. */}
-        {href && <ExternalLink href={href} label={hrefLabel ?? "Open on the platform"} />}
       </div>
       {children}
     </div>
