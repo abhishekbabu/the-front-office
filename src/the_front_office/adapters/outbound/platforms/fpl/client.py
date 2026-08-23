@@ -29,6 +29,7 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
     Fixture,
     Gameweek,
     GameweekResult,
+    H2HMatch,
     MiniLeague,
     Pick,
     Player,
@@ -294,6 +295,29 @@ class FPLClient:
             for row in rows
             if row.get("event") is not None
         ]
+
+    def get_h2h_match(self, league_id: int, entry_id: int, gameweek: int) -> H2HMatch | None:
+        """The tie this entry is in for `gameweek`, if there is one.
+
+        Head-to-head leagues pair managers per gameweek, so the opponent is a
+        property of the week rather than of the league. Returns None for a week
+        with no tie — a bye, or a league that has not drawn its fixtures.
+        """
+        data = self._api.cached(
+            f"h2h_{league_id}_{gameweek}",
+            f"{BASE_URL}/leagues-h2h-matches/league/{league_id}/?event={gameweek}",
+            ENTRY_TTL,
+        )
+        for match in (data or {}).get("results") or []:
+            for mine, theirs in (("1", "2"), ("2", "1")):
+                if match.get(f"entry_{mine}_entry") == entry_id and match.get(f"entry_{theirs}_entry"):
+                    return H2HMatch(
+                        opponent_entry=int(match[f"entry_{theirs}_entry"]),
+                        opponent_name=str(match.get(f"entry_{theirs}_name") or "Opponent"),
+                        my_points=int(match.get(f"entry_{mine}_points") or 0),
+                        opponent_points=int(match.get(f"entry_{theirs}_points") or 0),
+                    )
+        return None
 
     # ── fixtures ────────────────────────────────────────────────────
 

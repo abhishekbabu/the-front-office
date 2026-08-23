@@ -14,6 +14,7 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
     Fixture,
     Gameweek,
     GameweekResult,
+    H2HMatch,
     MiniLeague,
     Pick,
     Player,
@@ -24,6 +25,7 @@ from the_front_office.domain.errors import FPLAPIError, LeagueNotFoundError
 
 ENTRY_ID = 77
 LEAGUE_ID = "900"
+H2H_LEAGUE_ID = "950"
 
 
 def player(pid: int, position: str, points: float, cost: int = 50, team: str = "ARS", **kwargs: object) -> Player:
@@ -106,6 +108,7 @@ class FakeFPL:
             else [
                 MiniLeague(id=314, name="Overall", rank=340112, rank_count=9000000, is_private=False),
                 MiniLeague(id=900, name="Work League", rank=3, rank_count=12, is_private=True),
+                MiniLeague(id=950, name="Hood h2h", rank=1, is_private=True, is_h2h=True),
             ]
         )
         self.upcoming = upcoming
@@ -161,6 +164,9 @@ class FakeFPL:
     def get_history(self, entry_id: int) -> list[GameweekResult]:
         return self.history
 
+    def get_h2h_match(self, league_id: int, entry_id: int, gameweek: int) -> H2HMatch | None:
+        return H2HMatch(opponent_entry=99, opponent_name="Rival FC", my_points=40, opponent_points=52)
+
     def get_fixtures(self, gameweek: int) -> list[Fixture]:
         if self.fixtures_error:
             raise self.fixtures_error
@@ -190,7 +196,7 @@ def test_the_registry_advertises_no_trade_support() -> None:
 def test_only_invitational_leagues_are_listed() -> None:
     """Everyone is in Overall and in one league per gameweek; nobody competes there."""
     refs = provider().list_leagues()
-    assert [ref.name for ref in refs] == ["Work League"]
+    assert [ref.name for ref in refs] == ["Work League", "Hood h2h"]
     assert refs[0].league_id == LEAGUE_ID
     assert "3 of 12" in refs[0].detail
 
@@ -431,9 +437,9 @@ def test_the_header_names_the_gameweek_and_when_it_locks() -> None:
 def test_the_summary_marks_the_captain_and_the_doubts() -> None:
     """Starting a ruled-out player is the mistake the page exists to surface."""
     summary = provider().summary(LEAGUE_ID)
-    spots = {spot.player.replace(" (C)", ""): spot for spot in summary.lineup}
+    spots = {spot.player.replace(" (C)", ""): spot for spot in summary.mine.lineup}
 
-    assert any(spot.player.endswith("(C)") for spot in summary.lineup)
+    assert any(spot.player.endswith("(C)") for spot in summary.mine.lineup)
     assert spots["P7"].tone == "neutral"
     assert summary.swaps  # P15 is the strongest forward and starts on the bench
 
@@ -442,5 +448,39 @@ def test_the_summary_reports_a_blank_gameweek_on_the_player_not_just_the_club() 
     """A club with no fixture means every one of its players scores zero."""
     summary = provider(fixtures=[]).summary(LEAGUE_ID)
 
-    assert all("no fixture" in spot.detail for spot in summary.lineup)
-    assert all(spot.tone == "warning" for spot in summary.lineup)
+    assert all("no fixture" in spot.detail for spot in summary.mine.lineup)
+    assert all(spot.tone == "warning" for spot in summary.mine.lineup)
+
+
+# ── the matchup ─────────────────────────────────────────────────────────
+
+
+def test_a_head_to_head_league_shows_who_you_are_playing() -> None:
+    summary = provider().summary(H2H_LEAGUE_ID)
+
+    assert summary.opponent is not None
+    assert summary.opponent.name == "Rival FC"
+    assert summary.opponent.lineup
+
+
+def test_a_classic_league_has_no_opponent_to_show() -> None:
+    """A table is not a fixture, so inventing one would be a lie."""
+    assert provider().summary(LEAGUE_ID).opponent is None
+
+
+def test_the_squads_say_which_gameweek_they_were_fielded_in() -> None:
+    """Picks are only published once locked, while every projection beside them
+    is for the gameweek still open."""
+    summary = provider().summary(LEAGUE_ID)
+
+    assert summary.mine is not None
+    assert "GW4" in summary.mine.detail
+
+
+def test_only_a_blank_or_a_double_is_worth_warning_about() -> None:
+    """Every row already carries its own fixture; listing them all repeats the
+    page back at itself."""
+    warnings = {stat.label: stat for stat in provider().summary(LEAGUE_ID).fixtures}
+
+    assert warnings["MCI"].tone == "warning"  # no fixture in the fake week
+    assert "ARS" not in warnings  # an ordinary fixture is not a warning

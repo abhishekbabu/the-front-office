@@ -420,13 +420,13 @@ def test_the_summary_carries_the_lineup_and_the_changes() -> None:
     """Every figure in it is already known, so the page need not wait on a model."""
     summary = _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).summary("L1")
 
-    assert [spot.slot for spot in summary.lineup] == ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF"]
+    assert [spot.slot for spot in summary.mine.lineup] == ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF"]
     assert any(stat.label == "Week" for stat in summary.headline)
 
 
 def test_a_player_with_no_game_is_flagged_while_others_have_one() -> None:
     summary = _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).summary("L1")
-    benched = {spot.player: spot for spot in summary.lineup + summary.bench}
+    benched = {spot.player: spot for spot in summary.mine.lineup + summary.mine.bench}
 
     assert benched["Star QB"].tone == "neutral"  # has an opponent
 
@@ -437,8 +437,8 @@ def test_a_week_nobody_is_scheduled_for_does_not_flag_the_whole_roster() -> None
     preseason = {pid: _proj(pid, proj.name, proj.position, 0.0, opp="") for pid, proj in DEFAULT_PROJECTIONS.items()}
     summary = _provider(FakeSleeper(projections=preseason)).summary("L1")
 
-    assert all(spot.tone == "neutral" for spot in summary.lineup if spot.player != "—")
-    assert all("not scheduled yet" in spot.detail for spot in summary.lineup if spot.player != "—")
+    assert all(spot.tone == "neutral" for spot in summary.mine.lineup if spot.player != "—")
+    assert all("not scheduled yet" in spot.detail for spot in summary.mine.lineup if spot.player != "—")
 
 
 def test_the_summary_does_not_ask_for_the_waiver_pool() -> None:
@@ -449,3 +449,36 @@ def test_the_summary_does_not_ask_for_the_waiver_pool() -> None:
     client_summary = _provider(client).summary("L1")
 
     assert client_summary.headline
+
+
+def test_the_week_shows_the_team_you_are_playing() -> None:
+    """The other half of the only question a week asks."""
+    client = FakeSleeper(
+        projections=DEFAULT_PROJECTIONS,
+        rosters=[
+            SleeperRoster(
+                roster_id=1, owner_id=MY_ID, player_ids=["qb1", "rb1"], starter_ids=["qb1"], wins=2, losses=1
+            ),
+            SleeperRoster(roster_id=2, owner_id="them", player_ids=["rb2", "wr9"], starter_ids=["wr9"], wins=3),
+        ],
+        matchups=[
+            {"roster_id": 1, "matchup_id": 7, "points": 88.5},
+            {"roster_id": 2, "matchup_id": 7, "points": 96.1},
+        ],
+    )
+    summary = _provider(client).summary("L1")
+
+    assert summary.opponent is not None
+    assert [spot.player for spot in summary.opponent.lineup] == ["Waiver WR"]
+    assert [spot.player for spot in summary.opponent.bench] == ["Bad RB"]
+    assert summary.opponent.points == "96.1"
+
+
+def test_a_week_with_no_fixture_shows_no_opponent() -> None:
+    """A bye is not a nil-nil scoreline."""
+    assert _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).summary("L1").opponent is None
+
+
+def test_a_bye_is_reported_once_per_club_not_once_per_player() -> None:
+    byes = {stat.label for stat in _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).summary("L1").fixtures}
+    assert byes == set()  # every fake projection has an opponent

@@ -86,23 +86,22 @@ async function main() {
       await rail.click();
       await page.waitForTimeout(500);
 
-      if (wanted("arrival")) {
-        // Before running anything: what the page shows the moment you open it.
-        await page.getByRole("button", { name: "Scout", exact: true }).click();
-        await page.waitForTimeout(700);
-        await shoot(`${sport.toLowerCase()}-arrival`);
-      }
       if (wanted("scout")) {
-        // Explicit: switching sport keeps whichever view you were on, so after
-        // the first pass this would otherwise still be showing My team.
-        await page.getByRole("button", { name: "Scout", exact: true }).click();
-        await page.waitForTimeout(300);
-        const run = page.getByRole("button", { name: /Run (report|again)/i });
-        if (await run.count()) {
-          await run.click();
-          await page.waitForTimeout(1200);
+        // Explicit: switching sport keeps whichever view you were on.
+        await page.getByRole("button", { name: "This week", exact: true }).click();
+        await shoot(`${sport.toLowerCase()}-week`);
+      }
+      if (wanted("report")) {
+        const report = page.getByRole("button", { name: "Report", exact: true });
+        if (await report.count()) {
+          await report.click();
+          const run = page.getByRole("button", { name: /Run (report|again)/i });
+          if (await run.count()) {
+            await run.click();
+            await page.waitForTimeout(1200);
+          }
+          await shoot(`${sport.toLowerCase()}-report`);
         }
-        await shoot(`${sport.toLowerCase()}-scout`);
       }
       if (wanted("team")) {
         await page.getByRole("button", { name: "My team" }).click();

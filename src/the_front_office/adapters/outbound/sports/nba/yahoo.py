@@ -95,9 +95,10 @@ class YahooNBAProvider:
     def summary(self, league_id: str) -> Summary:
         """The header, without the free-agent pool or the model.
 
-        Only the roster and the add budget: the matchup block is prose Yahoo
-        hands back already rendered, so there is nothing structured to lift out
-        of it without parsing what the model is meant to read.
+        Only the roster and the add budget. Yahoo hands the matchup back as
+        prose it has already rendered, so there is nothing structured to lift
+        out of it without parsing what the model is meant to read — and a
+        category league has no lineup to set, so there is no side to show.
         """
         my_team = self.yahoo.get_user_team()
         used = my_team.roster_adds.value

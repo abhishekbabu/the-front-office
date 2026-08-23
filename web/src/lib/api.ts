@@ -45,7 +45,17 @@ export type Spot = { slot: string; player: string; detail: string; value: string
 /** A change the numbers already imply, before anyone has judged them. */
 export type Swap = { start: string; out: string; gain: string };
 
-export type Summary = { headline: Stat[]; lineup: Spot[]; bench: Spot[]; swaps: Swap[] };
+/** One team in a matchup — yours, or the one you are playing. */
+export type Side = { name: string; detail: string; points: string; lineup: Spot[]; bench: Spot[] };
+
+export type Summary = {
+  headline: Stat[];
+  mine: Side | null;
+  /** Null when the week has no fixture, which is not a nil-nil scoreline. */
+  opponent: Side | null;
+  swaps: Swap[];
+  fixtures: Stat[];
+};
 
 export type ScoutReport = {
   situation: string;

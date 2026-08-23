@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScoutPanel } from "@/panels/Scout";
+import { ReportPanel } from "@/panels/Report";
 import { TeamPanel } from "@/panels/Team";
 import { TradePanel } from "@/panels/Trade";
 import { SettingsPanel } from "@/panels/Settings";
@@ -14,7 +15,7 @@ import { Landing } from "@/panels/Landing";
 import { cn } from "@/lib/utils";
 
 /** The views that need a sport and a league behind them. */
-type SportView = "scout" | "team" | "trade";
+type SportView = "scout" | "team" | "report" | "trade";
 
 /** Settings works with nothing configured, which is exactly when it is needed. */
 type View = SportView | "settings" | "home";
@@ -47,7 +48,13 @@ export default function App() {
 
   // A sport that cannot trade must not leave the tab selected behind it.
   const panelKey = `${active?.sport}:${league?.league_id}`;
-  const views: SportView[] = ["scout", "team", ...(ai && active?.supports_trades ? ["trade" as const] : [])];
+  const views: SportView[] = [
+    "scout",
+    "team",
+    // Both need a model, so neither is offered without one.
+    ...(ai ? (["report"] as const) : []),
+    ...(ai && active?.supports_trades ? (["trade"] as const) : []),
+  ];
   const current: SportView = views.find((v) => v === view) ?? "scout";
 
   return (
@@ -96,7 +103,7 @@ export default function App() {
           <Group label="View">
             {views.map((v) => (
               <RailItem key={v} active={v === current} onClick={() => setView(v)}>
-                {{ scout: "Scout", team: "My team", trade: "Trade" }[v]}
+                {{ scout: "This week", team: "My team", report: "Report", trade: "Trade" }[v]}
               </RailItem>
             ))}
           </Group>
@@ -162,9 +169,11 @@ export default function App() {
           // analysis renders under the new league's name — a stale FPL report
           // headed "Huge Euge RR FF", with FPL's figures in the strip.
           current === "scout" ? (
-            <ScoutPanel key={panelKey} sport={active} league={league} ai={ai} />
+            <ScoutPanel key={panelKey} sport={active} league={league} />
           ) : current === "team" ? (
             <TeamPanel key={panelKey} sport={active} league={league} />
+          ) : current === "report" ? (
+            <ReportPanel key={panelKey} sport={active} league={league} />
           ) : (
             <TradePanel key={panelKey} sport={active} league={league} />
           )

@@ -72,11 +72,22 @@ class Spot(BaseModel):
     a formation has positions but not named places, and both render the same.
     """
 
+    player_id: str = Field(default="", description="Identifier this sport uses, for opening the player.")
     slot: str = Field(default="", description="Named place in the lineup, where the sport has them.")
     player: str
     detail: str = Field(description="Position, club and opponent, as that sport words it.")
     value: str = Field(description="The forward-looking number, with its unit.")
     tone: Tone = "neutral"
+
+
+class Side(BaseModel):
+    """One team in a matchup — yours, or the one you are playing."""
+
+    name: str
+    detail: str = Field(default="", description="Record, manager, or however the league identifies a team.")
+    points: str = Field(default="", description="What they have scored, or are projected to.")
+    lineup: list[Spot] = Field(default_factory=list)
+    bench: list[Spot] = Field(default_factory=list)
 
 
 class Swap(BaseModel):
@@ -95,11 +106,16 @@ class Summary(BaseModel):
     """
 
     headline: list[Stat] = Field(default_factory=list)
-    lineup: list[Spot] = Field(default_factory=list)
-    bench: list[Spot] = Field(default_factory=list)
+    mine: Side | None = None
+    opponent: Side | None = None
+    """Absent when the week has no fixture, which is not a nil-nil scoreline."""
+
     swaps: list[Swap] = Field(default_factory=list)
     """Changes the projections imply. Exact, and the report's job is to endorse
     or overrule them rather than to find them."""
+
+    fixtures: list[Stat] = Field(default_factory=list)
+    """The real-world matches behind the week, one per club in play."""
 
 
 class ScoutReport(BaseModel):

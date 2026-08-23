@@ -220,6 +220,16 @@ class Entry:
 
 
 @dataclass(frozen=True)
+class H2HMatch:
+    """One head-to-head tie: who you are playing, and the score so far."""
+
+    opponent_entry: int
+    opponent_name: str
+    my_points: int
+    opponent_points: int
+
+
+@dataclass(frozen=True)
 class Fixture:
     """One match, with the difficulty rating the game assigns each side."""
 

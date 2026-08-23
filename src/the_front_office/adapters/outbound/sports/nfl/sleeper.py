@@ -31,7 +31,7 @@ from the_front_office.adapters.outbound.sports.trades import resolve_sides
 from the_front_office.config.constants import NFL_SCOUT_PROMPT, NFL_TRADE_PROMPT
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import LeagueNotFoundError, SleeperAPIError
-from the_front_office.domain.models import SportContext, Spot, Stat, Summary, Swap, Tone, TradeProposal
+from the_front_office.domain.models import Side, SportContext, Spot, Stat, Summary, Swap, Tone, TradeProposal
 from the_front_office.domain.ports import LeagueRef
 
 logger = logging.getLogger(__name__)
@@ -230,7 +230,7 @@ class SleeperNFLProvider:
         )
 
     def summary(self, league_id: str) -> Summary:
-        """The standing, the lineup and the changes it implies. No model."""
+        """The week as it stands: both lineups, the swaps, the byes. No model."""
         state = self._week(league_id)
         _, matchup_stats = self._matchup(state.league, state.roster, league_id, state.week)
         starters = {slot.player.player_id for slot in state.lineup if slot.player}
@@ -242,25 +242,19 @@ class SleeperNFLProvider:
         return Summary(
             headline=self._headline(state.roster, state.week, state.current_points, state.best_points, state.on_bench)
             + matchup_stats,
-            lineup=[
-                Spot(
-                    slot=slot.slot,
-                    player=slot.player.name if slot.player else "—",
-                    detail=self._spot_detail(slot.player, scheduled) if slot.player else "empty",
-                    value=f"{slot.points:.1f}" if slot.player else "0.0",
-                    tone=self._spot_tone(slot.player, scheduled),
-                )
-                for slot in state.lineup
-            ],
-            bench=[
-                Spot(
-                    player=p.name,
-                    detail=self._spot_detail(p, scheduled),
-                    value=f"{p.points:.1f}",
-                    tone=self._spot_tone(p, scheduled),
-                )
-                for p in sorted((p for p in state.projected if p.player_id not in starters), key=lambda p: -p.points)
-            ],
+            mine=Side(
+                name="Your lineup",
+                detail=state.roster.record,
+                points=f"{state.current_points:.1f} proj",
+                lineup=[self._lineup_spot(slot, scheduled) for slot in state.lineup],
+                bench=[
+                    self._spot(p, scheduled)
+                    for p in sorted(
+                        (p for p in state.projected if p.player_id not in starters), key=lambda p: -p.points
+                    )
+                ],
+            ),
+            opponent=self._opponent(state, league_id, scheduled),
             swaps=[
                 Swap(
                     start=f"{change.start.name} ({change.slot})",
@@ -269,6 +263,75 @@ class SleeperNFLProvider:
                 )
                 for change in state.changes
             ],
+            fixtures=[
+                Stat(label=club, value="no game this week", tone="warning")
+                for club in sorted({p.team for p in state.projected if scheduled and not p.opponent})
+            ],
+        )
+
+    def _opponent(self, state: _Week, league_id: str, scheduled: bool) -> Side | None:
+        """The team you are playing, and what they are starting.
+
+        Their lineup is the other half of the only question this week asks, and
+        it costs one roster fetch that has already been cached.
+        """
+        try:
+            matchups = self.client.get_matchups(league_id, state.week)
+        except SleeperAPIError as e:
+            logger.warning(f"Skipping the opponent: {e}")
+            return None
+
+        mine = next((m for m in matchups if m.get("roster_id") == state.roster.roster_id), None)
+        if not mine or mine.get("matchup_id") is None:
+            return None
+        theirs = next(
+            (
+                m
+                for m in matchups
+                if m.get("matchup_id") == mine.get("matchup_id") and m.get("roster_id") != state.roster.roster_id
+            ),
+            None,
+        )
+        if not theirs:
+            return None
+
+        by_roster = {r.roster_id: r for r in self.client.get_rosters(league_id)}
+        roster = by_roster.get(int(theirs.get("roster_id", 0)))
+        if roster is None:
+            return None
+
+        names = self.client.get_league_users(league_id)
+        projected = [
+            p for p in (self._projection_for(pid, state.projections, state.players) for pid in roster.player_ids) if p
+        ]
+        starting = set(roster.starter_ids)
+        return Side(
+            name=names.get(roster.owner_id, "Opponent"),
+            detail=roster.record,
+            points=f"{float(theirs.get('points') or 0):.1f}",
+            lineup=[self._spot(p, scheduled) for p in projected if p.player_id in starting],
+            bench=[self._spot(p, scheduled) for p in projected if p.player_id not in starting],
+        )
+
+    def _lineup_spot(self, slot: LineupSlot, scheduled: bool) -> Spot:
+        if slot.player is None:
+            return Spot(slot=slot.slot, player="—", detail="empty", value="0.0", tone="warning")
+        return Spot(
+            player_id=slot.player.player_id,
+            slot=slot.slot,
+            player=slot.player.name,
+            detail=self._spot_detail(slot.player, scheduled),
+            value=f"{slot.points:.1f}",
+            tone=self._spot_tone(slot.player, scheduled),
+        )
+
+    def _spot(self, projection: WeeklyProjection, scheduled: bool) -> Spot:
+        return Spot(
+            player_id=projection.player_id,
+            player=projection.name,
+            detail=self._spot_detail(projection, scheduled),
+            value=f"{projection.points:.1f}",
+            tone=self._spot_tone(projection, scheduled),
         )
 
     @staticmethod

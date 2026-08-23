@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
-import type { Spot, Swap } from "@/lib/api";
+import type { Side, Spot, Swap } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 /**
@@ -89,5 +89,39 @@ function SpotList({ spots, empty }: { spots: Spot[]; empty?: string }) {
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * One team in a matchup, shown beside the other.
+ *
+ * Both sides render identically on purpose: the question is which lineup is
+ * better, and that is easier to see when nothing but the numbers differs.
+ */
+export function SideCard({ side, label }: { side: Side | null; label: string }) {
+  if (!side) return null;
+  return (
+    <Card>
+      <CardHeader>
+        {/* The label is chrome and reads as such uppercased; the team name is a
+            name someone chose, and shouting it makes it harder to recognise. */}
+        <span className="flex items-baseline gap-2">
+          {label}
+          <span className="font-sans text-[13px] font-semibold normal-case tracking-normal text-foreground">
+            {side.name}
+          </span>
+        </span>
+        <span className="normal-case tracking-normal">{[side.detail, side.points].filter(Boolean).join(" · ")}</span>
+      </CardHeader>
+      <SpotList spots={side.lineup} />
+      {side.bench.length > 0 && (
+        <>
+          <div className="border-y border-border px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Bench
+          </div>
+          <SpotList spots={side.bench} />
+        </>
+      )}
+    </Card>
   );
 }
