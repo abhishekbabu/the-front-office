@@ -73,7 +73,10 @@ class AIUnavailableError(FrontOfficeError):
     """Gemini is not usable — no API key, or the client failed to initialise."""
 
     def __init__(self, detail: str = "GOOGLE_API_KEY is not set") -> None:
-        super().__init__(f"AI features unavailable: {detail}. Use --mock to run without credentials.")
+        super().__init__(
+            f"AI features unavailable: {detail}. "
+            "Turn on Mock AI — `--mock` on the CLI, or MOCK_AI in Settings — to run without credentials."
+        )
 
 
 class AIResponseError(FrontOfficeError):

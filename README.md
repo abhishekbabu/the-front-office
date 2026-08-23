@@ -111,6 +111,7 @@ catalogue.
 | `SLEEPER_USERNAME` | for football | — | Sleeper needs no key or OAuth — just the username |
 | `FPL_ENTRY_ID` | for FPL | — | The number in the URL of your own points page. FPL has no username lookup |
 | `YAHOO_MAX_WEEKLY_ADDS` | no | `3` | Integer ≥ 0; drives the scout's add budget |
+| `MOCK_AI` | no | `false` | Canned reports instead of model calls; league data stays live |
 | `LOGFIRE_TOKEN` | no | — | A write token from a [Logfire](https://logfire.pydantic.dev) project. Omit and nothing is exported |
 | `LOGFIRE_ENVIRONMENT` | no | `local` | Separates traces from a laptop and a deployed run in one project |
 | `LOGFIRE_CAPTURE_PROMPTS` | no | `false` | Sends prompt and completion **text**. Off deliberately — a prompt carries your roster, leagues and FPL entry id |
@@ -147,17 +148,18 @@ First run opens a browser for the Yahoo OAuth2 handshake; the token is cached in
 | `/help` · `/quit` | — |
 
 Add `--mock` to `/scout` or `/trade` to swap Gemini for canned responses and
-exercise the report path without spending tokens. League data stays live.
+exercise the report path without spending tokens. League data stays live. The
+web UI has the same switch as `MOCK_AI` in Settings, and shows a badge in the
+sidebar the whole time it is on — a canned report is otherwise indistinguishable
+from a real one.
 
 The web UI covers the same ground with a sport picker in the sidebar, plus a
 Settings page for `.env` and a header strip of exact figures — rank, bank,
 transfers remaining, points sitting on the bench — read from league state rather
 than written by the model. Both front ends render the same validated models.
 
-`/scout` and `/trade` accept `--mock`, which swaps Gemini for canned responses so
-you can exercise the report path without spending tokens. Yahoo stays live —
-`--mock` mocks the AI, not the league data. Both drop you into a follow-up chat
-afterwards; press Enter on an empty line to move on.
+Both drop you into a follow-up chat afterwards; press Enter on an empty line to
+move on.
 
 ## Development
 

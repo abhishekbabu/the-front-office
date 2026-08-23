@@ -59,6 +59,7 @@ class FakeChat:
 @pytest.fixture(autouse=True)
 def _clear_chats() -> None:
     web._chats.clear()
+    _Engine.seen_mock.clear()
 
 
 @pytest.fixture
@@ -71,8 +72,13 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 class _Engine:
+    """Records whether it was told to skip the model."""
+
+    seen_mock: list[bool] = []
+
     def __init__(self, mock: bool) -> None:
         self.mock = mock
+        _Engine.seen_mock.append(mock)
 
     def start_analysis(self, league_id: str) -> Any:
         return MOCK_FPL_REPORT, FakeChat()
@@ -140,16 +146,27 @@ def test_a_platform_failure_reaches_the_client_in_words(monkeypatch: pytest.Monk
 
 def test_a_report_crosses_the_wire_as_the_domain_model(client: TestClient) -> None:
     """No second representation to keep in step with ScoutReport."""
-    body = client.post("/api/fpl/leagues/900/scout", json={"mock": True}).json()
+    body = client.post("/api/fpl/leagues/900/scout").json()
 
     assert body["report"]["situation"] == MOCK_FPL_REPORT.situation
     assert body["report"]["moves"][0]["action"] == "CAPTAIN"
     assert body["chat_id"]
 
 
-def test_scout_defaults_to_a_real_run(client: TestClient) -> None:
-    """An absent body must not silently mean mock, or reports would be canned."""
-    assert client.post("/api/fpl/leagues/900/scout").status_code == 200
+def test_whether_the_model_runs_is_read_from_configuration(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Read per request, so a change in Settings applies to the next run.
+
+    A client cannot ask for a canned report: one place decides it, and that
+    place is the same one the sidebar badge reads.
+    """
+    from the_front_office.config.settings import settings
+
+    client.post("/api/fpl/leagues/900/scout")
+    assert _Engine.seen_mock == [False]
+
+    monkeypatch.setattr(settings, "mock_ai", True)
+    client.post("/api/fpl/leagues/900/scout")
+    assert _Engine.seen_mock == [False, True]
 
 
 def test_a_verdict_crosses_the_wire_as_the_domain_model(client: TestClient) -> None:
@@ -180,7 +197,7 @@ def test_an_unknown_sport_is_a_404(client: TestClient) -> None:
 
 
 def test_a_follow_up_reaches_the_chat_the_report_opened(client: TestClient) -> None:
-    chat_id = client.post("/api/fpl/leagues/900/scout", json={"mock": True}).json()["chat_id"]
+    chat_id = client.post("/api/fpl/leagues/900/scout").json()["chat_id"]
 
     body = client.post(f"/api/chat/{chat_id}", json={"message": "Why bench him?"}).json()
 
@@ -196,7 +213,7 @@ def test_an_expired_conversation_says_so(client: TestClient) -> None:
 
 
 def test_a_model_failure_is_a_bad_gateway_not_a_crash(client: TestClient) -> None:
-    chat_id = client.post("/api/fpl/leagues/900/scout", json={"mock": True}).json()["chat_id"]
+    chat_id = client.post("/api/fpl/leagues/900/scout").json()["chat_id"]
     web._chats[chat_id] = FakeChat(RuntimeError("quota exhausted"))  # type: ignore[assignment]
 
     response = client.post(f"/api/chat/{chat_id}", json={"message": "Why?"})
@@ -206,7 +223,7 @@ def test_a_model_failure_is_a_bad_gateway_not_a_crash(client: TestClient) -> Non
 
 
 def test_an_empty_follow_up_is_rejected(client: TestClient) -> None:
-    chat_id = client.post("/api/fpl/leagues/900/scout", json={"mock": True}).json()["chat_id"]
+    chat_id = client.post("/api/fpl/leagues/900/scout").json()["chat_id"]
     assert client.post(f"/api/chat/{chat_id}", json={"message": ""}).status_code == 422
 
 
@@ -236,6 +253,35 @@ def settings_client(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> TestClien
 def test_settings_list_every_variable_the_app_reads(settings_client: TestClient) -> None:
     keys = {s["key"] for s in settings_client.get("/api/settings").json()}
     assert {"GOOGLE_API_KEY", "FPL_ENTRY_ID", "SLEEPER_USERNAME"} <= keys
+
+
+def test_each_setting_declares_the_control_it_needs(settings_client: TestClient) -> None:
+    """A page of text boxes invites a typo the validator then rejects on save."""
+    kinds = {s["key"]: s["kind"] for s in settings_client.get("/api/settings").json()}
+
+    assert kinds["MOCK_AI"] == "boolean"
+    assert kinds["FPL_ENTRY_ID"] == "integer"
+    assert kinds["NBA_API_DELAY"] == "number"
+    assert kinds["LOG_LEVEL"] == "choice"
+    assert kinds["SLEEPER_USERNAME"] == "text"
+
+
+def test_a_fixed_set_of_values_is_offered_rather_than_typed(settings_client: TestClient) -> None:
+    entry = next(s for s in settings_client.get("/api/settings").json() if s["key"] == "LOG_LEVEL")
+    assert entry["choices"] == ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+
+
+def test_a_boolean_reports_its_effective_value_not_the_file_text(
+    settings_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An absent key and a false one look identical in the file, so the UI would
+    otherwise render an unset checkbox for a setting that is genuinely on."""
+    from the_front_office.config.settings import settings
+
+    monkeypatch.setattr(settings, "mock_ai", True)
+    entry = next(s for s in settings_client.get("/api/settings").json() if s["key"] == "MOCK_AI")
+
+    assert entry["value"] == "true"
 
 
 def test_a_secret_is_never_sent_to_the_client(settings_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

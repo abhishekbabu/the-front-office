@@ -15,7 +15,7 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -56,12 +56,7 @@ class League(BaseModel):
     detail: str
 
 
-class RunRequest(BaseModel):
-    mock: bool = False
-    """Skip the model and return a canned report. League data stays live."""
-
-
-class TradeRequest(RunRequest):
+class TradeRequest(BaseModel):
     text: str = Field(min_length=1)
 
 
@@ -80,6 +75,10 @@ class Setting(BaseModel):
     field: str
     secret: bool
     present: bool
+    kind: str
+    """Which control to render: text, boolean, integer, number or choice."""
+
+    choices: list[str] = []
     value: str = ""
     """Empty for a secret. Presence is all the UI needs, and all it should hold."""
 
@@ -111,9 +110,10 @@ class Evaluation(BaseModel):
 
 _chats: dict[str, ChatSession] = {}
 
-# A module-level singleton rather than a call in the signature, which would
-# build a fresh instance per request and trips ruff's B008.
-_DEFAULT_RUN = Body(default=RunRequest())
+
+def _as_text(value: object) -> str:
+    """Render a value the way `.env` spells it."""
+    return str(value).lower() if isinstance(value, bool) else str(value or "")
 
 
 def _remember(chat: ChatSession) -> str:
@@ -173,17 +173,24 @@ def _register_routes(app: FastAPI) -> None:
         that one is set, and a page that renders them puts them in screenshots.
         """
         stored = env_file.read_values()
-        return [
-            Setting(
-                key=key,
-                field=field,
-                secret=key in env_file.SECRET_KEYS,
-                present=bool(getattr(settings, field, None)),
-                value="" if key in env_file.SECRET_KEYS else str(stored.get(key, "")),
-                shadowed=env_file.is_shadowed(key),
-            )
-            for key, field in env_file.declared().items()
-        ]
+        return [_describe(key, field, stored.get(key, "")) for key, field in env_file.declared().items()]
+
+    def _describe(key: str, field: str, stored: str) -> Setting:
+        kind, choices = env_file.field_kind(field)
+        secret = key in env_file.SECRET_KEYS
+        current = getattr(settings, field, None)
+        return Setting(
+            key=key,
+            field=field,
+            secret=secret,
+            present=bool(current),
+            # A boolean's stored form can be absent while its value is False, so
+            # the effective value is shown rather than the raw file text.
+            value="" if secret else (_as_text(current) if kind == "boolean" else str(stored)),
+            kind=kind,
+            choices=choices,
+            shadowed=env_file.is_shadowed(key),
+        )
 
     @app.put("/api/settings", response_model=list[Setting])
     def save_settings(update: SettingsUpdate) -> list[Setting]:
@@ -218,16 +225,18 @@ def _register_routes(app: FastAPI) -> None:
         return data.build_provider(sport).roster_rows(league_id)
 
     @app.post("/api/{sport}/leagues/{league_id}/scout", response_model=Analysis)
-    def scout(sport: str, league_id: str, request: RunRequest = _DEFAULT_RUN) -> Analysis:
+    def scout(sport: str, league_id: str) -> Analysis:
+        """Whether the model is really called is configuration, read per request
+        so a change in Settings applies to the next run without a restart."""
         provider = data.build_provider(sport)
-        report, chat = scout_engine(provider, request.mock).start_analysis(league_id)
+        report, chat = scout_engine(provider, settings.mock_ai).start_analysis(league_id)
         return Analysis(report=report, chat_id=_remember(chat))
 
     @app.post("/api/{sport}/leagues/{league_id}/trade", response_model=Evaluation)
     def trade(sport: str, league_id: str, request: TradeRequest) -> Evaluation:
         entry = _tradeable(sport)
         provider = data.build_provider(entry.sport)
-        verdict, chat = trade_engine(provider, request.mock).evaluate(league_id, request.text)
+        verdict, chat = trade_engine(provider, settings.mock_ai).evaluate(league_id, request.text)
         return Evaluation(verdict=verdict, chat_id=_remember(chat))
 
     @app.post("/api/chat/{chat_id}", response_model=Reply)

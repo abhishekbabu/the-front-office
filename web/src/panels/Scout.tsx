@@ -6,9 +6,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatStrip } from "@/components/ui/stat";
 import { Chat, Chips, ErrorNote, MoveRow, PageHeader } from "@/panels/shared";
 
-export function ScoutPanel({ sport, league, mock }: { sport: Sport; league: League; mock: boolean }) {
+export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) {
   const run = useMutation<Analysis, Error>({
-    mutationFn: () => api.scout(sport.sport, league.league_id, mock),
+    mutationFn: () => api.scout(sport.sport, league.league_id),
   });
 
   return (
@@ -67,7 +67,6 @@ export function ScoutPanel({ sport, league, mock }: { sport: Sport; league: Leag
       {!run.data && !run.isPending && !run.isError && (
         <p className="p-5 text-[13.5px] text-muted-foreground">
           Reads live league state, computes what has an exact answer, and asks the model only for judgement.
-          {mock && " Mock AI is on: the league data is real, the report is canned."}
         </p>
       )}
     </>

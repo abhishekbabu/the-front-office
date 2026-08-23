@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorNote, PageHeader } from "@/panels/shared";
+import { useTheme } from "@/lib/useTheme";
+import { PALETTES } from "@/themes/registry";
+import { cn } from "@/lib/utils";
 
 /**
  * Grouped by what each key unlocks, in the order someone sets them up, rather
@@ -31,8 +34,8 @@ const GROUPS: { title: string; note: string; keys: string[] }[] = [
   },
   {
     title: "AI",
-    note: "Without a key every report still runs with Mock AI on — the league data is real, the analysis is canned.",
-    keys: ["GOOGLE_API_KEY"],
+    note: "With Mock AI on, reports come back canned and no model is called — the league data stays live either way. Useful without a key, and for exercising a report without spending tokens.",
+    keys: ["GOOGLE_API_KEY", "MOCK_AI"],
   },
   {
     title: "Tracing",
@@ -86,6 +89,7 @@ export function SettingsPanel() {
 
       {settings.data && (
         <div className="flex flex-col gap-4 p-5">
+          <Appearance />
           {groups.map((group) => (
             <Card key={group.title}>
               <CardHeader>
@@ -122,6 +126,44 @@ export function SettingsPanel() {
   );
 }
 
+/**
+ * Palette lives in this browser, not in `.env`.
+ *
+ * Said plainly because everything else on this page is configuration shared by
+ * every front end — someone who sets a palette here and opens the app elsewhere
+ * should know why it did not follow them.
+ */
+function Appearance() {
+  const { palette, setPalette } = useTheme();
+  return (
+    <Card>
+      <CardHeader>
+        <span>Appearance</span>
+        <span className="normal-case tracking-normal">this browser only</span>
+      </CardHeader>
+      <div className="flex flex-wrap gap-2 p-4">
+        {PALETTES.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => setPalette(p.id)}
+            aria-pressed={p.id === palette}
+            className={cn(
+              "flex items-center gap-2.5 rounded-md border px-3 py-2 text-left transition-colors",
+              p.id === palette ? "border-foreground bg-muted" : "border-border hover:bg-muted",
+            )}
+          >
+            <span className="size-4 shrink-0 rounded-full border border-border" style={{ background: p.swatch }} />
+            <span>
+              <span className="block text-[13px] font-medium leading-tight">{p.label}</span>
+              <span className="block font-mono text-[10px] text-muted-foreground">{p.hint}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 function Row({
   setting,
   draft,
@@ -150,17 +192,61 @@ function Row({
           </Badge>
         )}
       </div>
-      <input
-        type={setting.secret ? "password" : "text"}
-        autoComplete="off"
-        spellCheck={false}
-        value={draft ?? (setting.secret ? "" : setting.value)}
-        onChange={(e) => onChange(e.target.value)}
-        // A secret's characters never reach the client, so there is nothing to
-        // show as a current value — only whether one exists.
-        placeholder={setting.secret ? (setting.present ? "•••••••• — type to replace" : "not set") : "not set"}
-        className="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 font-mono text-[12.5px] placeholder:font-sans placeholder:text-muted-foreground"
-      />
+      <Control setting={setting} draft={draft} onChange={onChange} />
     </label>
+  );
+}
+
+const FIELD = "h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 font-mono text-[12.5px] placeholder:font-sans placeholder:text-muted-foreground";
+
+function Control({
+  setting,
+  draft,
+  onChange,
+}: {
+  setting: Setting;
+  draft: string | undefined;
+  onChange: (value: string) => void;
+}) {
+  const current = draft ?? (setting.secret ? "" : setting.value);
+
+  if (setting.kind === "boolean") {
+    // `.env` spells booleans lowercase, and that is what gets written.
+    return (
+      <input
+        type="checkbox"
+        checked={current === "true"}
+        onChange={(e) => onChange(e.target.checked ? "true" : "false")}
+        className="size-4 accent-[var(--color-primary)] justify-self-start"
+      />
+    );
+  }
+
+  if (setting.kind === "choice") {
+    return (
+      <select value={current} onChange={(e) => onChange(e.target.value)} className={FIELD}>
+        {setting.choices.map((choice) => (
+          <option key={choice} value={choice}>
+            {choice}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  return (
+    <input
+      type={setting.secret ? "password" : setting.kind === "text" ? "text" : "number"}
+      step={setting.kind === "number" ? "0.1" : undefined}
+      inputMode={setting.kind === "integer" ? "numeric" : undefined}
+      autoComplete="off"
+      spellCheck={false}
+      value={current}
+      onChange={(e) => onChange(e.target.value)}
+      // A secret's characters never reach the client, so there is nothing to
+      // show as a current value — only whether one exists.
+      placeholder={setting.secret ? (setting.present ? "•••••••• — type to replace" : "not set") : "not set"}
+      className={FIELD}
+    />
   );
 }

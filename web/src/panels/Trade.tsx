@@ -8,11 +8,11 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Chat, Chips, ErrorNote, PageHeader } from "@/panels/shared";
 
-export function TradePanel({ sport, league, mock }: { sport: Sport; league: League; mock: boolean }) {
+export function TradePanel({ sport, league }: { sport: Sport; league: League }) {
   const [text, setText] = useState("");
 
   const run = useMutation<Evaluation, Error, string>({
-    mutationFn: (description) => api.trade(sport.sport, league.league_id, description, mock),
+    mutationFn: (description) => api.trade(sport.sport, league.league_id, description),
   });
 
   return (

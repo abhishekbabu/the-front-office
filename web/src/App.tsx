@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Moon, Settings, Sun, Trophy } from "lucide-react";
 import { api, type League, type Sport } from "@/lib/api";
 import { useTheme } from "@/lib/useTheme";
-import { PALETTES } from "@/themes/registry";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,13 +19,14 @@ type SportView = "scout" | "team" | "trade";
 type View = SportView | "settings";
 
 export default function App() {
-  const { mode, setMode, palette, setPalette } = useTheme();
+  const { mode, setMode } = useTheme();
   const [sport, setSport] = useState<string | null>(null);
   const [view, setView] = useState<View>("scout");
   const [leagueId, setLeagueId] = useState<string | null>(null);
-  const [mock, setMock] = useState(false);
 
   const sports = useQuery({ queryKey: ["sports"], queryFn: api.sports });
+  const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
+  const mockOn = (settings.data ?? []).some((s) => s.key === "MOCK_AI" && s.value === "true");
   const configured = useMemo(() => (sports.data ?? []).filter((s) => s.configured), [sports.data]);
   const active: Sport | undefined = configured.find((s) => s.sport === sport) ?? configured[0];
 
@@ -94,43 +94,25 @@ export default function App() {
           </Group>
         )}
 
-        <div className="mt-auto flex flex-col gap-3">
-          <RailItem active={view === "settings"} onClick={() => setView("settings")}>
-            <span className="flex items-center gap-2">
-              <Settings className="size-3.5" aria-hidden />
-              Settings
-            </span>
-          </RailItem>
+        <div className="mt-auto flex flex-col gap-2">
+          {/* Mock mode is invisible once it leaves the sidebar, and a canned
+              report reads exactly like a real one — so say so, always. */}
+          {mockOn && (
+            <Badge variant="warn" appearance="status" className="mx-1" title="Reports are canned; league data is live">
+              Mock AI
+            </Badge>
+          )}
 
-          <label className="flex cursor-pointer items-center justify-between gap-2 px-2 text-[13px] text-muted-foreground">
-            <span>Mock AI</span>
-            <input
-              type="checkbox"
-              checked={mock}
-              onChange={(e) => setMock(e.target.checked)}
-              className="size-3.5 accent-[var(--color-primary)]"
-            />
-          </label>
-
-          <div className="flex items-center gap-1 px-1">
-            {PALETTES.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setPalette(p.id)}
-                title={`${p.label} — ${p.hint}`}
-                aria-label={p.label}
-                aria-pressed={p.id === palette}
-                className={cn(
-                  "size-4 rounded-full border transition-transform",
-                  p.id === palette ? "scale-110 border-foreground" : "border-border hover:scale-110",
-                )}
-                style={{ background: p.swatch }}
-              />
-            ))}
+          <div className="flex items-center gap-1">
+            <RailItem className="flex-1" active={view === "settings"} onClick={() => setView("settings")}>
+              <span className="flex items-center gap-2">
+                <Settings className="size-3.5" aria-hidden />
+                Settings
+              </span>
+            </RailItem>
             <Button
               variant="ghost"
               size="icon"
-              className="ml-auto"
               aria-label={mode === "dark" ? "Switch to light" : "Switch to dark"}
               onClick={() => setMode(mode === "dark" ? "light" : "dark")}
             >
@@ -147,11 +129,11 @@ export default function App() {
           <Empty sports={sports.data} />
         ) : active && league ? (
           current === "scout" ? (
-            <ScoutPanel sport={active} league={league} mock={mock} />
+            <ScoutPanel sport={active} league={league} />
           ) : current === "team" ? (
             <TeamPanel sport={active} league={league} />
           ) : (
-            <TradePanel sport={active} league={league} mock={mock} />
+            <TradePanel sport={active} league={league} />
           )
         ) : (
           <div className="p-6">
@@ -183,6 +165,7 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
 function RailItem({
   active,
   disabled,
+  className,
   children,
   ...props
 }: React.ComponentProps<"button"> & { active?: boolean }) {
@@ -193,6 +176,7 @@ function RailItem({
         "flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[13.5px] transition-colors",
         active ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted",
         disabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
+        className,
       )}
       {...props}
     >

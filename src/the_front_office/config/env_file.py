@@ -15,7 +15,9 @@ import logging
 import os
 import re
 import stat
+import types
 from pathlib import Path
+from typing import Literal, Union, get_args, get_origin
 
 from the_front_office.config.settings import PROJECT_ROOT, AppSettings, settings
 
@@ -40,6 +42,35 @@ def env_var(field: str) -> str:
     """
     alias = AppSettings.model_fields[field].validation_alias
     return alias if isinstance(alias, str) else field.upper()
+
+
+def field_kind(field: str) -> tuple[str, list[str]]:
+    """How a setting should be edited, derived from its own annotation.
+
+    A settings page that renders every value as a text box invites a typo the
+    validator then rejects on save. `bool` is checked before `int` because in
+    Python it is one.
+
+    Returns:
+        The control to use, and the allowed values when there are a fixed few.
+    """
+    annotation = AppSettings.model_fields[field].annotation
+    # Unwrap `X | None`: optionality is about whether a value is required, not
+    # about what kind of value it is.
+    if get_origin(annotation) in (Union, types.UnionType):
+        real = [arg for arg in get_args(annotation) if arg is not type(None)]
+        if len(real) == 1:
+            annotation = real[0]
+
+    if get_origin(annotation) is Literal:
+        return "choice", [str(value) for value in get_args(annotation)]
+    if annotation is bool:
+        return "boolean", []
+    if annotation is int:
+        return "integer", []
+    if annotation is float:
+        return "number", []
+    return "text", []
 
 
 def declared() -> dict[str, str]:

@@ -102,19 +102,21 @@ it edits line by line so comments survive. A secret's value must never leave the
 process — report presence, never contents. `reload_settings` mutates the
 singleton in place; rebinding would strand every module that imported it.
 
-**UI.** The API returns the domain models themselves — never define a parallel
-response type for something `domain/models.py` already models, or the two drift.
-Provider access lives in the web adapter's `data.py`, free of any web framework,
-so it is testable with no server running.
+**UI.** The API returns the domain models themselves — never a parallel response
+type for something `domain/models.py` already models, or the two drift. Provider
+access lives in `data.py`, free of any web framework, so it is testable with no
+server running. Whether the model is really called is configuration (`MOCK_AI`),
+read per request, not a flag a client sets — and since a canned report is
+indistinguishable from a real one, anything running mocked must show it.
 
-In `web/`, colour comes only from semantic tokens (`bg-card`, `text-muted-foreground`,
-`border-border`) — never a raw Tailwind palette utility, which cannot follow a
-palette change. Every token is one `light-dark(light, dark)` pair; adding a palette
-is a `themes.css` block plus a `registry.ts` entry and no component change. Status
-colours (`ok`, `warn`, `destructive`) and the difficulty ramp are shared across
-palettes deliberately: they encode meaning, are tuned for colour-blind legibility,
-and every value clears WCAG AA against its own ground. Anything that encodes state
-in colour must also carry it in text or shape.
+In `web/`, colour comes only from semantic tokens (`bg-card`,
+`text-muted-foreground`) — never a raw Tailwind palette utility, which cannot
+follow a palette change. Every token is one `light-dark(light, dark)` pair, so a
+palette is a `themes.css` block plus a `registry.ts` entry and no component
+change. Status colours and the difficulty ramp are deliberately shared across
+palettes: they encode meaning, are tuned for colour-blind legibility, and clear
+WCAG AA against their own ground. State carried in colour must also be carried
+in text or shape.
 
 **Extract on the second instance.** This app is deliberately shaped so sports
 and platforms differ only where they genuinely differ; everything else is

@@ -196,3 +196,47 @@ def test_pydantic_reads_back_exactly_what_was_written(tmp_path: Path, monkeypatc
         sleeper_username: str = ""
 
     assert Probe().sleeper_username == awkward
+
+
+# ── how each setting should be edited ───────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("field", "kind"),
+    [
+        ("mock_ai", "boolean"),
+        ("logfire_capture_prompts", "boolean"),
+        ("fpl_entry_id", "integer"),
+        ("yahoo_max_weekly_adds", "integer"),
+        ("nba_api_delay", "number"),
+        ("log_level", "choice"),
+        ("sleeper_username", "text"),
+        ("gemini_api_key", "text"),
+    ],
+)
+def test_a_field_declares_the_control_it_needs(field: str, kind: str) -> None:
+    assert env_file.field_kind(field)[0] == kind
+
+
+def test_optionality_does_not_change_what_kind_a_value_is() -> None:
+    """`int | None` is still an integer; the None only says it may be absent."""
+    assert env_file.field_kind("fpl_entry_id") == ("integer", [])
+
+
+def test_a_bool_is_not_reported_as_an_integer() -> None:
+    """In Python it is one, so the check order actually matters."""
+    assert env_file.field_kind("mock_ai")[0] == "boolean"
+
+
+def test_a_choice_carries_its_allowed_values() -> None:
+    assert env_file.field_kind("log_level")[1] == ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+
+
+def test_every_declared_field_resolves_to_a_known_control() -> None:
+    for field in env_file.declared().values():
+        assert env_file.field_kind(field)[0] in {"text", "boolean", "integer", "number", "choice"}
+
+
+def test_a_boolean_writes_the_spelling_dotenv_reads_back(env: Path) -> None:
+    env_file.write_values({"MOCK_AI": "true"})
+    assert "MOCK_AI=true" in env.read_text(encoding="utf-8")

@@ -67,6 +67,9 @@ export type Setting = {
   value: string;
   /** A shell variable is overriding .env, so an edit here will not take effect. */
   shadowed: boolean;
+  /** Which control to render: text, boolean, integer, number or choice. */
+  kind: "text" | "boolean" | "integer" | "number" | "choice";
+  choices: string[];
 };
 export type Evaluation = { verdict: TradeVerdict; chat_id: string };
 export type RosterRow = Record<string, string>;
@@ -98,10 +101,9 @@ export const api = {
   sports: () => request<Sport[]>("/api/sports"),
   leagues: (sport: string) => request<League[]>(`/api/${sport}/leagues`),
   roster: (sport: string, league: string) => request<RosterRow[]>(`/api/${sport}/leagues/${league}/roster`),
-  scout: (sport: string, league: string, mock: boolean) =>
-    post<Analysis>(`/api/${sport}/leagues/${league}/scout`, { mock }),
-  trade: (sport: string, league: string, text: string, mock: boolean) =>
-    post<Evaluation>(`/api/${sport}/leagues/${league}/trade`, { text, mock }),
+  scout: (sport: string, league: string) => post<Analysis>(`/api/${sport}/leagues/${league}/scout`, {}),
+  trade: (sport: string, league: string, text: string) =>
+    post<Evaluation>(`/api/${sport}/leagues/${league}/trade`, { text }),
   ask: (chatId: string, message: string) => post<{ answer: string }>(`/api/chat/${chatId}`, { message }),
   settings: () => request<Setting[]>("/api/settings"),
   saveSettings: (values: Record<string, string>) => put<Setting[]>("/api/settings", { values }),

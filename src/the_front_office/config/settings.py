@@ -31,6 +31,14 @@ class AppSettings(BaseSettings):
     gemini_api_key: str | None = Field(default=None, validation_alias="GOOGLE_API_KEY")
     default_model: str = "gemini-2.5-pro"
 
+    mock_ai: bool = False
+    """Return canned reports instead of calling the model. League data stays live.
+
+    Configuration rather than a per-request flag so one place decides it, and so
+    it survives a reload — which is also why every surface shows a badge while
+    it is on. A canned report is indistinguishable from a real one on the page.
+    """
+
     # ── Yahoo ───────────────────────────────────────────────────────────
     yahoo_client_id: str | None = None
     yahoo_client_secret: str | None = None
