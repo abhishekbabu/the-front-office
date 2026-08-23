@@ -38,6 +38,7 @@ from the_front_office.adapters.inbound.cli import commands as cmd  # noqa: E402
 from the_front_office.adapters.inbound.cli import output  # noqa: E402
 from the_front_office.adapters.inbound.cli import repl as cli  # noqa: E402
 from the_front_office.adapters.inbound.cli.session import Session  # noqa: E402
+from the_front_office.domain.models import PlayerCard  # noqa: E402
 
 
 class FakeProvider:
@@ -49,8 +50,8 @@ class FakeProvider:
 
         return [LeagueRef("L1", "My League", "nfl", "12-team")]
 
-    def roster_rows(self, league_id: str) -> Any:
-        return [{"Player": "Star QB", "Pos": "QB"}]
+    def roster(self, league_id: str) -> list[PlayerCard]:
+        return [PlayerCard(player_id="qb1", columns={"Player": "Star QB", "Pos": "QB"})]
 
 
 def fake_entry(

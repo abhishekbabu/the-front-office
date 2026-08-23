@@ -40,7 +40,14 @@ export type Tone = "neutral" | "good" | "warning";
 export type Stat = { label: string; value: string; tone: Tone };
 
 /** One place in a lineup, or one player on a bench. */
-export type Spot = { slot: string; player: string; detail: string; value: string; tone: Tone };
+export type Spot = {
+  player_id: string;
+  slot: string;
+  player: string;
+  detail: string;
+  value: string;
+  tone: Tone;
+};
 
 /** A change the numbers already imply, before anyone has judged them. */
 export type Swap = { start: string; out: string; gain: string };
@@ -97,7 +104,19 @@ export type Setting = {
   choices: string[];
 };
 export type Evaluation = { verdict: TradeVerdict; chat_id: string };
-export type RosterRow = Record<string, string>;
+/** A player as a table row: the sport's own columns, plus what a column cannot be. */
+export type PlayerCard = { player_id: string; columns: Record<string, string>; tone: Tone };
+
+export type PlayerDetail = {
+  player_id: string;
+  name: string;
+  position: string;
+  team: string;
+  headline: string;
+  note: string;
+  tone: Tone;
+  stats: Stat[];
+};
 
 /**
  * A failure the server described in its own words, ready to show as-is.
@@ -139,7 +158,9 @@ const put = <T,>(path: string, body: unknown) =>
 export const api = {
   sports: () => request<Sport[]>("/api/sports"),
   leagues: (sport: string) => request<League[]>(`/api/${sport}/leagues`),
-  roster: (sport: string, league: string) => request<RosterRow[]>(`/api/${sport}/leagues/${league}/roster`),
+  roster: (sport: string, league: string) => request<PlayerCard[]>(`/api/${sport}/leagues/${league}/roster`),
+  player: (sport: string, league: string, id: string) =>
+    request<PlayerDetail>(`/api/${sport}/leagues/${league}/players/${id}`),
   summary: (sport: string, league: string) => request<Summary>(`/api/${sport}/leagues/${league}/summary`),
   scout: (sport: string, league: string) => post<Analysis>(`/api/${sport}/leagues/${league}/scout`, {}),
   trade: (sport: string, league: string, text: string) =>

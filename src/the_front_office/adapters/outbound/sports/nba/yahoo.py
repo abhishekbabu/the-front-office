@@ -23,11 +23,26 @@ from the_front_office.adapters.outbound.sports.nba.projections import Projection
 from the_front_office.adapters.outbound.sports.trades import resolve_sides
 from the_front_office.config.constants import NBA_SCOUT_PROMPT, NBA_TRADE_PROMPT
 from the_front_office.config.settings import settings
-from the_front_office.domain.errors import FrontOfficeError, LeagueNotFoundError
-from the_front_office.domain.models import SportContext, Stat, Summary, TradeProposal
+from the_front_office.domain.errors import (
+    FrontOfficeError,
+    LeagueNotFoundError,
+    PlayerNotFoundError,
+)
+from the_front_office.domain.models import PlayerCard, PlayerDetail, SportContext, Stat, Summary, TradeProposal
 from the_front_office.domain.ports import LeagueRef
 
 logger = logging.getLogger(__name__)
+
+
+def _recent(stats: object, key: str) -> str:
+    """One recent-form figure, or a dash when nba_stats has nothing.
+
+    Out of season, and for a player who has not featured, there is no line to
+    show — and a zero would read as a bad one rather than an absent one.
+    """
+    line = getattr(stats, "last_15", None) if stats is not None else None
+    value = (line or {}).get(key) if isinstance(line, dict) else None
+    return f"{value:.1f}" if isinstance(value, int | float) else "—"
 
 
 class YahooNBAProvider:
@@ -166,21 +181,53 @@ class YahooNBAProvider:
             logger.warning(f"{len(players)} matches for {name!r}; using {players[0].name.full!r}")
         return players[0]
 
-    def roster_rows(self, league_id: str = "") -> list[dict[str, str]]:
-        """The user's roster as table rows, for a team view."""
-        team = self.yahoo.get_user_team()
-        rows = []
-        for player in team.players():
-            rows.append(
-                {
-                    "Player": str(player.name.full),
-                    "Pos": str(player.display_position),
-                    "Team": str(player.editorial_team_abbr),
-                    "Slot": str(getattr(getattr(player, "selected_position", None), "position", "")),
-                    "Status": str(getattr(player, "status", "") or ""),
-                }
+    def roster(self, league_id: str = "") -> list[PlayerCard]:
+        """The user's roster, with recent form where nba_stats has it."""
+        cards = []
+        for player in self.yahoo.get_user_team().players():
+            name = str(player.name.full)
+            status = str(getattr(player, "status", "") or "")
+            stats = self.nba.get_player_stats(name)
+            cards.append(
+                PlayerCard(
+                    player_id=str(player.player_key),
+                    tone="warning" if status else "neutral",
+                    columns={
+                        "Player": name,
+                        "Pos": str(player.display_position),
+                        "Team": str(player.editorial_team_abbr),
+                        "Slot": str(getattr(getattr(player, "selected_position", None), "position", "")),
+                        "PTS": _recent(stats, "PTS"),
+                        "REB": _recent(stats, "REB"),
+                        "AST": _recent(stats, "AST"),
+                        "Status": status,
+                    },
+                )
             )
-        return rows
+        return cards
+
+    def player(self, league_id: str, player_id: str) -> PlayerDetail:
+        """One player, with their last-fifteen line where nba_stats has it."""
+        player = next(
+            (p for p in self.yahoo.get_user_team().players() if str(p.player_key) == player_id),
+            None,
+        )
+        if player is None:
+            raise PlayerNotFoundError([player_id])
+
+        name = str(player.name.full)
+        stats = self.nba.get_player_stats(name)
+        status = str(getattr(player, "status", "") or "")
+        return PlayerDetail(
+            player_id=player_id,
+            name=name,
+            position=str(player.display_position),
+            team=str(player.editorial_team_abbr),
+            headline=f"{_recent(stats, 'PTS')} pts over the last 15",
+            note=status,
+            tone="warning" if status else "neutral",
+            stats=[Stat(label=key, value=_recent(stats, key)) for key in ("PTS", "REB", "AST", "STL", "BLK", "FG%")],
+        )
 
     @property
     def sleeper(self) -> "SleeperClient":

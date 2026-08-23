@@ -79,7 +79,7 @@ def test_every_provider_satisfies_the_protocol() -> None:
 
     for provider in (YahooNBAProvider, SleeperNFLProvider):
         assert provider.sport and provider.label
-        for method in ("list_leagues", "build_context", "roster_rows"):
+        for method in ("list_leagues", "build_context", "roster"):
             assert callable(getattr(provider, method, None)), f"{provider.__name__}.{method}"
 
 

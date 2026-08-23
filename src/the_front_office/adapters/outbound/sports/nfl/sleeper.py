@@ -30,8 +30,19 @@ from the_front_office.adapters.outbound.sports.nfl.lineup import (
 from the_front_office.adapters.outbound.sports.trades import resolve_sides
 from the_front_office.config.constants import NFL_SCOUT_PROMPT, NFL_TRADE_PROMPT
 from the_front_office.config.settings import settings
-from the_front_office.domain.errors import LeagueNotFoundError, SleeperAPIError
-from the_front_office.domain.models import Side, SportContext, Spot, Stat, Summary, Swap, Tone, TradeProposal
+from the_front_office.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError
+from the_front_office.domain.models import (
+    PlayerCard,
+    PlayerDetail,
+    Side,
+    SportContext,
+    Spot,
+    Stat,
+    Summary,
+    Swap,
+    Tone,
+    TradeProposal,
+)
 from the_front_office.domain.ports import LeagueRef
 
 logger = logging.getLogger(__name__)
@@ -114,26 +125,71 @@ class SleeperNFLProvider:
                 return roster
         raise LeagueNotFoundError(f"you do not own a roster in league {league_id}")
 
-    def roster_rows(self, league_id: str) -> list[dict[str, str]]:
-        """The user's roster as table rows, without pulling the waiver pool."""
-        roster = self._my_roster(league_id)
-        players = self.client.get_players()
-        starters = set(roster.starter_ids)
-        rows = []
-        for player_id in roster.player_ids:
-            meta = players.get(player_id)
+    def roster(self, league_id: str) -> list[PlayerCard]:
+        """The full roster, with the depth and experience a week view leaves out."""
+        state = self._week(league_id)
+        starters = set(state.roster.starter_ids)
+        scheduled = any(p.opponent for p in state.projected)
+
+        cards = []
+        for player_id in state.roster.player_ids:
+            meta = state.players.get(player_id)
             if not meta:
                 continue
-            rows.append(
-                {
-                    "Player": str(meta.get("name") or player_id),
-                    "Pos": str(meta.get("position") or ""),
-                    "Team": str(meta.get("team") or "FA"),
-                    "Slot": "START" if player_id in starters else "BN",
-                    "Status": str(meta.get("injury_status") or ""),
-                }
+            projection = state.projections.get(player_id)
+            injury = str(meta.get("injury_status") or "")
+            depth = int(meta.get("depth_chart_order") or 0)
+            cards.append(
+                PlayerCard(
+                    player_id=player_id,
+                    tone="warning" if injury else "neutral",
+                    columns={
+                        "Player": str(meta.get("name") or player_id),
+                        "Pos": str(meta.get("position") or ""),
+                        "Team": str(meta.get("team") or "FA"),
+                        "Slot": "START" if player_id in starters else "BN",
+                        "Proj": f"{projection.points:.1f}" if projection else "0.0",
+                        "Opponent": self._opponent_label(projection, scheduled),
+                        "Depth": str(depth) if depth else "—",
+                        "Exp": f"{int(meta.get('years_exp') or 0)}y",
+                        "Status": injury,
+                    },
+                )
             )
-        return rows
+        return cards
+
+    @staticmethod
+    def _opponent_label(projection: WeeklyProjection | None, scheduled: bool) -> str:
+        if projection and projection.opponent:
+            return f"vs {projection.opponent}"
+        return "no game" if scheduled else "—"
+
+    def player(self, league_id: str, player_id: str) -> PlayerDetail:
+        """One player, as this week and the depth chart see them."""
+        state = self._week(league_id)
+        meta = state.players.get(player_id)
+        if meta is None:
+            raise PlayerNotFoundError([player_id])
+
+        projection = state.projections.get(player_id)
+        scheduled = any(p.opponent for p in state.projected)
+        depth = int(meta.get("depth_chart_order") or 0)
+        injury = str(meta.get("injury_status") or "")
+        return PlayerDetail(
+            player_id=player_id,
+            name=str(meta.get("name") or player_id),
+            position=str(meta.get("position") or ""),
+            team=str(meta.get("team") or "FA"),
+            headline=f"{projection.points:.1f} proj pts" if projection else "no projection",
+            note=injury,
+            tone="warning" if injury else "neutral",
+            stats=[
+                Stat(label=f"Week {state.week}", value=self._opponent_label(projection, scheduled)),
+                Stat(label="Depth chart", value=f"{depth}" if depth else "unlisted"),
+                Stat(label="Experience", value=f"{int(meta.get('years_exp') or 0)} seasons"),
+                Stat(label="Status", value=str(meta.get("status") or "active")),
+            ],
+        )
 
     # ── trades ──────────────────────────────────────────────────────
 

@@ -1,14 +1,16 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, type League, type RosterRow, type Sport } from "@/lib/api";
+import { api, type League, type PlayerCard, type Sport } from "@/lib/api";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Table, Td, Th, Tr } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PlayerPanel } from "@/components/ui/player";
 import { ErrorNote, PageHeader } from "@/panels/shared";
 import { cn } from "@/lib/utils";
 
 /** Columns whose values are figures, so they align right like the numbers they are. */
-const NUMERIC = new Set(["xPts", "Price", "Proj", "Points"]);
+const NUMERIC = new Set(["xPts", "Price", "Proj", "Points", "Form", "xGI", "Owned", "Depth", "Exp", "PTS", "REB", "AST"]);
 
 /**
  * Values that mean "look at this".
@@ -21,15 +23,23 @@ function statusTone(value: string): "fail" | "warn" {
   return /\b(out|suspended|injured|ir)\b/i.test(value) ? "fail" : "warn";
 }
 
+/**
+ * The whole squad, in more depth than a week view.
+ *
+ * This is where you go to look at your players rather than at this week: the
+ * season numbers, the ownership, the depth chart. Any row opens.
+ */
 export function TeamPanel({ sport, league }: { sport: Sport; league: League }) {
-  const roster = useQuery<RosterRow[], Error>({
+  const [open, setOpen] = useState<string | null>(null);
+
+  const roster = useQuery<PlayerCard[], Error>({
     queryKey: ["roster", sport.sport, league.league_id],
     queryFn: () => api.roster(sport.sport, league.league_id),
   });
 
-  // The columns are the sport's own vocabulary — FPL sends Price and xPts, NFL
-  // sends Slot — so they are read off the data rather than declared per sport.
-  const columns = roster.data?.[0] ? Object.keys(roster.data[0]) : [];
+  // The columns are the sport's own vocabulary, read off the data rather than
+  // declared per sport.
+  const columns = roster.data?.[0] ? Object.keys(roster.data[0].columns) : [];
 
   return (
     <>
@@ -40,7 +50,7 @@ export function TeamPanel({ sport, league }: { sport: Sport; league: League }) {
       <div className="p-5">
         <Card>
           <CardHeader>
-            <span>{sport.label.replace(/\s*\(.*\)$/, "")} squad</span>
+            <span>Squad</span>
             {roster.data && <span>{roster.data.length} players</span>}
           </CardHeader>
 
@@ -58,10 +68,16 @@ export function TeamPanel({ sport, league }: { sport: Sport; league: League }) {
                 </tr>
               </thead>
               <tbody>
-                {roster.data.map((row, i) => (
-                  <Tr key={i}>
+                {roster.data.map((card) => (
+                  <Tr
+                    key={card.player_id}
+                    onClick={() => setOpen(card.player_id)}
+                    className="cursor-pointer"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === "Enter" && setOpen(card.player_id)}
+                  >
                     {columns.map((column) => {
-                      const value = row[column] ?? "";
+                      const value = card.columns[column] ?? "";
                       return (
                         <Td key={column} className={cn(NUMERIC.has(column) && "text-right")}>
                           {column === "Status" && value ? (
@@ -85,6 +101,15 @@ export function TeamPanel({ sport, league }: { sport: Sport; league: League }) {
           )}
         </Card>
       </div>
+
+      {open && (
+        <PlayerPanel
+          sport={sport.sport}
+          league={league.league_id}
+          playerId={open}
+          onClose={() => setOpen(null)}
+        />
+      )}
     </>
   );
 }

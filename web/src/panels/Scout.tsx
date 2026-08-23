@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type League, type Sport, type Summary } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -5,6 +6,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatStrip } from "@/components/ui/stat";
 import { LineupCard, SideCard } from "@/components/ui/lineup";
+import { PlayerPanel } from "@/components/ui/player";
 import { ErrorNote, PageHeader } from "@/panels/shared";
 
 /**
@@ -16,6 +18,8 @@ import { ErrorNote, PageHeader } from "@/panels/shared";
  * only thing on it.
  */
 export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) {
+  const [open, setOpen] = useState<string | null>(null);
+
   const week = useQuery<Summary, Error>({
     queryKey: ["summary", sport.sport, league.league_id],
     queryFn: () => api.summary(sport.sport, league.league_id),
@@ -38,8 +42,8 @@ export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) 
         <div className="flex flex-col gap-4 p-5">
           {week.data.opponent ? (
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <SideCard side={week.data.mine} label="You" />
-              <SideCard side={week.data.opponent} label="Opponent" />
+              <SideCard side={week.data.mine} label="You" onOpen={setOpen} />
+              <SideCard side={week.data.opponent} label="Opponent" onOpen={setOpen} />
             </div>
           ) : (
             <LineupCard
@@ -47,6 +51,7 @@ export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) 
               lineup={week.data.mine?.lineup ?? []}
               bench={week.data.mine?.bench ?? []}
               swaps={week.data.swaps}
+              onOpen={setOpen}
             />
           )}
 
@@ -97,6 +102,15 @@ export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) 
             </Badge>
           )}
         </div>
+      )}
+
+      {open && (
+        <PlayerPanel
+          sport={sport.sport}
+          league={league.league_id}
+          playerId={open}
+          onClose={() => setOpen(null)}
+        />
       )}
     </>
   );

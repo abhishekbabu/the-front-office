@@ -107,6 +107,18 @@ async function main() {
         await page.getByRole("button", { name: "My team" }).click();
         await shoot(`${sport.toLowerCase()}-team`);
       }
+      if (wanted("player")) {
+        // Open the first row, which is the whole point of the table being one.
+        await page.getByRole("button", { name: "My team" }).click();
+        await page.waitForTimeout(500);
+        const row = page.locator("tbody tr").first();
+        if (await row.count()) {
+          await row.click();
+          await page.waitForTimeout(700);
+          await shoot(`${sport.toLowerCase()}-player`);
+          await page.getByRole("button", { name: "Close" }).click();
+        }
+      }
       if (wanted("trade")) {
         const trade = page.getByRole("button", { name: "Trade", exact: true });
         if (await trade.count()) {

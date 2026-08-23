@@ -11,7 +11,13 @@ from typing import Protocol, TypedDict, TypeVar, runtime_checkable
 
 from pydantic import BaseModel
 
-from the_front_office.domain.models import SportContext, Summary, TradeProposal
+from the_front_office.domain.models import (
+    PlayerCard,
+    PlayerDetail,
+    SportContext,
+    Summary,
+    TradeProposal,
+)
 
 TModel = TypeVar("TModel", bound=BaseModel)
 
@@ -97,11 +103,19 @@ class SportProvider(Protocol):
         """
         ...
 
-    def roster_rows(self, league_id: str) -> list[dict[str, str]]:
-        """The user's roster as table rows, for a team view.
+    def roster(self, league_id: str) -> list[PlayerCard]:
+        """The user's roster, one card per player, for a team view.
 
-        Cheaper than build_context — a roster listing should not pull
-        projections and a waiver pool.
+        Cheaper than build_context — a roster listing should not pull a waiver
+        pool — and richer than a lineup, which shows only what a week turns on.
+        """
+        ...
+
+    def player(self, league_id: str, player_id: str) -> PlayerDetail:
+        """Everything worth knowing about one player.
+
+        Raises:
+            PlayerNotFoundError: nothing in this league has that identifier.
         """
         ...
 

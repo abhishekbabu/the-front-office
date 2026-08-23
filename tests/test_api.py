@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from reports import MOCK_FPL_REPORT, MOCK_NBA_VERDICT
 
 from the_front_office.adapters.inbound.web import api as web
-from the_front_office.domain.models import SportContext
+from the_front_office.domain.models import PlayerCard, SportContext
 from the_front_office.domain.ports import LeagueRef
 
 
@@ -30,10 +30,10 @@ class FakeProvider:
             raise self.error
         return [LeagueRef(league_id="900", name="Work League", sport="fpl", detail="3 of 12")]
 
-    def roster_rows(self, league_id: str) -> list[dict[str, str]]:
+    def roster(self, league_id: str) -> list[PlayerCard]:
         if self.error:
             raise self.error
-        return [{"Player": "Haaland", "Pos": "FWD", "xPts": "7.4"}]
+        return [PlayerCard(player_id="10", columns={"Player": "Haaland", "Pos": "FWD", "xPts": "7.4"})]
 
     def build_context(self, league_id: str) -> SportContext:
         return SportContext(prompt="prompt")
@@ -110,7 +110,8 @@ def test_leagues_are_listed(client: TestClient) -> None:
 def test_a_roster_keeps_the_sports_own_columns(client: TestClient) -> None:
     """The client reads the keys off the data rather than being taught them."""
     body = client.get("/api/fpl/leagues/900/roster").json()
-    assert list(body[0]) == ["Player", "Pos", "xPts"]
+    assert list(body[0]["columns"]) == ["Player", "Pos", "xPts"]
+    assert body[0]["player_id"] == "10"
 
 
 def test_an_unconfigured_sport_is_a_readable_400(monkeypatch: pytest.MonkeyPatch) -> None:

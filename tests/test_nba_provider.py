@@ -244,13 +244,26 @@ def test_selecting_an_unknown_league_raises() -> None:
         provider._select("999")
 
 
-def test_roster_rows_flatten_the_roster() -> None:
-    from types import SimpleNamespace
+def test_a_roster_card_carries_the_row_and_what_a_row_cannot() -> None:
+    """The columns are the table; the id and the tone are what a table needs
+    and a column should not be."""
+    yahoo = FakeYahoo(roster=[make_player("A B", "PF,C", "LAL", status="O", selected_position="IL")])
 
-    yahoo = FakeYahoo(roster=[make_player("A B", position="PF,C", team="LAL", selected_position="IL", status="O")])
-    provider = YahooNBAProvider(SimpleNamespace(id="1", name="One"), nba=FakeNBA(), yahoo=yahoo)  # type: ignore[arg-type]
-    rows = provider.roster_rows()
-    assert rows == [{"Player": "A B", "Pos": "PF,C", "Team": "LAL", "Slot": "IL", "Status": "O"}]
+    card = YahooNBAProvider(league=None, nba=FakeNBA(), yahoo=yahoo).roster()[0]  # type: ignore[arg-type]
+
+    assert card.columns["Player"] == "A B"
+    assert card.columns["Slot"] == "IL"
+    assert card.player_id
+    assert card.tone == "warning"
+
+
+def test_recent_form_is_a_dash_when_there_is_none() -> None:
+    """Out of season there is no line to show, and a zero would read as a bad
+    one rather than an absent one."""
+    yahoo = FakeYahoo(roster=[make_player("A B")])
+    card = YahooNBAProvider(league=None, nba=FakeNBA(), yahoo=yahoo).roster()[0]  # type: ignore[arg-type]
+
+    assert card.columns["PTS"] == "—"
 
 
 # ── projections ─────────────────────────────────────────────────────────

@@ -21,7 +21,7 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
     Squad,
 )
 from the_front_office.adapters.outbound.sports.fpl.fpl import FPLProvider
-from the_front_office.domain.errors import FPLAPIError, LeagueNotFoundError
+from the_front_office.domain.errors import FPLAPIError, LeagueNotFoundError, PlayerNotFoundError
 
 ENTRY_ID = 77
 LEAGUE_ID = "900"
@@ -213,17 +213,17 @@ def test_a_manager_in_no_private_league_still_has_something_to_scout() -> None:
 def test_the_squad_read_is_the_last_completed_gameweek() -> None:
     """Picks are published only once a deadline passes."""
     client = FakeFPL()
-    FPLProvider(ENTRY_ID, client=client).roster_rows(LEAGUE_ID)  # type: ignore[arg-type]
+    FPLProvider(ENTRY_ID, client=client).roster(LEAGUE_ID)  # type: ignore[arg-type]
     assert client.squad_requests == [4]
 
 
 def test_before_the_season_there_is_no_squad_to_read() -> None:
     with pytest.raises(FPLAPIError, match="season has not started"):
-        provider(upcoming=1).roster_rows(LEAGUE_ID)
+        provider(upcoming=1).roster(LEAGUE_ID)
 
 
 def test_roster_rows_mark_the_captain_and_the_bench() -> None:
-    rows = {row["Player"]: row for row in provider().roster_rows(LEAGUE_ID)}
+    rows = {c.columns["Player"]: c.columns for c in provider().roster(LEAGUE_ID)}
     assert rows["P8"]["Slot"] == "C"
     assert rows["P3"]["Slot"] == "XI"
     assert rows["P15"]["Slot"] == "BN"
@@ -238,7 +238,7 @@ def test_roster_rows_report_a_doubt() -> None:
         3: player(3, "DEF", 6.0, status="d", chance_of_playing=50),
         **MARKET,
     }
-    rows = {row["Player"]: row for row in FPLProvider(ENTRY_ID, client=fake).roster_rows(LEAGUE_ID)}  # type: ignore[arg-type]
+    rows = {c.columns["Player"]: c.columns for c in FPLProvider(ENTRY_ID, client=fake).roster(LEAGUE_ID)}  # type: ignore[arg-type]
     assert rows["P3"]["Status"] == "doubtful 50%"
 
 
@@ -484,3 +484,39 @@ def test_only_a_blank_or_a_double_is_worth_warning_about() -> None:
 
     assert warnings["MCI"].tone == "warning"  # no fixture in the fake week
     assert "ARS" not in warnings  # an ordinary fixture is not a warning
+
+
+# ── one player ──────────────────────────────────────────────────────────
+
+
+def test_a_player_carries_the_numbers_fpl_judges_them_on() -> None:
+    """Expected goals arrive in the same payload as the price, which is why
+    this sport needs no second stats provider."""
+    detail = provider().player(LEAGUE_ID, "8")
+    labels = {stat.label for stat in detail.stats}
+
+    assert detail.name == "Player 8"
+    assert {"xG", "xA", "xGI", "Form", "Owned by", "Price"} <= labels
+
+
+def test_a_players_fixture_is_for_the_gameweek_still_open() -> None:
+    detail = provider().player(LEAGUE_ID, "8")
+    assert any(stat.label == "GW5" for stat in detail.stats)
+
+
+def test_a_flagged_player_is_toned_and_carries_the_news() -> None:
+    fake = FakeFPL()
+    fake.get_players = lambda: {  # type: ignore[method-assign]
+        **SQUAD_PLAYERS,
+        3: player(3, "DEF", 6.0, status="i", chance_of_playing=0, news="Hamstring - expected back 12 Sep"),
+        **MARKET,
+    }
+    detail = FPLProvider(ENTRY_ID, client=fake).player(LEAGUE_ID, "3")  # type: ignore[arg-type]
+
+    assert detail.tone == "warning"
+    assert "Hamstring" in detail.note
+
+
+def test_an_unknown_player_is_refused_by_name() -> None:
+    with pytest.raises(PlayerNotFoundError, match="nope"):
+        provider().player(LEAGUE_ID, "nope")

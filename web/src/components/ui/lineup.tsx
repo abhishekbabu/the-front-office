@@ -15,11 +15,13 @@ export function LineupCard({
   lineup,
   bench,
   swaps,
+  onOpen,
 }: {
   title: string;
   lineup: Spot[];
   bench: Spot[];
   swaps: Swap[];
+  onOpen?: (id: string) => void;
 }) {
   if (!lineup.length && !bench.length) return null;
   return (
@@ -30,12 +32,12 @@ export function LineupCard({
       </CardHeader>
 
       <div className="grid grid-cols-1 md:grid-cols-2">
-        <SpotList spots={lineup} />
+        <SpotList spots={lineup} onOpen={onOpen} />
         <div className="border-t border-border md:border-l md:border-t-0">
           <div className="border-b border-border px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Bench
           </div>
-          <SpotList spots={bench} empty="Nobody on the bench." />
+          <SpotList spots={bench} empty="Nobody on the bench." onOpen={onOpen} />
         </div>
       </div>
 
@@ -59,16 +61,26 @@ export function LineupCard({
   );
 }
 
-function SpotList({ spots, empty }: { spots: Spot[]; empty?: string }) {
+function SpotList({ spots, empty, onOpen }: { spots: Spot[]; empty?: string; onOpen?: (id: string) => void }) {
   if (!spots.length) {
     return <p className="px-4 py-3 text-[13px] text-muted-foreground">{empty ?? "Nothing set."}</p>;
   }
   return (
     <div className="flex flex-col">
-      {spots.map((spot, i) => (
+      {spots.map((spot, i) => {
+        // A place with nobody in it has nothing to open.
+        const open = spot.player_id && onOpen ? () => onOpen(spot.player_id) : undefined;
+        return (
         <div
           key={`${spot.player}-${i}`}
-          className="flex items-baseline gap-3 border-b border-border/45 px-4 py-2 last:border-b-0"
+          onClick={open}
+          onKeyDown={open && ((e) => e.key === "Enter" && open())}
+          tabIndex={open ? 0 : undefined}
+          role={open ? "button" : undefined}
+          className={cn(
+            "flex items-baseline gap-3 border-b border-border/45 px-4 py-2 last:border-b-0",
+            open && "cursor-pointer hover:bg-muted",
+          )}
         >
           {spot.slot && (
             <span className="w-16 shrink-0 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
@@ -87,7 +99,8 @@ function SpotList({ spots, empty }: { spots: Spot[]; empty?: string }) {
             <span className={cn("shrink-0 font-mono text-[12.5px] tabular-nums")}>{spot.value}</span>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -98,7 +111,7 @@ function SpotList({ spots, empty }: { spots: Spot[]; empty?: string }) {
  * Both sides render identically on purpose: the question is which lineup is
  * better, and that is easier to see when nothing but the numbers differs.
  */
-export function SideCard({ side, label }: { side: Side | null; label: string }) {
+export function SideCard({ side, label, onOpen }: { side: Side | null; label: string; onOpen?: (id: string) => void }) {
   if (!side) return null;
   return (
     <Card>
@@ -113,13 +126,13 @@ export function SideCard({ side, label }: { side: Side | null; label: string }) 
         </span>
         <span className="normal-case tracking-normal">{[side.detail, side.points].filter(Boolean).join(" · ")}</span>
       </CardHeader>
-      <SpotList spots={side.lineup} />
+      <SpotList spots={side.lineup} onOpen={onOpen} />
       {side.bench.length > 0 && (
         <>
           <div className="border-y border-border px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Bench
           </div>
-          <SpotList spots={side.bench} />
+          <SpotList spots={side.bench} onOpen={onOpen} />
         </>
       )}
     </Card>

@@ -14,7 +14,7 @@ from the_front_office.adapters.outbound.platforms.sleeper.types import (
     WeeklyProjection,
 )
 from the_front_office.adapters.outbound.sports.nfl.sleeper import SleeperNFLProvider
-from the_front_office.domain.errors import LeagueNotFoundError, SleeperAPIError
+from the_front_office.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError
 
 MY_ID = "user-1"
 
@@ -329,13 +329,13 @@ def test_roster_rows_mark_starters_and_bench() -> None:
         projections=dict(DEFAULT_PROJECTIONS),
         rosters=[SleeperRoster(roster_id=1, owner_id=MY_ID, player_ids=["qb1", "rb1"], starter_ids=["qb1"])],
     )
-    rows = _provider(client).roster_rows("L1")
+    rows = [c.columns for c in _provider(client).roster("L1")]
     assert {r["Player"]: r["Slot"] for r in rows} == {"Star QB": "START", "Good RB": "BN"}
 
 
 def test_roster_rows_skip_players_missing_from_the_catalog() -> None:
     client = FakeSleeper(rosters=[SleeperRoster(roster_id=1, owner_id=MY_ID, player_ids=["ghost"], starter_ids=[])])
-    assert _provider(client).roster_rows("L1") == []
+    assert _provider(client).roster("L1") == []
 
 
 # ── headline figures ────────────────────────────────────────────────────
@@ -482,3 +482,17 @@ def test_a_week_with_no_fixture_shows_no_opponent() -> None:
 def test_a_bye_is_reported_once_per_club_not_once_per_player() -> None:
     byes = {stat.label for stat in _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).summary("L1").fixtures}
     assert byes == set()  # every fake projection has an opponent
+
+
+def test_a_player_carries_their_week_and_their_depth() -> None:
+    detail = _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).player("L1", "qb1")
+    labels = {stat.label: stat.value for stat in detail.stats}
+
+    assert detail.name == "Star QB"
+    assert detail.headline == "22.0 proj pts"
+    assert labels["Week 3"] == "vs MIA"
+
+
+def test_an_unknown_player_is_refused() -> None:
+    with pytest.raises(PlayerNotFoundError):
+        _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).player("L1", "nobody")

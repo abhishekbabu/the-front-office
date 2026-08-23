@@ -36,8 +36,8 @@ from the_front_office.adapters.outbound.sports.fpl.squad import (
 )
 from the_front_office.config.constants import FPL_SCOUT_PROMPT
 from the_front_office.config.settings import settings
-from the_front_office.domain.errors import FPLAPIError, LeagueNotFoundError
-from the_front_office.domain.models import Side, SportContext, Spot, Stat, Summary, Swap
+from the_front_office.domain.errors import FPLAPIError, LeagueNotFoundError, PlayerNotFoundError
+from the_front_office.domain.models import PlayerCard, PlayerDetail, Side, SportContext, Spot, Stat, Summary, Swap
 from the_front_office.domain.ports import LeagueRef
 
 logger = logging.getLogger(__name__)
@@ -130,29 +130,76 @@ class FPLProvider:
             [player for pick, player in in_order if not pick.is_starting],
         )
 
-    def roster_rows(self, league_id: str) -> list[dict[str, str]]:
-        """The squad as table rows, without pulling the market or the fixtures."""
+    def player(self, league_id: str, player_id: str) -> PlayerDetail:
+        """One player, with the numbers FPL actually judges them on.
+
+        Expected goals and assists come from the same payload as the price, so
+        this costs nothing beyond the catalog every other call already reads.
+        """
+        catalog = self.client.get_players()
+        player = catalog.get(int(player_id)) if player_id.isdigit() else None
+        if player is None:
+            raise PlayerNotFoundError([player_id])
+
+        upcoming = self.client.upcoming_gameweek()
+        fixture = self._fixtures_by_club([player], upcoming.id).get(player.team, "no fixture")
+        return PlayerDetail(
+            player_id=str(player.id),
+            name=player.full_name or player.name,
+            position=player.position,
+            team=player.team,
+            headline=f"{player.expected_points:.1f} xPts",
+            note=player.news,
+            tone="warning" if player.availability else "neutral",
+            stats=[
+                Stat(label="Price", value=as_millions(player.cost)),
+                Stat(label=f"GW{upcoming.id}", value=fixture),
+                Stat(label="Form", value=f"{player.form:.1f}"),
+                Stat(label="Points", value=str(player.total_points)),
+                Stat(label="Per game", value=f"{player.points_per_game:.1f}"),
+                Stat(label="Minutes", value=f"{player.minutes:,}"),
+                Stat(label="Owned by", value=f"{player.selected_by:.1f}%"),
+                # Opta's expected numbers, which are why FPL needs no second
+                # stats provider — they arrive with the price.
+                Stat(label="xG", value=f"{player.expected_goals:.2f}"),
+                Stat(label="xA", value=f"{player.expected_assists:.2f}"),
+                Stat(label="xGI", value=f"{player.expected_goal_involvements:.2f}"),
+                Stat(label="xGC", value=f"{player.expected_goals_conceded:.2f}"),
+                Stat(label="ICT", value=f"{player.ict_index:.1f}"),
+            ],
+        )
+
+    def roster(self, league_id: str) -> list[PlayerCard]:
+        """The squad in full, with the season numbers a week view leaves out."""
         entry_id = self._resolve_entry_id()
         gameweek = self._last_completed_gameweek(self.client.upcoming_gameweek().id)
         squad, players, _, _ = self._squad(entry_id, gameweek)
 
         captain = next((p.element for p in squad.picks if p.is_captain), None)
         by_position = {p.element: p for p in squad.picks}
-        rows = []
+        cards = []
         for player in sorted(players, key=lambda p: by_position[p.id].position):
             pick = by_position[player.id]
-            rows.append(
-                {
-                    "Player": player.name,
-                    "Pos": player.position,
-                    "Club": player.team,
-                    "Price": as_millions(player.cost),
-                    "Slot": ("C" if player.id == captain else "XI") if pick.is_starting else "BN",
-                    "xPts": f"{player.expected_points:.1f}",
-                    "Status": player.availability,
-                }
+            cards.append(
+                PlayerCard(
+                    player_id=str(player.id),
+                    tone="warning" if player.availability else "neutral",
+                    columns={
+                        "Player": player.name,
+                        "Pos": player.position,
+                        "Club": player.team,
+                        "Slot": ("C" if player.id == captain else "XI") if pick.is_starting else "BN",
+                        "Price": as_millions(player.cost),
+                        "xPts": f"{player.expected_points:.1f}",
+                        "Form": f"{player.form:.1f}",
+                        "Points": str(player.total_points),
+                        "xGI": f"{player.expected_goal_involvements:.2f}",
+                        "Owned": f"{player.selected_by:.1f}%",
+                        "Status": player.availability,
+                    },
+                )
             )
-        return rows
+        return cards
 
     def summary(self, league_id: str) -> Summary:
         """The gameweek as it stands: both squads, the fixtures, the swaps.
@@ -238,6 +285,7 @@ class FPLProvider:
     def _spot(self, player: Player, fixtures: dict[str, str], captain: bool = False) -> Spot:
         flag = player.availability
         return Spot(
+            player_id=str(player.id),
             player=player.name + (" (C)" if captain else ""),
             detail=f"{player.position} · {player.team} {fixtures.get(player.team, 'no fixture')}"
             + (f" · {flag}" if flag else ""),

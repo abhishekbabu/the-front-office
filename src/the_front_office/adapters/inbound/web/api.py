@@ -28,7 +28,7 @@ from the_front_office.config.logging import setup_logging
 from the_front_office.config.settings import PROJECT_ROOT, settings
 from the_front_office.config.telemetry import setup_telemetry
 from the_front_office.domain.errors import FrontOfficeError
-from the_front_office.domain.models import ScoutReport, Summary, TradeVerdict
+from the_front_office.domain.models import PlayerCard, PlayerDetail, ScoutReport, Summary, TradeVerdict
 from the_front_office.domain.ports import ChatSession
 
 logger = logging.getLogger(__name__)
@@ -310,15 +310,20 @@ def _register_routes(app: FastAPI) -> None:
         provider = data.build_provider(sport)
         return [League(league_id=r.league_id, name=r.name, detail=r.detail) for r in provider.list_leagues()]
 
-    @app.get("/api/{sport}/leagues/{league_id}/roster")
-    def roster(sport: str, league_id: str) -> list[dict[str, str]]:
-        """Table rows, with per-sport columns the client renders generically.
+    @app.get("/api/{sport}/leagues/{league_id}/roster", response_model=list[PlayerCard])
+    def roster(sport: str, league_id: str) -> list[PlayerCard]:
+        """One card per player, with per-sport columns rendered generically.
 
-        The shape is the sport's own vocabulary — an FPL row carries Price and
-        xPts, an NFL row carries Slot — so the client reads the keys of the
-        first row rather than being taught each sport's columns.
+        The columns are the sport's own vocabulary — FPL sends Price and xGI,
+        football sends Depth — so the client reads whatever keys arrive rather
+        than being taught each sport.
         """
-        return data.build_provider(sport).roster_rows(league_id)
+        return data.build_provider(sport).roster(league_id)
+
+    @app.get("/api/{sport}/leagues/{league_id}/players/{player_id}", response_model=PlayerDetail)
+    def player(sport: str, league_id: str, player_id: str) -> PlayerDetail:
+        """Everything worth knowing about one player, when someone asks."""
+        return data.build_provider(sport).player(league_id, player_id)
 
     @app.get("/api/{sport}/leagues/{league_id}/summary", response_model=Summary)
     def summary(sport: str, league_id: str) -> Summary:

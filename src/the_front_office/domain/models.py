@@ -90,6 +90,38 @@ class Side(BaseModel):
     bench: list[Spot] = Field(default_factory=list)
 
 
+class PlayerCard(BaseModel):
+    """A player as a row in a roster table.
+
+    `columns` is the sport's own vocabulary — FPL sends Price and xPts, football
+    sends Slot — so a client renders whatever keys arrive rather than being
+    taught each sport. What sits beside it is what a table needs and a column
+    should not be: an identifier to open, and whether the row wants attention.
+    """
+
+    player_id: str
+    columns: dict[str, str]
+    tone: Tone = "neutral"
+
+
+class PlayerDetail(BaseModel):
+    """Everything worth knowing about one player, on demand.
+
+    Fetched when someone asks rather than carried by every row: the interesting
+    numbers differ per sport and there are a dozen of them, which is a table
+    nobody can read attached to a payload nobody needs.
+    """
+
+    player_id: str
+    name: str
+    position: str
+    team: str
+    headline: str = Field(default="", description="The one number this player is judged on.")
+    note: str = Field(default="", description="Injury or availability news, in the platform's words.")
+    tone: Tone = "neutral"
+    stats: list[Stat] = Field(default_factory=list)
+
+
 class Swap(BaseModel):
     """A change the numbers already imply, before anyone has judged them."""
 
