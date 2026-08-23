@@ -23,6 +23,38 @@ import { cn } from "@/lib/utils";
  * animation cannot play from a tree that has already gone.
  */
 /**
+ * The one figure this player is judged on, beside their name.
+ *
+ * A figure gets display type; the absence of one gets a sentence. Setting
+ * "no projection" at that size renders a missing number as though it were
+ * the number.
+ */
+function Headline({ detail }: { detail: PlayerDetail }) {
+  if (!detail.headline) {
+    return detail.headline_label ? (
+      <p className="mt-1.5 text-[13px] leading-snug text-muted-foreground">{detail.headline_label}</p>
+    ) : null;
+  }
+  return (
+    <div className="mt-1.5 flex items-baseline gap-2">
+      <span
+        className={cn(
+          "font-display text-[28px] font-semibold leading-none tracking-tight tabular-nums",
+          detail.tone === "warning" && "text-warn",
+        )}
+      >
+        {detail.headline}
+      </span>
+      {detail.headline_label && (
+        <span className="min-w-0 font-mono text-[11px] leading-snug text-muted-foreground">
+          {detail.headline_label}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
  * The same measures across several seasons, read across.
  *
  * The figures are the point, so they are right-aligned and tabular and the
@@ -105,7 +137,12 @@ function Portrait({ src, name }: { src: string; name: string }) {
       animate="shown"
       onError={() => setFailed(true)}
       title={name}
-      className="size-12 shrink-0 rounded-md bg-muted object-cover"
+      // Square and centre-cropped, which suits both: FPL ships a 500px square
+      // cut-out, Sleeper a 350x254 studio card whose only loss to a square is
+      // white margin. 96px is as large as the smaller of the two stays sharp
+      // at 2x, so this is the size the sources actually support rather than
+      // the size that would look boldest.
+      className="size-24 shrink-0 rounded-lg bg-photo object-cover"
     />
   );
 }
@@ -158,27 +195,43 @@ export function PlayerPanel({
           onClick={(e) => e.stopPropagation()}
           aria-label="Player detail"
         >
-          <div className="sticky top-0 z-10 flex items-start gap-3 border-b border-border bg-popover px-5 py-4">
+          {/* Everything that says who this is, pinned. On a long stat table
+              the name and the one figure they are judged on are exactly what
+              you stop being able to see, and they are what every row below is
+              about. */}
+          <div className="sticky top-0 z-10 flex items-start gap-4 border-b border-border bg-popover px-5 py-4">
             {player.data && <Portrait src={player.data.image_url} name={player.data.name} />}
-            <div className="min-w-0 flex-1">
+
+            <div className="min-w-0 flex-1 pt-0.5">
               {player.data ? (
                 <>
-                  <h2 className="font-display text-xl font-semibold tracking-tight">{player.data.name}</h2>
-                  <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">
+                  <h2 className="font-display text-[22px] font-semibold leading-tight tracking-tight">
+                    {player.data.name}
+                  </h2>
+                  <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
                     {[player.data.position, player.data.team].filter(Boolean).join(" · ")}
                   </p>
+                  <Headline detail={player.data} />
+                  {player.data.note && (
+                    <Badge variant="warn" appearance="status" className="mt-2">
+                      {player.data.note}
+                    </Badge>
+                  )}
                 </>
               ) : (
-                <Skeleton className="h-6 w-40" />
+                <div className="flex flex-col gap-2">
+                  <Skeleton className="h-6 w-44" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
               )}
             </div>
-            {player.data?.url && (
-              <ExternalLink
-                href={player.data.url}
-                label={`Open ${player.data.name} on the platform`}
-              />
-            )}
-            <IconButton label="Close" side="left" icon={<X />} onClick={onClose} />
+
+            <div className="flex shrink-0 items-center">
+              {player.data?.url && (
+                <ExternalLink href={player.data.url} label={`Open ${player.data.name} on the platform`} />
+              )}
+              <IconButton label="Close" side="left" icon={<X />} onClick={onClose} />
+            </div>
           </div>
 
           {player.isLoading && <Loading lines={4} />}
@@ -188,38 +241,6 @@ export function PlayerPanel({
 
           {player.data && (
             <m.div variants={list} initial="hidden" animate="shown" className="flex flex-col gap-5 px-5 py-4">
-              <m.div variants={listItem}>
-                {/* A figure gets display type; the absence of one gets a
-                    sentence. Setting "no projection" at 3xl renders a missing
-                    number as though it were the number. */}
-                {player.data.headline ? (
-                  <div className="flex items-baseline gap-2">
-                    <span
-                      className={cn(
-                        "font-display text-3xl font-semibold tracking-tight tabular-nums",
-                        player.data.tone === "warning" && "text-warn",
-                      )}
-                    >
-                      {player.data.headline}
-                    </span>
-                    {player.data.headline_label && (
-                      <span className="font-mono text-[11px] text-muted-foreground">
-                        {player.data.headline_label}
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  player.data.headline_label && (
-                    <p className="text-[13px] text-muted-foreground">{player.data.headline_label}</p>
-                  )
-                )}
-                {player.data.note && (
-                  <Badge variant="warn" appearance="status" className="mt-2">
-                    {player.data.note}
-                  </Badge>
-                )}
-              </m.div>
-
               {player.data.tables.map((table) => (
                 <m.section key={table.title} variants={listItem}>
                   <h3 className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">

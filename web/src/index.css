@@ -50,6 +50,15 @@
   --color-ok: light-dark(#00745a, #2dd4a7);
   --color-warn: light-dark(#946300, #e3b341);
 
+  /* The ground a photograph sits on, and the one token that is deliberately
+     the same in both modes. The platforms disagree about backgrounds — FPL
+     ships a transparent cut-out, Sleeper a white studio card — so a surface
+     that followed the theme would put a glaring white rectangle in a dark
+     drawer beside a portrait that floats. A light tile reads as a photo frame
+     under either, which is what it is. Shared across palettes for the same
+     reason the status colors are: it encodes a fact, not a taste. */
+  --color-photo: #f1f1f3;
+
   /* Fixture and matchup difficulty, 1 (easiest) to 5 (hardest). The obvious
      ramp is green to red, which is exactly the axis CVD flattens — so lightness
      falls monotonically across the five as well, and every component that uses
