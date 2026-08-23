@@ -26,6 +26,38 @@ class YahooAPIError(FrontOfficeError):
     """
 
 
+class YahooAuthError(FrontOfficeError):
+    """Yahoo accepted the token and refused the request.
+
+    Distinct from a bad token: the handshake succeeded, so re-authorising alone
+    changes nothing. It means the developer app itself was never granted the
+    Fantasy Sports scope, and every endpoint refuses identically.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Yahoo refused the request: this application is not authorised for Fantasy Sports. "
+            "At https://developer.yahoo.com/apps/ open your app, set API Permissions → "
+            "Fantasy Sports → Read, then delete .yahoofantasy and run `just yahoo-login` — "
+            "the existing token was granted under the old permissions and keeps them."
+        )
+
+
+class YahooLoginRequiredError(FrontOfficeError):
+    """No cached Yahoo token, and this process cannot obtain one.
+
+    The handshake opens a browser and waits, which is fine from a terminal and
+    impossible inside a request handler — the caller would wait on a window it
+    cannot see.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Yahoo is not authorised on this machine yet. Run `just yahoo-login` once; "
+            "the token is cached in .yahoofantasy and reused after that."
+        )
+
+
 class SleeperAPIError(FrontOfficeError):
     """A Sleeper API call failed.
 

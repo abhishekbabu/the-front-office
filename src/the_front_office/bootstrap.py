@@ -53,20 +53,29 @@ def _build_fpl() -> SportProvider:
 
 
 def _build_nba() -> SportProvider:
-    """Yahoo needs an authenticated context and a specific league object.
+    """Yahoo needs an authorised context and a specific league object.
 
-    The handshake is deferred to here so that constructing the registry — which
-    every entry point does at startup — never triggers a browser OAuth flow.
+    Deferred to here so that constructing the registry — which every entry point
+    does at startup — never touches Yahoo. Nothing in this path is interactive:
+    an absent token is reported rather than obtained, because the handshake
+    opens a browser and this runs inside a request handler as often as not.
     """
-    from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
+    from the_front_office.adapters.outbound.platforms.yahoo import client as yahoo
     from the_front_office.adapters.outbound.sports.nba.yahoo import YahooNBAProvider
+    from the_front_office.domain.errors import LeagueNotFoundError
 
-    YahooClient.login()
-    ctx = YahooClient.get_context()
-    leagues = list(ctx.get_leagues("nba", YahooNBAProvider.season_year()))
+    yahoo.YahooClient.ensure_authorised()
+    ctx = yahoo.YahooClient.get_context()
+    try:
+        leagues = list(ctx.get_leagues("nba", YahooNBAProvider.season_year()))
+    except Exception as e:
+        # yahoofantasy raises requests' own exceptions. Left alone they escape
+        # as a 500 with a stack trace, which tells the user nothing about the
+        # permission they actually need to change.
+        logger.error(f"Yahoo league lookup failed: {e}")
+        raise yahoo.translate(e) from e
+
     if not leagues:
-        from the_front_office.domain.errors import LeagueNotFoundError
-
         raise LeagueNotFoundError("no Yahoo NBA leagues for this season")
     return YahooNBAProvider(leagues[0], all_leagues=leagues)
 

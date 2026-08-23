@@ -136,8 +136,20 @@ just api    # FastAPI on :8000, reloading on change
 just web    # Vite on :5173, proxying /api to the above
 ```
 
-First run opens a browser for the Yahoo OAuth2 handshake; the token is cached in
-`.yahoofantasy` and reused.
+NBA needs one interactive step first:
+
+```bash
+just yahoo-login    # opens a browser; token cached in .yahoofantasy and reused
+```
+
+It is separate because the handshake blocks on a browser click, which a web
+request handler cannot do — so every non-interactive path reports a missing
+token instead of trying to obtain one.
+
+Your Yahoo app must have **API Permissions → Fantasy Sports → Read**. Without
+it every endpoint returns 403 with only "this application is not authorized",
+which reads like a bad token; changing the permission also requires deleting
+`.yahoofantasy` and logging in again, since the old token keeps the old scopes.
 
 | Command | Description |
 |---------|-------------|

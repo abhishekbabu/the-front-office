@@ -18,7 +18,13 @@ from the_front_office.adapters.outbound.platforms.yahoo.types import (
     Timeframe,
 )
 from the_front_office.config.settings import settings
-from the_front_office.domain.errors import TeamNotFoundError, YahooAPIError
+from the_front_office.domain.errors import (
+    FrontOfficeError,
+    TeamNotFoundError,
+    YahooAPIError,
+    YahooAuthError,
+    YahooLoginRequiredError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +38,20 @@ SCOREBOARD_TTL_SECONDS = 120
 MAX_PARALLEL_YAHOO_REQUESTS = 8
 
 
+def translate(error: Exception) -> FrontOfficeError:
+    """Turn a yahoofantasy transport failure into something a user can act on.
+
+    A 403 from Yahoo Fantasy means one specific thing — the developer app lacks
+    the Fantasy Sports scope — and saying so is the difference between a
+    two-minute fix and an afternoon spent re-authorising a token that was never
+    the problem.
+    """
+    response = getattr(error, "response", None)
+    if response is not None and getattr(response, "status_code", None) == 403:
+        return YahooAuthError()
+    return YahooAPIError(f"Yahoo request failed: {error}")
+
+
 class YahooClient:
     @staticmethod
     def _token_exists() -> bool:
@@ -39,20 +59,38 @@ class YahooClient:
         return Path(settings.yahoo_token_file).exists()
 
     @classmethod
+    def ensure_authorised(cls) -> None:
+        """Require a cached token without trying to obtain one.
+
+        What every non-interactive caller wants. The handshake opens a browser
+        and blocks until someone clicks it, so a server that attempted it would
+        hang on a window nobody can see.
+
+        Raises:
+            YahooLoginRequiredError: no token has been cached yet.
+        """
+        if not cls._token_exists():
+            raise YahooLoginRequiredError()
+
+    @classmethod
     def login(cls, force: bool = False) -> None:
-        """Run the yahoofantasy OAuth2 login flow."""
+        """Run the yahoofantasy OAuth2 login flow.
+
+        Interactive: opens a browser and waits. Only call this from a terminal.
+
+        Raises:
+            YahooLoginRequiredError: the flow could not be completed.
+            YahooAPIError: credentials are missing.
+        """
         if cls._token_exists() and not force:
             return
 
-        print("🔐 Starting Yahoo Fantasy OAuth2 login …")
-        print(f"   Redirect URI → {settings.yahoo_redirect_uri}")
-        print("   A browser window will open — please authorize the app.\n")
+        logger.info(f"Starting Yahoo OAuth2 login, redirect URI {settings.yahoo_redirect_uri}")
 
         # Bound locally so the type checker can see them narrowed to str.
         client_id, client_secret = settings.yahoo_client_id, settings.yahoo_client_secret
         if not client_id or not client_secret:
-            print("⚠️  YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET must be set in .env")
-            sys.exit(1)
+            raise YahooAPIError("YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET must be set before logging in.")
 
         python_dir = Path(sys.executable).parent
         yahoofantasy_bin_path = python_dir / "yahoofantasy.exe"
@@ -73,10 +111,10 @@ class YahooClient:
 
         try:
             subprocess.run(cmd, check=True)
-            print("\n✅ Login successful! Token saved.")
-        except subprocess.CalledProcessError as exc:
-            print(f"\n❌ Login failed (exit code {exc.returncode}).")
-            sys.exit(1)
+        except (subprocess.CalledProcessError, OSError) as e:
+            logger.error(f"Yahoo login failed: {e}")
+            raise YahooLoginRequiredError() from e
+        logger.info("Yahoo login complete; token cached.")
 
     @classmethod
     def get_context(cls) -> Context:

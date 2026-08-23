@@ -18,13 +18,12 @@ do not add new doc files.
 ## Hard rules
 
 **Errors.** Services never signal failure by return value — no `None`, no `[]`,
-no `"❌ ..."` string, all of which a caller cannot tell from a real result.
-Raise a `FrontOfficeError` subclass from `domain/errors.py`. An empty list is a
-valid *answer* (no search matches); a failed request is not. Only the inbound
-adapters render errors. `raise ... from e`, and log before raising.
-
-**No `print()` outside `adapters/inbound/`.** Everything else uses a module-level
-`logger = logging.getLogger(__name__)`.
+no `"❌ ..."` string, none of which a caller can tell from a real result. Raise a
+`FrontOfficeError` subclass from `domain/errors.py`; an empty list is a valid
+*answer*, a failed request is not. Never `print` or `sys.exit` outside
+`adapters/inbound/` — exiting takes down a request and leaves nothing to render.
+Only inbound adapters render errors. `raise ... from e`, and log before raising
+through a module-level `logger = logging.getLogger(__name__)`.
 
 **Dates and times.** Never use naive `datetime.now()` or `date.today()` for
 anything persisted or compared — store aware UTC, convert at the comparison.
@@ -54,10 +53,13 @@ the platform are the same thing the names coincide (`fpl/fpl.py`,
 yahoofantasy SDK because it sets attributes via `setattr` at runtime — do not
 re-enable it there, and do not disable anything else globally.
 
-**Yahoo fetching.** yahoofantasy's persistence is a read-modify-write of one
-shared pickle, so never call `_load_or_fetch`/`_save` from a thread pool — only
-`make_request` is safe to parallelise. Live-changing data (the scoreboard) needs
-an explicit short `persist_ttl`; the default is an hour.
+**Yahoo.** yahoofantasy's persistence is a read-modify-write of one shared
+pickle, so never call `_load_or_fetch`/`_save` from a thread pool — only
+`make_request` parallelises safely. The scoreboard needs an explicit short
+`persist_ttl`; the default is an hour. It raises requests' own exceptions, which
+escape as a 500 unless passed through `yahoo.translate`. Never trigger the OAuth
+flow implicitly — it blocks on a browser click, so non-interactive callers use
+`ensure_authorised`.
 
 **Chat history is resent every turn.** Seed follow-up chats with a briefing, not
 the generation prompt, and say explicitly what was left out.
@@ -136,14 +138,13 @@ Sleeper and FPL are both plain public JSON and share `JsonApiClient` — held as
 collaborator, given its own retry policy and domain error, not inherited.
 
 **Telemetry.** All of it lives in `config/telemetry.py`, called once per process
-by each entry point. Never open a span by hand and never import `logfire`
-outside that module — the libraries carrying the latency are auto-instrumented,
-which is what keeps tracing out of `domain/` and `application/` and out of the
-ports. It must stay inert without a token (`send_to_logfire="if-token-present"`),
-so the suite and CI need no secret. Prompt text is not exported unless
-`LOGFIRE_CAPTURE_PROMPTS` is set: a prompt carries the user's roster, leagues and
-entry id. Each `logfire.instrument_*` needs its matching extra declared on the
-dependency, or it imports fine and raises at call time.
+by each entry point. Never open a span by hand or import `logfire` elsewhere —
+the libraries carrying the latency are auto-instrumented, which keeps tracing out
+of `domain/`, `application/` and the ports. It stays inert without a token
+(`send_to_logfire="if-token-present"`), so the suite and CI need no secret.
+Prompt text is exported only under `LOGFIRE_CAPTURE_PROMPTS`: a prompt carries
+the user's roster, leagues and entry id. Each `logfire.instrument_*` needs its
+matching extra on the dependency, or it imports fine and raises at call time.
 
 **Headline figures.** `ScoutReport.headline` is filled by the engine from the
 provider's `SportContext`, never by the model — the field's description tells it
