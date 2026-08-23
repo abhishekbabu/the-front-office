@@ -50,12 +50,6 @@ class AppSettings(BaseSettings):
     fpl_entry_id: int | None = Field(default=None, gt=0)
     fpl_cache_file: str = ".fpl_cache.json"
 
-    # ── Scouting ────────────────────────────────────────────────────────
-    nba_api_delay: float = Field(default=4.0, ge=0.0)
-    """Seconds between nba_api calls — the project spec requires a delay to avoid IP blocks."""
-    nba_cache_file: str = ".nba_cache.json"
-    """Unified cache for all NBA data (stats + schedule)."""
-
     # ── Telemetry ───────────────────────────────────────────────────────
     # Optional. Without a token nothing is exported and no network call is
     # made, so a fresh clone and the test suite behave identically to before.

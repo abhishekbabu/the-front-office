@@ -14,8 +14,8 @@ prompt — no entry point, renderer or UI should learn its name.
    `SportProvider` from `domain/ports.py`. The filename is the platform that
    owns the **league**, not every platform the sport reads from: NBA leagues
    live on Yahoo, so the provider is `nba/yahoo.py` even though it also reads
-   nba_stats and Sleeper. Naming it this way leaves room for the same sport on
-   a second platform — `nba/sleeper.py` beside `nba/yahoo.py`.
+   Sleeper for both stats and projections. Naming it this way leaves room for
+   the same sport on a second platform — `nba/sleeper.py` beside `nba/yahoo.py`.
    - `sport` / `label` class attributes
    - `list_leagues() -> list[LeagueRef]`
    - `build_context(league_id) -> SportContext`
@@ -35,7 +35,8 @@ names a file; everything else is a role-named helper beside the provider:
 ```text
 sports/nba/yahoo.py        provider — Yahoo owns the league
 sports/nba/projections.py  projected totals, read from Sleeper
-sports/nba/context.py      prompt lines, read from nba_stats
+sports/nba/form.py         recent form, read from Sleeper
+sports/nba/context.py      prompt lines, built from both
 sports/nfl/sleeper.py      provider — Sleeper owns the league
 sports/nfl/lineup.py       optimal lineup, computed from projections
 ```

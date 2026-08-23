@@ -264,7 +264,7 @@ def test_each_setting_declares_the_control_it_needs(settings_client: TestClient)
 
     assert kinds["LOGFIRE_CAPTURE_PROMPTS"] == "boolean"
     assert kinds["FPL_ENTRY_ID"] == "integer"
-    assert kinds["NBA_API_DELAY"] == "number"
+    assert kinds["YAHOO_MAX_WEEKLY_ADDS"] == "integer"
     assert kinds["LOG_LEVEL"] == "choice"
     assert kinds["SLEEPER_USERNAME"] == "text"
 

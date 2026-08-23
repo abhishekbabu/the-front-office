@@ -331,7 +331,7 @@ class FakeYahoo:
 
 
 class FakeNBA:
-    """Stands in for NBAStatsClient."""
+    """Stands in for SleeperNBAForm."""
 
     def __init__(self, stats: dict[str, Any] | None = None, games: dict[str, int] | None = None) -> None:
         self.stats = stats or {}
@@ -436,7 +436,6 @@ def _isolate_from_local_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
         ("yahoo_cache_file", "yahoo.json"),
         ("sleeper_cache_file", "sleeper.json"),
         ("fpl_cache_file", "fpl.json"),
-        ("nba_cache_file", "nba.json"),
     ):
         monkeypatch.setattr(settings, field, str(tmp_path / name))
 

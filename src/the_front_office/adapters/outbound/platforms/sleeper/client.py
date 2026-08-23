@@ -21,9 +21,12 @@ from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
 from the_front_office.adapters.outbound.platforms.http import JsonApiClient
 from the_front_office.adapters.outbound.platforms.retry import build_retry, is_transient
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
+    NBA_STAT_KEYS,
     SEASON_STAT_KEYS,
     SPLIT_KEYS,
+    TEAM_ROW_PREFIX,
     GameProjection,
+    NBAGameLog,
     PlayerMeta,
     ScheduledGame,
     ScoringFormat,
@@ -45,6 +48,8 @@ BASE_URL = "https://api.sleeper.app/v1"
 PROJECTIONS_URL = "https://api.sleeper.app/projections"
 # Not under /v1, unlike everything else here.
 SCHEDULE_URL = "https://api.sleeper.app/schedule"
+# Per-game logs live off the same un-versioned root as projections.
+STATS_URL = "https://api.sleeper.app/stats"
 
 # Sleeper serves several sports off the same shape. The football path uses "nfl";
 # the basketball projections the NBA scout reads use "nba".
@@ -68,6 +73,8 @@ SEASON_STATS_TTL = timedelta(hours=12)
 # A published season schedule barely moves — flexed games are the exception,
 # not the rule — and a transaction feed only grows.
 SEASON_SCHEDULE_TTL = timedelta(hours=12)
+# A finished game's line never changes; only the newest week is still moving.
+NBA_LOGS_TTL = timedelta(hours=3)
 TRANSACTIONS_TTL = timedelta(minutes=15)
 
 RETRY_MAX_ATTEMPTS = 3
@@ -310,6 +317,70 @@ class SleeperClient:
         urls = {f"matchups_{league_id}_{w}": f"{BASE_URL}/league/{league_id}/matchups/{w}" for w in weeks}
         raw = self._api.cached_many(urls, MATCHUPS_TTL)
         return {w: raw.get(f"matchups_{league_id}_{w}") or [] for w in weeks}
+
+    def get_nba_game_logs(self, season: str, weeks: list[int]) -> dict[str, list[NBAGameLog]]:
+        """Every player's game-by-game lines over `weeks`, keyed by player_id.
+
+        Sleeper publishes one row per player per game, which is the shape a
+        "last ten games" window actually needs — weekly buckets hold three or
+        four games and cannot be cut at ten.
+
+        Trimmed before caching for the same reason the catalog is: six weeks of
+        raw rows is ~9MB of quarter splits and plus-minus, and the cache is one
+        file shared with everything else the client reads.
+        """
+        urls = {f"nba_logs_{season}_{w}": f"{STATS_URL}/{NBA}/{season}/{w}?season_type=regular" for w in weeks}
+        raw = self._api.cached_many(urls, NBA_LOGS_TTL)
+
+        logs: dict[str, list[NBAGameLog]] = {}
+        for week in weeks:
+            for row in raw.get(f"nba_logs_{season}_{week}") or []:
+                if not isinstance(row, dict):
+                    continue
+                player_id = str(row.get("player_id") or "")
+                # Team totals ride in the same feed under a prefixed id, and a
+                # team's 146 points is not a player's line.
+                if not player_id or player_id.startswith(TEAM_ROW_PREFIX):
+                    continue
+                stats = row.get("stats") or {}
+                # Sleeper files a row for every game a player was scheduled
+                # for, carrying no stats at all where they did not appear. A
+                # game somebody sat out is not a game they played, and
+                # averaging it in as a line of noughts is how a run of five
+                # DNPs becomes "recent form".
+                if not stats:
+                    continue
+                logs.setdefault(player_id, []).append(
+                    NBAGameLog(
+                        player_id=player_id,
+                        date=str(row.get("date") or ""),
+                        opponent=str(row.get("opponent") or ""),
+                        stats={k: float(v) for k in NBA_STAT_KEYS if (v := stats.get(k)) is not None},
+                    )
+                )
+        # Newest first, so a caller takes the first N rather than sorting again.
+        for runs in logs.values():
+            runs.sort(key=lambda g: g.date, reverse=True)
+        return logs
+
+    def get_nba_schedule(self, season: str) -> list[ScheduledGame]:
+        """The basketball season's games, in the same shape football uses.
+
+        Sleeper nests the clubs one level deeper here than it does for
+        football, which is the only difference worth a separate reader.
+        """
+        data = self._cached(f"schedule_{NBA}_{season}", f"{SCHEDULE_URL}/{NBA}/regular/{season}", SEASON_SCHEDULE_TTL)
+        return [
+            ScheduledGame(
+                week=int(g.get("week") or 0),
+                date=str(g.get("date") or ""),
+                home=str((g.get("home") or {}).get("team") or ""),
+                away=str((g.get("away") or {}).get("team") or ""),
+                status=str(g.get("status") or ""),
+            )
+            for g in (data or [])
+            if isinstance(g, dict)
+        ]
 
     def get_transactions(self, league_id: str, week: int) -> list[Transaction]:
         """What the league did in one week: waivers, free agents and trades.

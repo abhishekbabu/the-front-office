@@ -207,7 +207,7 @@ def test_pydantic_reads_back_exactly_what_was_written(tmp_path: Path, monkeypatc
         ("logfire_capture_prompts", "boolean"),
         ("fpl_entry_id", "integer"),
         ("yahoo_max_weekly_adds", "integer"),
-        ("nba_api_delay", "number"),
+        ("yahoo_max_weekly_adds", "integer"),
         ("log_level", "choice"),
         ("sleeper_username", "text"),
         ("gemini_api_key", "text"),

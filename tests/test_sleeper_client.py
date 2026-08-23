@@ -483,3 +483,64 @@ def test_a_week_that_does_not_answer_is_an_empty_week_not_a_missing_key(tmp_path
     weeks = client.get_matchups_bulk("L1", [1, 2])
 
     assert weeks[2] == []
+
+
+# ── basketball ──────────────────────────────────────────────────────────
+
+NBA_LOGS = [
+    {"player_id": "p1", "date": "2026-01-02", "opponent": "LAL", "stats": {"pts": 30.0, "stl": 2.0}},
+    {"player_id": "p1", "date": "2026-01-01", "opponent": "GSW", "stats": {"pts": 20.0}},
+    # A game he was scheduled for and did not play.
+    {"player_id": "p1", "date": "2025-12-30", "opponent": "PHX", "stats": {}},
+    # Team totals ride in the same feed.
+    {"player_id": "TEAM_DEN", "date": "2026-01-02", "opponent": "LAL", "stats": {"pts": 130.0}},
+]
+
+
+def test_a_game_nobody_played_is_not_a_game_log(tmp_path: Path) -> None:
+    """Sleeper files a row for every scheduled game, carrying no stats where
+    the player did not appear — and a run of those averaged in as noughts is
+    how five DNPs become "recent form"."""
+    client, _ = _client({"/stats/nba/2026/1": NBA_LOGS}, tmp_path)
+
+    logs = client.get_nba_game_logs("2026", [1])
+
+    assert [g.date for g in logs["p1"]] == ["2026-01-02", "2026-01-01"]
+
+
+def test_team_totals_are_not_mistaken_for_a_player(tmp_path: Path) -> None:
+    """A team's 130 points is not somebody's line."""
+    client, _ = _client({"/stats/nba/2026/1": NBA_LOGS}, tmp_path)
+
+    assert set(client.get_nba_game_logs("2026", [1])) == {"p1"}
+
+
+def test_game_logs_come_back_newest_first(tmp_path: Path) -> None:
+    """So a caller takes the first N rather than sorting them again."""
+    client, _ = _client({"/stats/nba/2026/1": NBA_LOGS}, tmp_path)
+
+    assert client.get_nba_game_logs("2026", [1])["p1"][0].date == "2026-01-02"
+
+
+def test_an_absent_category_is_left_out_rather_than_stored_as_zero(tmp_path: Path) -> None:
+    """It is read back as nought; storing it would double the payload."""
+    client, _ = _client({"/stats/nba/2026/1": NBA_LOGS}, tmp_path)
+
+    newest, older = client.get_nba_game_logs("2026", [1])["p1"]
+    assert newest.get("stl") == 2.0
+    assert older.get("stl") == 0.0
+    assert "stl" not in older.stats
+
+
+NBA_SCHEDULE = [
+    {"week": 1, "date": "2026-10-20", "home": {"team": "DET"}, "away": {"team": "BOS"}, "status": "pre_game"},
+]
+
+
+def test_the_basketball_schedule_nests_its_clubs_one_level_deeper(tmp_path: Path) -> None:
+    """The only difference from football worth a separate reader."""
+    client, _ = _client({"/schedule/nba/regular/2026": NBA_SCHEDULE}, tmp_path)
+
+    game = client.get_nba_schedule("2026")[0]
+
+    assert (game.home, game.away, game.status) == ("DET", "BOS", "pre_game")

@@ -4,7 +4,7 @@ Sleeper and the Fantasy Premier League game are both open and read-only: no
 OAuth, no key, plain GETs whose only real obligations are politeness about
 request volume and a second attempt when a connection stalls. That is the whole
 of what they share, so it is a collaborator a client holds rather than a base
-class it inherits — the Yahoo and nba_api clients reach their platforms through
+class it inherits — the Yahoo client reaches its platform through
 vendor SDKs and would have no transport to inherit.
 
 Each caller supplies its own retry policy and its own domain error, because

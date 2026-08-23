@@ -35,8 +35,7 @@ second representation of a report to keep in step. It also serves the built UI f
 
 **Outbound adapters** (`src/the_front_office/adapters/outbound/`)
 - **Yahoo Fantasy** via `yahoofantasy` — OAuth2, rosters, matchups, and hand-built player queries that sort free agents by an individual stat category. Responses are cached in `.yahoo_cache.json` rather than the SDK's own store
-- **NBA.com** via `nba_api` — one full-season `LeagueGameLog` call bucketed by player for recent form (L5/L10/L15), cached in `.nba_cache.json`, with `tenacity` retries classified by error type
-- **Sleeper** — public and auth-free, and used by both sports: football leagues, every roster in them, matchups and weekly projections; the real-world season schedule, season totals and the league's transaction feed; NBA per-game projections summed into category totals for the matchup period. Cached in `.sleeper_cache.json`
+- **Sleeper** — public and auth-free, and the stats provider for both football and basketball: football leagues, every roster in them, matchups and weekly projections; the real-world season schedule, season totals and the league's transaction feed; NBA per-game projections summed into category totals for the matchup period, per-game box scores for recent form (L5/L10/L15), and the basketball schedule. Cached in `.sleeper_cache.json`
 - **Fantasy Premier League** — public and auth-free, and the only platform here that is also its own stats provider: one `bootstrap-static` call carries the squad, the prices, the game's own `ep_next` projection and Opta expected goals, with per-player season history, mini-league tables and fixtures alongside. Cached in `.fpl_cache.json`
 - **Gemini** via `google-genai` — `gemini-2.5-pro` for analysis, `gemini-2.5-flash` for parsing
 
@@ -101,8 +100,8 @@ or absent without echoing a secret, and flags keys nothing will pick up —
 
 Do **not** copy `.yahoofantasy`: refresh-token rotation means two machines
 sharing one token can invalidate each other, and re-authenticating is a single
-browser flow. Do not copy `.nba_cache.json`, `.sleeper_cache.json`,
-`.fpl_cache.json` or `.yahoo_cache.json` either — they are derived, expiring,
+browser flow. Do not copy `.sleeper_cache.json`, `.fpl_cache.json` or
+`.yahoo_cache.json` either — they are derived, expiring,
 and one holds a ~14MB player catalog.
 
 ### Environment
@@ -119,7 +118,6 @@ and one holds a ~14MB player catalog.
 | `LOGFIRE_ENVIRONMENT` | no | `local` | Separates traces from a laptop and a deployed run in one project |
 | `LOGFIRE_CAPTURE_PROMPTS` | no | `false` | Sends prompt and completion **text**. Off deliberately — a prompt carries your roster, leagues and FPL entry id |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG` \| `INFO` \| `WARNING` \| `ERROR` \| `CRITICAL` |
-| `NBA_API_DELAY` | no | `4.0` | Seconds between nba_api calls |
 
 Each is a validated field on `AppSettings` in
 [`config/settings.py`](src/the_front_office/config/settings.py) — a malformed

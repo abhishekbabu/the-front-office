@@ -112,14 +112,14 @@ def test_a_custom_predicate_decides() -> None:
     assert len(calls) == 3
 
 
-def test_both_platform_clients_use_the_shared_policy() -> None:
+def test_the_platform_clients_use_the_shared_policy() -> None:
     """The point of extracting it: one place to change the common behavior."""
     import inspect
 
-    from the_front_office.adapters.outbound.platforms.nba_stats import client as nba
+    from the_front_office.adapters.outbound.platforms.fpl import client as fpl
     from the_front_office.adapters.outbound.platforms.sleeper import client as sleeper
 
-    for module in (nba, sleeper):
+    for module in (fpl, sleeper):
         source = inspect.getsource(module)
         assert "build_retry(" in source
         assert "is_transient(" in source
