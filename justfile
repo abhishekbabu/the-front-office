@@ -44,6 +44,10 @@ lint:
     uv run ruff check src/ tests/ scripts/
     uv run ruff format --check src/ tests/ scripts/
 
+# Report what this machine is configured for, and flag typo'd .env keys
+doctor:
+    uv run python scripts/doctor.py
+
 # Verify AGENTS.md symlinks, length limits and skill frontmatter
 check-agents:
     uv run python scripts/check_agent_docs.py

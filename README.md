@@ -70,6 +70,19 @@ cp .env.template .env        # PowerShell: Copy-Item .env.template .env
 
 Without `just`: `uv sync && uv run pre-commit install`.
 
+**On a second machine**, copy `.env` across by hand — the four secrets
+(`YAHOO_CLIENT_ID`, `YAHOO_CLIENT_SECRET`, `GOOGLE_API_KEY`, `LOGFIRE_TOKEN`)
+belong in a password manager, not in this repo, which is public. Then run
+`just doctor`, which names every variable the app reads, reports each as present
+or absent without echoing a secret, and flags keys nothing will pick up —
+`AppSettings` ignores what it does not recognise, so a mistyped key is silent.
+
+Do **not** copy `.yahoofantasy`: refresh-token rotation means two machines
+sharing one token can invalidate each other, and re-authenticating is a single
+browser flow. Do not copy `.nba_cache.json`, `.sleeper_cache.json` or
+`.fpl_cache.json` either — they are derived, TTL'd, and one holds a ~14MB player
+catalogue.
+
 ### Environment
 
 | Variable | Required | Default | Notes |
@@ -122,6 +135,7 @@ afterwards; press Enter on an empty line to move on.
 ## Development
 
 ```bash
+just doctor             # what this machine is configured for; flags typo'd .env keys
 just check              # lint + format + types + tests + 95% coverage floor
 just fmt                # auto-fix lint findings, then format
 just test               # hermetic suite (args pass through: just test "-k scout")
