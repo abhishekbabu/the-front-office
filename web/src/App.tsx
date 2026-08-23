@@ -76,8 +76,11 @@ export default function App() {
   const current: SportView = views.find((v) => v === view) ?? "scout";
 
   return (
-    <div className="grid min-h-full grid-cols-[13rem_minmax(0,1fr)]">
-      <nav className="flex flex-col gap-6 border-r border-border bg-card px-3 py-4">
+    // Fixed to the viewport, with each column scrolling on its own. A single
+    // page scroll takes the rail with it, so the sport you are on and the way
+    // back leave the screen exactly when a long table makes you want them.
+    <div className="grid h-full grid-cols-[13rem_minmax(0,1fr)] overflow-hidden">
+      <nav className="flex flex-col gap-6 overflow-y-auto border-r border-border bg-card px-3 py-4">
         <button
           onClick={() => setView("home")}
           aria-label="Back to all leagues"
@@ -156,7 +159,7 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="min-w-0">
+      <main className="min-w-0 overflow-y-auto">
         {/* Keyed on the view so switching one animates the new panel in;
             without a key React reuses the tree and nothing transitions. */}
         {view === "settings" ? (

@@ -77,14 +77,12 @@ export function TeamPanel({ sport, league }: { sport: Sport; league: League }) {
         </div>
       )}
 
-      {open && (
-        <PlayerPanel
-          sport={sport.key}
-          league={league.league_id}
-          playerId={open}
-          onClose={() => setOpen(null)}
-        />
-      )}
+      <PlayerPanel
+        sport={sport.key}
+        league={league.league_id}
+        playerId={open}
+        onClose={() => setOpen(null)}
+      />
     </>
   );
 }

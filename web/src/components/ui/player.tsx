@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useRef } from "react";
 import { X } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { fade, list, listItem, slideOver } from "@/lib/motion";
@@ -14,6 +15,11 @@ import { cn } from "@/lib/utils";
  *
  * A panel rather than a page: you open it to settle a question about a row you
  * are already looking at, and closing it should put you back exactly there.
+ *
+ * Mounted whether or not anyone is open — `playerId` of null is the closed
+ * state, not a reason to render nothing. A caller that instead dropped the
+ * component would take this AnimatePresence down with it, and an exit
+ * animation cannot play from a tree that has already gone.
  */
 export function PlayerPanel({
   sport,
@@ -23,21 +29,30 @@ export function PlayerPanel({
 }: {
   sport: string;
   league: string;
-  playerId: string;
+  playerId: string | null;
   onClose: () => void;
 }) {
+  // Held so the panel still has someone to show on the way out. Reading
+  // `playerId` directly would blank the contents for the length of the slide.
+  const last = useRef("");
+  if (playerId) last.current = playerId;
+  const shown = playerId ?? last.current;
+
   const player = useQuery<PlayerDetail, Error>({
-    queryKey: ["player", sport, league, playerId],
-    queryFn: () => api.player(sport, league, playerId),
+    queryKey: ["player", sport, league, shown],
+    queryFn: () => api.player(sport, league, shown),
+    enabled: Boolean(shown),
   });
 
   return (
     <AnimatePresence>
+      {playerId && (
       <m.div
         variants={fade}
         initial="hidden"
         animate="shown"
         exit="gone"
+        key="player-panel"
         className="fixed inset-0 z-50 flex justify-end bg-foreground/20"
         onClick={onClose}
         role="presentation"
@@ -120,6 +135,7 @@ export function PlayerPanel({
           )}
         </m.aside>
       </m.div>
+      )}
     </AnimatePresence>
   );
 }
