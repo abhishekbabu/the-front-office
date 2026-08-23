@@ -14,10 +14,36 @@ export type Metric = { figure: string; unit: string } | { figure: null; text: st
 
 const LEADING_FIGURE = /^([+-]?\d[\d.,]*%?)\s*(.*)$/s;
 
+/**
+ * A signed number anywhere in the string. A move is ranked by what it changes,
+ * so when the metric opens with something else — a price, most often — the
+ * delta buried after it is still the figure the row is about.
+ */
+const SIGNED_FIGURE = /([+-]\d[\d.,]*%?)/;
+
 export function splitMetric(metric: string): Metric {
   const trimmed = metric.trim();
-  const match = LEADING_FIGURE.exec(trimmed);
-  if (!match) return { figure: null, text: trimmed };
-  const [, figure, unit] = match;
-  return { figure: figure!, unit: (unit ?? "").trim() };
+
+  const leading = LEADING_FIGURE.exec(trimmed);
+  if (leading) {
+    const [, figure, unit] = leading;
+    return { figure: figure!, unit: (unit ?? "").trim() };
+  }
+
+  // "£8.5m, +1.4 xPts" opens with a currency symbol, so there is no leading
+  // figure — but +1.4 is what the move is worth, and leaving the whole string
+  // as small print puts a hole in the column of figures.
+  const signed = SIGNED_FIGURE.exec(trimmed);
+  if (signed) {
+    const figure = signed[1]!;
+    const unit = (trimmed.slice(0, signed.index) + trimmed.slice(signed.index + figure.length))
+      // Cutting the figure out leaves a gap and can strand a separator.
+      .replace(/\s+/g, " ")
+      .replace(/\s*,\s*,\s*/g, ", ")
+      .replace(/^[\s,]+|[\s,]+$/g, "")
+      .trim();
+    return { figure, unit };
+  }
+
+  return { figure: null, text: trimmed };
 }

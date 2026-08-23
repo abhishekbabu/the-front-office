@@ -71,7 +71,10 @@ function MetricValue({ metric }: { metric: string }) {
     <div className="text-right">
       <div className="font-display text-[19px] font-semibold tracking-tight tabular-nums text-ok">{parsed.figure}</div>
       {parsed.unit && (
-        <div className="mt-0.5 max-w-[9rem] font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+        // Written by the model and often a phrase rather than a unit —
+        // "proj pts, +4.1 over Smith". Uppercasing and letter-spacing that
+        // makes a long one harder to read, not more label-like.
+        <div className="mt-0.5 max-w-[11rem] font-mono text-[10px] leading-snug text-muted-foreground">
           {parsed.unit}
         </div>
       )}

@@ -41,3 +41,26 @@ describe("splitMetric", () => {
     expect(splitMetric("")).toEqual({ figure: null, text: "" });
   });
 });
+
+describe("splitMetric with a leading price", () => {
+  it("promotes the delta rather than leaving the row without a figure", () => {
+    // A move is ranked by what it changes, and the price is not that.
+    expect(splitMetric("£8.5m, +1.4 xPts")).toEqual({ figure: "+1.4", unit: "£8.5m, xPts" });
+  });
+
+  it("handles a negative delta after a price", () => {
+    expect(splitMetric("£5.8m, -0.4 xPts")).toEqual({ figure: "-0.4", unit: "£5.8m, xPts" });
+  });
+
+  it("still prefers a leading figure when there is one", () => {
+    // "+4.1 over Smith" is a comparison, not the headline number.
+    expect(splitMetric("14.2 proj pts, +4.1 over Smith")).toEqual({
+      figure: "14.2",
+      unit: "proj pts, +4.1 over Smith",
+    });
+  });
+
+  it("leaves prose alone", () => {
+    expect(splitMetric("£8.5m")).toEqual({ figure: null, text: "£8.5m" });
+  });
+});

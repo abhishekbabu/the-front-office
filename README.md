@@ -136,6 +136,21 @@ just api    # FastAPI on :8000, reloading on change
 just web    # Vite on :5173, proxying /api to the above
 ```
 
+To look at the finished thing:
+
+```bash
+just preview   # the real app on :8100 with Mock AI forced on for that process
+just shots     # screenshot every view into web/.shots (starts its own preview)
+```
+
+`preview` runs the same routes against the same platforms as `just ui` — the
+point is to see what the app actually renders, so substituting fixtures would
+only confirm whatever the fixtures were written to show. Real data is where the
+awkward cases are: a league in a format the code forgot to read, a preseason
+week where every projection is zero, a fifteen-man squad rather than a tidy
+three. `shots` drives it with Playwright and reports any console errors, which a
+screenshot of a blank panel otherwise hides.
+
 NBA needs one interactive step first:
 
 ```bash

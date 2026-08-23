@@ -43,6 +43,7 @@ export default function App() {
   const league: League | undefined = (leagues.data ?? []).find((l) => l.league_id === leagueId) ?? leagues.data?.[0];
 
   // A sport that cannot trade must not leave the tab selected behind it.
+  const panelKey = `${active?.sport}:${league?.league_id}`;
   const views: SportView[] = active?.supports_trades ? ["scout", "team", "trade"] : ["scout", "team"];
   const current: SportView = views.find((v) => v === view) ?? "scout";
 
@@ -161,12 +162,16 @@ export default function App() {
             </div>
           )
         ) : active && league ? (
+          // Keyed so a sport or league change remounts the panel. Without it the
+          // panel keeps the report it already fetched, and the previous sport's
+          // analysis renders under the new league's name — a stale FPL report
+          // headed "Huge Euge RR FF", with FPL's figures in the strip.
           current === "scout" ? (
-            <ScoutPanel sport={active} league={league} />
+            <ScoutPanel key={panelKey} sport={active} league={league} />
           ) : current === "team" ? (
-            <TeamPanel sport={active} league={league} />
+            <TeamPanel key={panelKey} sport={active} league={league} />
           ) : (
-            <TradePanel sport={active} league={league} />
+            <TradePanel key={panelKey} sport={active} league={league} />
           )
         ) : (
           <div className="p-6">

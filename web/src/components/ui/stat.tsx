@@ -13,7 +13,12 @@ export function StatStrip({ stats }: { stats: StatValue[] }) {
   return (
     <div className="flex flex-wrap border-b border-border">
       {stats.map((stat) => (
-        <div key={stat.label} className="min-w-[7rem] border-r border-border px-5 py-2.5">
+        <div
+          key={stat.label}
+          // Not on the last: a divider with nothing after it reads as an empty
+          // cell stretching to the edge.
+          className="min-w-[7rem] border-border px-5 py-2.5 [&:not(:last-child)]:border-r"
+        >
           <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             {stat.label}
           </div>

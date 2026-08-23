@@ -88,7 +88,9 @@ ENTRY = {
         "classic": [
             {"id": 314, "name": "Overall", "league_type": "s", "entry_rank": 340112, "rank_count": 9000000},
             {"id": 900, "name": "Work League", "league_type": "x", "entry_rank": 3, "rank_count": 12},
-        ]
+        ],
+        # Head-to-head is a separate list, and carries no rank_count.
+        "h2h": [{"id": 950, "name": "Hood h2h", "league_type": "x", "entry_rank": 1, "rank_count": None}],
     },
 }
 
@@ -265,7 +267,23 @@ def test_gameweeks_carry_their_flags(client: FPLClient) -> None:
 def test_an_entry_separates_private_leagues_from_the_games_own(client: FPLClient) -> None:
     entry = client.get_entry(77)
     assert entry.manager == "Abhishek Babu"
-    assert [(lg.name, lg.is_private) for lg in entry.leagues] == [("Overall", False), ("Work League", True)]
+    assert [(lg.name, lg.is_private) for lg in entry.leagues] == [
+        ("Overall", False),
+        ("Work League", True),
+        ("Hood h2h", True),
+    ]
+
+
+def test_head_to_head_leagues_are_read_too(client: FPLClient) -> None:
+    """They live in their own list, so a manager whose only invitational league
+    is head-to-head has an empty classic list and looks like they have none."""
+    h2h = next(lg for lg in client.get_entry(77).leagues if lg.is_h2h)
+
+    assert (h2h.name, h2h.rank, h2h.rank_count) == ("Hood h2h", 1, None)
+
+
+def test_a_classic_league_is_not_marked_head_to_head(client: FPLClient) -> None:
+    assert not next(lg for lg in client.get_entry(77).leagues if lg.name == "Work League").is_h2h
 
 
 def test_an_unknown_entry_raises(tmp_path: Path) -> None:
@@ -365,3 +383,40 @@ def test_rate_limiting_is_retried_but_a_missing_entry_is_not() -> None:
     assert _is_retryable(http(429))
     assert _is_retryable(http(503))
     assert not _is_retryable(http(404))
+
+
+# ── how a standing reads ────────────────────────────────────────────────
+
+
+def test_a_classic_standing_is_a_position_in_a_field() -> None:
+    from the_front_office.adapters.outbound.platforms.fpl.types import MiniLeague
+
+    league = MiniLeague(id=1, name="Work", rank=3, is_private=True, rank_count=12)
+    assert league.standing == "3 of 12"
+
+
+def test_a_head_to_head_standing_is_a_placing() -> None:
+    """There is no field to be a position in — it is a table of match records."""
+    from the_front_office.adapters.outbound.platforms.fpl.types import MiniLeague
+
+    league = MiniLeague(id=1, name="Hood h2h", rank=1, is_private=True, is_h2h=True)
+    assert league.standing == "1st · head-to-head"
+
+
+@pytest.mark.parametrize(
+    ("rank", "expected"),
+    [(1, "1st"), (2, "2nd"), (3, "3rd"), (4, "4th"), (11, "11th"), (12, "12th"), (13, "13th"), (21, "21st")],
+)
+def test_placings_read_as_english(rank: int, expected: str) -> None:
+    from the_front_office.adapters.outbound.platforms.fpl.types import MiniLeague
+
+    league = MiniLeague(id=1, name="x", rank=rank, is_private=True, is_h2h=True)
+    assert league.standing.startswith(expected)
+
+
+def test_a_missing_field_size_does_not_render_as_zero() -> None:
+    """`1 of 0` is worse than saying nothing about the field."""
+    from the_front_office.adapters.outbound.platforms.fpl.types import MiniLeague
+
+    league = MiniLeague(id=1, name="x", rank=4200, is_private=True, rank_count=None)
+    assert league.standing == "4,200"

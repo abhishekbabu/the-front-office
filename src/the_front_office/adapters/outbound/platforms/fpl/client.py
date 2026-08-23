@@ -217,7 +217,7 @@ class FPLClient:
         data = self._api.cached(f"entry_{entry_id}", f"{BASE_URL}/entry/{entry_id}/", ENTRY_TTL)
         if not isinstance(data, dict) or "id" not in data:
             raise FPLAPIError(f"No FPL entry with id {entry_id}.")
-        classic = (data.get("leagues") or {}).get("classic") or []
+        leagues = data.get("leagues") or {}
         return Entry(
             entry_id=int(data["id"]),
             name=str(data.get("name") or f"Entry {entry_id}"),
@@ -225,17 +225,23 @@ class FPLClient:
             overall_points=int(data.get("summary_overall_points") or 0),
             overall_rank=int(data.get("summary_overall_rank") or 0),
             current_event=int(data.get("current_event") or 0),
+            # Both formats, because they are separate lists and a manager whose
+            # only invitational league is head-to-head has nothing in the other.
             leagues=[
                 MiniLeague(
                     id=int(lg["id"]),
                     name=str(lg.get("name") or lg["id"]),
                     rank=int(lg.get("entry_rank") or 0),
-                    rank_count=int(lg.get("rank_count") or 0),
+                    # Null for head-to-head, which ranks by match record rather
+                    # than by position in a field.
+                    rank_count=int(lg["rank_count"]) if lg.get("rank_count") else None,
                     # 'x' is an invitational league someone created; 's' is one
                     # of the game's own — Overall, your country, each gameweek.
                     is_private=str(lg.get("league_type") or "") == "x",
+                    is_h2h=kind == "h2h",
                 )
-                for lg in classic
+                for kind in ("classic", "h2h")
+                for lg in (leagues.get(kind) or [])
                 if lg.get("id") is not None
             ],
         )

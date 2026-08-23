@@ -44,6 +44,14 @@ lint:
     uv run ruff check src/ tests/ scripts/
     uv run ruff format --check src/ tests/ scripts/
 
+# Serve the real app on :8100 with Mock AI on, for inspecting the UI
+preview *args: web-build
+    uv run python scripts/preview.py {{ args }}
+
+# Screenshot every view into web/.shots (starts and stops its own preview)
+shots *args: web-build
+    cd web && pnpm shoot {{ args }}
+
 # Authorize this machine with Yahoo (opens a browser); --force replaces the token
 yahoo-login *args:
     uv run python scripts/yahoo_login.py {{ args }}

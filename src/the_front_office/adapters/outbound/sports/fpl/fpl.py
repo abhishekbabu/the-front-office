@@ -95,7 +95,7 @@ class FPLProvider:
                 league_id=str(lg.id),
                 name=lg.name,
                 sport=self.sport,
-                detail=f"{lg.rank:,} of {lg.rank_count:,} · {entry.name}",
+                detail=f"{lg.standing} · {entry.name}",
             )
             for lg in private
         ]
@@ -235,7 +235,7 @@ class FPLProvider:
             Stat(label="Overall", value=f"{entry.overall_rank:,}"),
         ]
         if league:
-            stats.append(Stat(label="Mini-league", value=f"{league.rank:,} of {league.rank_count:,}"))
+            stats.append(Stat(label="Mini-league", value=league.standing))
         stats += [
             Stat(label="Bank", value=as_millions(squad.bank)),
             Stat(label="Free transfers", value=str(allowance), tone="good" if allowance else "neutral"),
@@ -255,7 +255,7 @@ class FPLProvider:
         ]
         league = next((lg for lg in entry.leagues if str(lg.id) == league_id), None)
         if league:
-            lines.append(f"MINI-LEAGUE: {league.name} — {league.rank:,} of {league.rank_count:,}")
+            lines.append(f"MINI-LEAGUE: {league.name} — {league.standing}")
         lines.append(f"MONEY: {as_millions(squad.bank)} in the bank, squad worth {as_millions(squad.value)}")
         if squad.points_on_bench:
             lines.append(f"LAST GAMEWEEK: {squad.points_on_bench} points were left on the bench.")
