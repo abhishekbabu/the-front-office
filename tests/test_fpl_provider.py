@@ -970,3 +970,26 @@ def test_the_market_is_ranked_on_the_games_own_projection() -> None:
 def test_the_market_has_no_lineup_column() -> None:
     """A player you do not own is not in a lineup of yours."""
     assert "Slot" not in provider().free_agents(H2H_LEAGUE)[0].columns
+
+
+# ── the way across to the platform ──────────────────────────────────────
+
+
+def test_a_head_to_head_league_links_to_its_own_kind_of_table() -> None:
+    """The two formats are different pages: a h2h league opened as a classic
+    one shows a table it does not play by."""
+    refs = {ref.name: ref.url for ref in provider().list_leagues()}
+
+    assert refs["Hood h2h"].endswith("/leagues/950/standings/h")
+    assert refs["Work League"].endswith("/leagues/900/standings/c")
+
+
+def test_a_team_links_to_that_managers_entry() -> None:
+    teams = {t.name: t.url for t in provider().teams(H2H_LEAGUE)}
+
+    assert teams["Rival FC"] == "https://fantasy.premierleague.com/entry/99/event/1"
+
+
+def test_a_player_has_no_link_because_fpl_publishes_no_player_page() -> None:
+    """An empty string is honest; a constructed URL that 404s is not."""
+    assert provider().player(LEAGUE_ID, "8").url == ""

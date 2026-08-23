@@ -28,7 +28,15 @@ class FakeProvider:
     def list_leagues(self) -> list[LeagueRef]:
         if self.error:
             raise self.error
-        return [LeagueRef(league_id="900", name="Work League", sport="fpl", detail="3 of 12")]
+        return [
+            LeagueRef(
+                league_id="900",
+                name="Work League",
+                sport="fpl",
+                detail="3 of 12",
+                url="https://fantasy.example/leagues/900",
+            )
+        ]
 
     def roster(self, league_id: str) -> list[PlayerCard]:
         if self.error:
@@ -104,7 +112,23 @@ def test_a_sport_declares_whether_it_can_trade(client: TestClient) -> None:
 
 def test_leagues_are_listed(client: TestClient) -> None:
     body = client.get("/api/fpl/leagues").json()
-    assert body == [{"league_id": "900", "name": "Work League", "detail": "3 of 12"}]
+    assert body == [
+        {
+            "league_id": "900",
+            "name": "Work League",
+            "detail": "3 of 12",
+            "url": "https://fantasy.example/leagues/900",
+        }
+    ]
+
+
+def test_a_league_carries_the_way_across_to_its_platform(client: TestClient) -> None:
+    """Reading a league is this app; the moves are made on the platform, so
+    the link has to survive the trip through the wire type — which is its own
+    class here and silently drops anything it does not declare."""
+    body = client.get("/api/fpl/leagues").json()
+
+    assert body[0]["url"] == "https://fantasy.example/leagues/900"
 
 
 def test_a_roster_keeps_the_sports_own_columns(client: TestClient) -> None:

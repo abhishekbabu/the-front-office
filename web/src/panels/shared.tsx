@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, SendHorizontal } from "lucide-react";
+import { ExternalLink as ExternalLinkIcon, SendHorizontal } from "lucide-react";
 import { IconButton } from "@/components/ui/icon-button";
 import { ApiError, api, type Move } from "@/lib/api";
 import { moveTone } from "@/lib/tone";
 import { splitMetric } from "@/lib/metric";
 import { Badge } from "@/components/ui/badge";
+import { ExternalLink } from "@/components/ui/external-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -26,11 +27,16 @@ export function PageHeader({
   title,
   meta,
   leading,
+  href,
+  hrefLabel,
   children,
 }: {
   title: string;
   meta?: string;
   leading?: React.ReactNode;
+  /** The platform this thing lives on, opened in a new tab. */
+  href?: string;
+  hrefLabel?: string;
   children?: React.ReactNode;
 }) {
   return (
@@ -41,6 +47,9 @@ export function PageHeader({
           <h1 className="font-display text-[21px] font-semibold leading-tight tracking-tight">{title}</h1>
           {meta && <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">{meta}</p>}
         </div>
+        {/* Beside the name rather than out with the controls: it is a fact
+            about this league, not an action on the page. */}
+        {href && <ExternalLink href={href} label={hrefLabel ?? "Open on the platform"} />}
       </div>
       {children}
     </div>
@@ -143,7 +152,7 @@ export function ErrorNote({ error }: { error: unknown }) {
           className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium hover:bg-muted"
         >
           Apply for API access
-          <ExternalLink className="size-3.5" aria-hidden />
+          <ExternalLinkIcon className="size-3.5" aria-hidden />
         </a>
       )}
     </div>

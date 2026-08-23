@@ -32,6 +32,8 @@ export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) 
       <PageHeader
         title={league.name}
         meta={[week.data?.window, league.detail].filter(Boolean).join(" · ")}
+        href={league.url}
+        hrefLabel={`Open ${league.name} on the platform`}
       />
       <StatStrip stats={week.data?.headline ?? []} />
 

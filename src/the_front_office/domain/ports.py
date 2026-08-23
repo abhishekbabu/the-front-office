@@ -34,6 +34,11 @@ class LeagueRef:
     detail: str = ""
     """Anything worth showing beside the name — record, scoring format, team count."""
 
+    url: str = ""
+    """This league on its own platform. Reading it here is the whole app; the
+    moves themselves are made there, so every view offers the way across.
+    Empty where a platform has no addressable page for it."""
+
 
 class HistoryTurn(TypedDict):
     """One turn of a seeded conversation.

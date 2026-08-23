@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 from conftest import FakeAI, FakeNBA, FakeYahoo, make_player
+from conftest import _team as _yahoo_team
 from reports import MOCK_NBA_REPORT
 
 from the_front_office.adapters.outbound.sports.nba.yahoo import YahooNBAProvider
@@ -465,3 +466,21 @@ def test_available_players_carry_the_same_form_columns_as_a_roster() -> None:
     agents = _provider(FakeYahoo()).free_agents("")
 
     assert {"Player", "Pos", "Team", "PTS", "REB", "AST", "Status"} <= set(agents[0].columns)
+
+
+def test_a_team_link_is_built_from_the_two_numbers_in_its_key() -> None:
+    """A team key is `nba.l.<league>.t.<team>` and the URL wants the numbers."""
+    teams = {
+        t.name: t.url
+        for t in _provider(FakeYahoo(teams=[_yahoo_team("Theirs", "nba.l.123.t.4", rank=1, wins=1, losses=0)])).teams(
+            ""
+        )
+    }
+
+    assert teams["Theirs"] == "https://basketball.fantasysports.yahoo.com/nba/123/4"
+
+
+def test_a_key_in_an_unexpected_shape_yields_no_link_rather_than_a_broken_one() -> None:
+    teams = _provider(FakeYahoo(teams=[_yahoo_team("Odd", "something-else", rank=1, wins=1, losses=0)])).teams("")
+
+    assert teams == [] or teams[0].url == ""

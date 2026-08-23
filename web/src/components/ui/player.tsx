@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { fade, list, listItem, slideOver } from "@/lib/motion";
 import { IconButton } from "@/components/ui/icon-button";
+import { ExternalLink } from "@/components/ui/external-link";
 import { Loading } from "@/components/ui/state";
 import { api, type PlayerDetail, type StatTable } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -150,7 +151,10 @@ export function PlayerPanel({
           initial="hidden"
           animate="shown"
           exit="gone"
-          className="flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-border bg-popover shadow-lg"
+          // Wide enough that a season table fits without scrolling inside
+          // itself — three columns of "£14.0m → £14.7m" is what sets the
+          // floor. Still capped, and still full width on a narrow screen.
+          className="flex h-full w-full max-w-2xl flex-col overflow-y-auto border-l border-border bg-popover shadow-lg"
           onClick={(e) => e.stopPropagation()}
           aria-label="Player detail"
         >
@@ -168,6 +172,12 @@ export function PlayerPanel({
                 <Skeleton className="h-6 w-40" />
               )}
             </div>
+            {player.data?.url && (
+              <ExternalLink
+                href={player.data.url}
+                label={`Open ${player.data.name} on the platform`}
+              />
+            )}
             <IconButton label="Close" side="left" icon={<X />} onClick={onClose} />
           </div>
 

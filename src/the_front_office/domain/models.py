@@ -169,6 +169,10 @@ class PlayerDetail(BaseModel):
         ),
     )
     note: str = Field(default="", description="Injury or availability news, in the platform's words.")
+    url: str = Field(
+        default="",
+        description="This player on the platform's own site, where one exists.",
+    )
     image_url: str = Field(
         default="",
         description=(
@@ -239,6 +243,7 @@ class TeamRef(BaseModel):
     team_id: str = Field(description="Identifier this platform uses for a team, roster or entry.")
     name: str
     detail: str = Field(default="", description="Record, manager, or however the league identifies them.")
+    url: str = Field(default="", description="This team on its own platform, where there is such a page.")
     is_mine: bool = False
 
 

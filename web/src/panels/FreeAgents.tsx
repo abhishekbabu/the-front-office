@@ -49,7 +49,11 @@ export function FreeAgentsPanel({ sport, league }: { sport: Sport; league: Leagu
 
   return (
     <>
-      <PageHeader title={league.name} meta={league.detail} />
+      <PageHeader
+        title={league.name}
+        meta={league.detail}
+        href={league.url}
+        hrefLabel={`Open ${league.name} on the platform`} />
 
       {players.isError && <ErrorNote error={players.error} />}
       {players.isLoading && <Loading lines={6} />}

@@ -24,7 +24,7 @@ export type Sport = {
   blocked_code: string;
 };
 
-export type League = { league_id: string; name: string; detail: string };
+export type League = { league_id: string; name: string; detail: string; url: string };
 
 export type MoveAction = "ADD" | "DROP" | "START" | "BENCH" | "TRANSFER" | "CAPTAIN" | "MONITOR";
 
@@ -161,6 +161,8 @@ export type TeamRef = {
   team_id: string;
   name: string;
   detail: string;
+  /** This team on its own platform, where there is such a page. */
+  url: string;
   is_mine: boolean;
 };
 
@@ -193,6 +195,8 @@ export type PlayerDetail = {
   headline: string;
   /** What that figure is, or why there is not one. */
   headline_label: string;
+  /** This player on the platform's own site, where one exists. */
+  url: string;
   note: string;
   image_url: string;
   tone: Tone;

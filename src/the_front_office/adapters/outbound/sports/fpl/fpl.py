@@ -74,6 +74,10 @@ logger = logging.getLogger(__name__)
 
 # FPL's own player pages show a portrait keyed by Opta's code, not the element
 # id. Public, keyless, and already alongside every other asset the site serves.
+# Where the moves are actually made.
+LEAGUE_URL = "https://fantasy.premierleague.com/leagues/{league_id}/standings/{kind}"
+ENTRY_URL = "https://fantasy.premierleague.com/entry/{entry_id}/event/1"
+
 PORTRAIT_URL = "https://resources.premierleague.com/premierleague/photos/players/250x250/p{code}.png"
 
 # Three back is a different club and usually a different role; a fourth row
@@ -143,6 +147,7 @@ class FPLProvider:
                     name=entry.name,
                     sport=self.sport,
                     detail=f"overall rank {entry.overall_rank:,} · {entry.overall_points} pts",
+                    url=ENTRY_URL.format(entry_id=entry.entry_id),
                 )
             ]
         return [
@@ -151,6 +156,7 @@ class FPLProvider:
                 name=lg.name,
                 sport=self.sport,
                 detail=f"{lg.standing} · {entry.name}",
+                url=self._league_url(lg),
             )
             for lg in private
         ]
@@ -389,6 +395,7 @@ class FPLProvider:
                 team_id=str(row.entry),
                 name=row.entry_name,
                 detail=row.manager,
+                url=ENTRY_URL.format(entry_id=row.entry),
                 is_mine=row.entry == entry_id,
             )
             for row in table
@@ -552,6 +559,16 @@ class FPLProvider:
             standings=self._standings(league, entry_id),
             matches=self._matches(playing),
         )
+
+    @staticmethod
+    def _league_url(league: MiniLeague) -> str:
+        """The mini-league on FPL's own site.
+
+        The two formats are different pages, so the suffix is not cosmetic —
+        a head-to-head league opened as a classic one shows a table it does
+        not play by.
+        """
+        return LEAGUE_URL.format(league_id=league.id, kind="h" if league.is_h2h else "c")
 
     def _find_league(self, league_id: str, entry_id: int) -> MiniLeague | None:
         """The mini-league behind an id, or None when there is no such thing.
