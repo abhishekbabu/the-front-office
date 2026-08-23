@@ -2,27 +2,10 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type League, type PlayerCard, type Sport } from "@/lib/api";
 import { Card, CardHeader } from "@/components/ui/card";
-import { DataTable } from "@/components/ui/data-table";
-import { Badge } from "@/components/ui/badge";
-import { Empty, Loading } from "@/components/ui/state";
+import { RosterTable } from "@/components/ui/roster-table";
+import { Loading } from "@/components/ui/state";
 import { PlayerPanel } from "@/components/ui/player";
 import { ErrorNote, PageHeader } from "@/panels/shared";
-
-/** Columns whose values are figures, so they align right like numbers. */
-const NUMERIC = new Set([
-  "xPts", "Price", "Proj", "Points", "Form", "xGI", "Owned", "Depth", "Exp", "PTS", "REB", "AST",
-]);
-
-/**
- * Values that mean "look at this".
- *
- * The provider writes a status in the platform's own words — "doubtful 75%",
- * "Questionable", "OUT" — so anything non-empty is worth a badge, and the two
- * that mean definitely-not-playing get the stronger one.
- */
-function statusTone(value: string): "fail" | "warn" {
-  return /\b(out|suspended|injured|ir)\b/i.test(value) ? "fail" : "warn";
-}
 
 /**
  * The whole squad, in more depth than the week view.
@@ -53,26 +36,11 @@ export function TeamPanel({ sport, league }: { sport: Sport; league: League }) {
               <span>{roster.data.length} players</span>
             </CardHeader>
 
-            {roster.data.length === 0 ? (
-              <Empty title="No players yet" detail="This roster is empty for the current season." />
-            ) : (
-              <DataTable
-                rows={roster.data}
-                numeric={NUMERIC}
-                onSelect={(row) => setOpen(row.player_id)}
-                render={(column, value) =>
-                  column === "Status" && value ? (
-                    <Badge variant={statusTone(value)} appearance="status">
-                      {value}
-                    </Badge>
-                  ) : column === "Player" ? (
-                    <span className="font-medium">{value}</span>
-                  ) : column === "Slot" ? (
-                    <span className="font-mono text-[11px] text-muted-foreground">{value}</span>
-                  ) : undefined
-                }
-              />
-            )}
+            <RosterTable
+              players={roster.data}
+              empty={{ title: "No players yet", detail: "This roster is empty for the current season." }}
+              onOpen={setOpen}
+            />
           </Card>
         </div>
       )}

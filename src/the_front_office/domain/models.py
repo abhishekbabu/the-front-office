@@ -189,6 +189,15 @@ class ScheduleRow(BaseModel):
     """The week in progress, so a long table can say where you are in it."""
 
 
+class TeamRef(BaseModel):
+    """One team in the league, addressable so its roster can be opened."""
+
+    team_id: str = Field(description="Identifier this platform uses for a team, roster or entry.")
+    name: str
+    detail: str = Field(default="", description="Record, manager, or however the league identifies them.")
+    is_mine: bool = False
+
+
 class StandingRow(BaseModel):
     """One team in the league table."""
 
@@ -197,6 +206,10 @@ class StandingRow(BaseModel):
     detail: str = Field(default="", description="Manager, or however the league identifies the entry.")
     record: str = Field(default="", description="In the league's own terms: '3-1', '2W 1D 1L'.")
     points: str = Field(default="", description="What the table is actually sorted on.")
+    team_id: str = Field(
+        default="",
+        description="Addresses this team's roster. Empty where the platform cannot serve one.",
+    )
     is_mine: bool = False
     """Yours, so a fourteen-team table does not have to be read to find it."""
 

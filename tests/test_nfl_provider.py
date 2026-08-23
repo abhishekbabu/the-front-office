@@ -17,7 +17,7 @@ from the_front_office.adapters.outbound.platforms.sleeper.types import (
     WeeklyProjection,
 )
 from the_front_office.adapters.outbound.sports.nfl.sleeper import SleeperNFLProvider
-from the_front_office.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError
+from the_front_office.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError, TeamNotFoundError
 
 MY_ID = "user-1"
 
@@ -48,6 +48,7 @@ class FakeSleeper:
         self.season_stats_error = season_stats_error
         self.season_schedule = season_schedule if season_schedule is not None else []
         self.matchups_error: Exception | None = None
+        self.players_catalog: dict[str, PlayerMeta] | None = None
         self.schedule_error = schedule_error
         self.transactions = transactions if transactions is not None else {}
         self.transactions_error = transactions_error
@@ -123,6 +124,8 @@ class FakeSleeper:
         return self.matchups
 
     def get_players(self) -> dict[str, PlayerMeta]:
+        if self.players_catalog is not None:
+            return self.players_catalog
         return {
             "qb1": PlayerMeta(player_id="qb1", name="Star QB", position="QB", team="BUF"),
             "rb1": PlayerMeta(player_id="rb1", name="Good RB", position="RB", team="BUF"),
@@ -945,3 +948,69 @@ def test_a_missing_scoreboard_falls_back_to_projections() -> None:
 
     assert summary.mine is not None
     assert summary.mine.points.endswith("proj")
+
+
+# ── the rest of the league ──────────────────────────────────────────────
+
+
+def test_the_teams_list_puts_you_first() -> None:
+    """You are the row somebody is looking for, and a fourteen-team league is
+    long enough that hunting for it is a chore."""
+    teams = _provider(_league_client()).teams("L1")
+
+    assert teams[0].is_mine
+    assert [t.is_mine for t in teams[1:]] == [False]
+
+
+def test_a_team_carries_the_id_its_roster_is_behind() -> None:
+    teams = _provider(_league_client()).teams("L1")
+    assert {t.team_id for t in teams} == {"1", "2"}
+
+
+def test_another_managers_roster_comes_back_in_your_own_columns() -> None:
+    """One table renders both, so they have to agree about the shape."""
+    provider = _provider(_league_client())
+
+    mine = provider.roster("L1")
+    theirs = provider.roster_of("L1", "2")
+
+    assert set(theirs[0].columns) == set(mine[0].columns)
+    assert [c.columns["Player"] for c in theirs] == ["Bad RB"]
+
+
+def test_an_unknown_team_is_refused() -> None:
+    with pytest.raises(TeamNotFoundError):
+        _provider(_league_client()).roster_of("L1", "999")
+
+
+def test_free_agents_exclude_everyone_already_rostered() -> None:
+    client = _league_client()
+    client.players_catalog = {
+        "qb1": PlayerMeta(player_id="qb1", name="Star QB", position="QB", team="BUF"),
+        "free1": PlayerMeta(player_id="free1", name="Waiver WR", position="WR", team="NYJ"),
+    }
+
+    agents = _provider(client).free_agents("L1")
+
+    assert [c.columns["Player"] for c in agents] == ["Waiver WR"]
+
+
+def test_a_position_a_fantasy_league_does_not_score_is_left_out() -> None:
+    """The catalog carries every practice-squad body in the league."""
+    client = _league_client()
+    client.players_catalog = {
+        "ol1": PlayerMeta(player_id="ol1", name="A Guard", position="OL", team="NYJ"),
+        "free1": PlayerMeta(player_id="free1", name="Waiver WR", position="WR", team="NYJ"),
+    }
+
+    agents = _provider(client).free_agents("L1")
+
+    assert [c.columns["Player"] for c in agents] == ["Waiver WR"]
+
+
+def test_free_agents_have_no_lineup_column() -> None:
+    """It would read "BN" down its whole length."""
+    client = _league_client()
+    client.players_catalog = {"free1": PlayerMeta(player_id="free1", name="Waiver WR", position="WR", team="NYJ")}
+
+    assert "Slot" not in _provider(client).free_agents("L1")[0].columns

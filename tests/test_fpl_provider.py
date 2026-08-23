@@ -25,7 +25,7 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
     TableRow,
 )
 from the_front_office.adapters.outbound.sports.fpl.fpl import FPLProvider
-from the_front_office.domain.errors import FPLAPIError, LeagueNotFoundError, PlayerNotFoundError
+from the_front_office.domain.errors import FPLAPIError, LeagueNotFoundError, PlayerNotFoundError, TeamNotFoundError
 
 ENTRY_ID = 77
 LEAGUE_ID = "900"
@@ -903,3 +903,55 @@ def test_a_missing_live_feed_falls_back_to_projections() -> None:
 
     assert summary.mine is not None
     assert all(s.value.endswith("xPts") for s in summary.mine.lineup)
+
+
+# ── the rest of the league ──────────────────────────────────────────────
+
+
+def test_the_teams_list_puts_you_first() -> None:
+    teams = provider().teams(H2H_LEAGUE)
+
+    assert teams[0].is_mine
+    assert teams[0].name == "Front Office FC"
+
+
+def test_the_table_is_the_membership_list() -> None:
+    """FPL publishes no separate one, so a league with no readable table has
+    no teams to browse either."""
+    assert provider(standings_error=FPLAPIError("down")).teams(H2H_LEAGUE) == []
+
+
+def test_another_managers_squad_comes_back_in_your_own_columns() -> None:
+    p = provider()
+
+    mine = p.roster(H2H_LEAGUE)
+    theirs = p.roster_of(H2H_LEAGUE, "99")
+
+    assert set(theirs[0].columns) == set(mine[0].columns)
+
+
+def test_a_team_id_that_is_not_an_entry_is_refused() -> None:
+    with pytest.raises(TeamNotFoundError):
+        provider().roster_of(H2H_LEAGUE, "not-a-number")
+
+
+def test_the_market_excludes_what_you_already_own() -> None:
+    """FPL has no waiver wire — every player is buyable — so the question is
+    not who is free but who is worth the money."""
+    owned = {int(card.player_id) for card in provider().roster(H2H_LEAGUE)}
+
+    market = {int(card.player_id) for card in provider().free_agents(H2H_LEAGUE)}
+
+    assert not (owned & market)
+
+
+def test_the_market_is_ranked_on_the_games_own_projection() -> None:
+    """Which is what a transfer is actually decided on."""
+    values = [float(card.columns["xPts"]) for card in provider().free_agents(H2H_LEAGUE)]
+
+    assert values == sorted(values, reverse=True)
+
+
+def test_the_market_has_no_lineup_column() -> None:
+    """A player you do not own is not in a lineup of yours."""
+    assert "Slot" not in provider().free_agents(H2H_LEAGUE)[0].columns

@@ -27,6 +27,7 @@ from the_front_office.domain.errors import (
     FrontOfficeError,
     LeagueNotFoundError,
     PlayerNotFoundError,
+    TeamNotFoundError,
 )
 from the_front_office.domain.models import (
     LeagueSchedule,
@@ -37,6 +38,7 @@ from the_front_office.domain.models import (
     Stat,
     StatGroup,
     Summary,
+    TeamRef,
     TradeProposal,
 )
 from the_front_office.domain.ports import LeagueRef
@@ -45,6 +47,10 @@ logger = logging.getLogger(__name__)
 
 
 NINE_CAT = ("PTS", "REB", "AST", "STL", "BLK", "3PTM", "FG%", "FT%", "TO")
+
+# Enough to find somebody, few enough to read — and one Yahoo request rather
+# than the eight the category scout makes.
+AVAILABLE_BROWSE_LIMIT = 100
 """What a nine-category league is actually scored on, in the order it is read."""
 
 
@@ -172,6 +178,7 @@ class YahooNBAProvider:
                         rank=rank,
                         name=str(getattr(team, "name", "")),
                         record=self._record(outcome),
+                        team_id=str(getattr(team, "team_key", "")),
                         points=str(getattr(standings, "points_for", "") or ""),
                         is_mine=getattr(team, "team_key", None) == getattr(mine, "team_key", object()),
                     ),
@@ -244,8 +251,46 @@ class YahooNBAProvider:
 
     def roster(self, league_id: str = "") -> list[PlayerCard]:
         """The user's roster, with recent form where nba_stats has it."""
+        return self._cards(self.yahoo.get_user_team().players())
+
+    def teams(self, league_id: str) -> list[TeamRef]:
+        """Everyone in the league, yours first."""
+        self._select_into(league_id)
+        mine = self.yahoo.get_user_team()
+        my_key = getattr(mine, "team_key", object())
+        refs = [
+            TeamRef(
+                team_id=str(getattr(team, "team_key", "")),
+                name=str(getattr(team, "name", "")),
+                detail=self._record(getattr(getattr(team, "team_standings", None), "outcome_totals", None)),
+                is_mine=getattr(team, "team_key", None) == my_key,
+            )
+            for team in self.yahoo.league.teams()
+        ]
+        return sorted([r for r in refs if r.team_id], key=lambda ref: (not ref.is_mine, ref.name.lower()))
+
+    def roster_of(self, league_id: str, team_id: str) -> list[PlayerCard]:
+        """Another manager's roster, in the same columns as your own."""
+        self._select_into(league_id)
+        team = next((t for t in self.yahoo.league.teams() if str(getattr(t, "team_key", "")) == team_id), None)
+        if team is None:
+            raise TeamNotFoundError(team_id)
+        return self._cards(team.players())
+
+    def free_agents(self, league_id: str) -> list[PlayerCard]:
+        """The best players nobody in the league holds.
+
+        Sorted by Yahoo's own season rank rather than by a category: a wire
+        browsed one stat at a time is the scout's job, and this is the list you
+        read when you just want to see who is out there.
+        """
+        self._select_into(league_id)
+        return self._cards(self.yahoo.fetch_available(AVAILABLE_BROWSE_LIMIT), slot_column=False)
+
+    def _cards(self, players: Any, slot_column: bool = True) -> list[PlayerCard]:
+        """One table shape for every list of players this sport shows."""
         cards = []
-        for player in self.yahoo.get_user_team().players():
+        for player in players:
             name = str(player.name.full)
             status = str(getattr(player, "status", "") or "")
             stats = self.nba.get_player_stats(name)
@@ -257,7 +302,13 @@ class YahooNBAProvider:
                         "Player": name,
                         "Pos": str(player.display_position),
                         "Team": str(player.editorial_team_abbr),
-                        "Slot": str(getattr(getattr(player, "selected_position", None), "position", "")),
+                        # A free-agent list has no lineup to be in, so the
+                        # column would be blank down its whole length.
+                        **(
+                            {"Slot": str(getattr(getattr(player, "selected_position", None), "position", ""))}
+                            if slot_column
+                            else {}
+                        ),
                         "PTS": _recent(stats, "PTS"),
                         "REB": _recent(stats, "REB"),
                         "AST": _recent(stats, "AST"),

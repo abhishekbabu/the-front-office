@@ -248,6 +248,23 @@ class YahooClient:
                 logger.warning(f"Not storing unparseable {stat_name} response: {e}")
         return raw_by_stat
 
+    def fetch_available(self, count: int = 100) -> list[Player]:
+        """The best available players in the league, however they became free.
+
+        ALL_AVAILABLE rather than FREE_AGENT: somebody sitting on waivers is
+        still a decision to be made about, and a list that hides them is a list
+        that goes quiet every Tuesday.
+        """
+        query, cache_key = self._player_query(
+            count, PlayerStatus.ALL_AVAILABLE, PlayerStat.ACTUAL_RANK, Timeframe.SEASON
+        )
+        raw = self._cache.cached(
+            cache_key,
+            LEADERS_TTL,
+            lambda: self.league.ctx.make_request(query, league=self.league.id),
+        )
+        return self._parse_players(parse_response(raw), count)
+
     def get_user_team(self) -> Team:
         """Identify the team owned by the current user.
 

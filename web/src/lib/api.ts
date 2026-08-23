@@ -136,6 +136,8 @@ export type StandingRow = {
   detail: string;
   record: string;
   points: string;
+  /** Addresses this team's roster. Empty where the platform cannot serve one. */
+  team_id: string;
   is_mine: boolean;
 };
 
@@ -153,6 +155,13 @@ export type ActivityRow = {
   what: string;
   detail: string;
   tone: Tone;
+};
+
+export type TeamRef = {
+  team_id: string;
+  name: string;
+  detail: string;
+  is_mine: boolean;
 };
 
 export type LeagueSchedule = {
@@ -220,6 +229,11 @@ export const api = {
   summary: (sport: string, league: string) => request<Summary>(`/api/${sport}/leagues/${league}/summary`),
   schedule: (sport: string, league: string) =>
     request<LeagueSchedule>(`/api/${sport}/leagues/${league}/schedule`),
+  freeAgents: (sport: string, league: string) =>
+    request<PlayerCard[]>(`/api/${sport}/leagues/${league}/free-agents`),
+  teams: (sport: string, league: string) => request<TeamRef[]>(`/api/${sport}/leagues/${league}/teams`),
+  teamRoster: (sport: string, league: string, team: string) =>
+    request<PlayerCard[]>(`/api/${sport}/leagues/${league}/teams/${encodeURIComponent(team)}/roster`),
   scout: (sport: string, league: string) => post<Analysis>(`/api/${sport}/leagues/${league}/scout`, {}),
   trade: (sport: string, league: string, text: string) =>
     post<Evaluation>(`/api/${sport}/leagues/${league}/trade`, { text }),

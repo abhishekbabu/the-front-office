@@ -130,7 +130,7 @@ async function main() {
         await shoot(`${sport.toLowerCase()}-league`);
         // Each tab is a different question; one shot of the first proves
         // nothing about the others.
-        for (const tab of ["Table", "Fixtures", "Activity"]) {
+        for (const tab of ["Table", "Rosters", "Fixtures", "Activity"]) {
           const control = page.getByRole("tab", { name: tab });
           if (await control.count()) {
             await control.click();
@@ -138,6 +138,11 @@ async function main() {
             await shoot(`${sport.toLowerCase()}-${tab.toLowerCase()}`);
           }
         }
+      }
+      if (wanted("agents")) {
+        await page.getByRole("button", { name: "Free agents" }).click();
+        await page.waitForTimeout(2500);
+        await shoot(`${sport.toLowerCase()}-agents`);
       }
       if (wanted("team")) {
         await page.getByRole("button", { name: "My team" }).click();

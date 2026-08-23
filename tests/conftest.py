@@ -35,11 +35,21 @@ def make_player(
     return player
 
 
-def _team(name: str, key: str, rank: int, wins: int, losses: int, ties: int = 0, points: str = "") -> Any:
+def _team(
+    name: str,
+    key: str,
+    rank: int,
+    wins: int,
+    losses: int,
+    ties: int = 0,
+    points: str = "",
+    roster: list[Any] | None = None,
+) -> Any:
     """A yahoofantasy Team, which sets its attributes by setattr at runtime."""
     return SimpleNamespace(
         name=name,
         team_key=key,
+        players=lambda: roster if roster is not None else [make_player(f"{name} One")],
         team_standings=SimpleNamespace(
             rank=rank,
             points_for=points,
@@ -65,6 +75,7 @@ class FakeYahoo:
         search_results: dict[str, list[Any]] | None = None,
         adds_used: int = 0,
         teams: list[Any] | None = None,
+        available: list[Any] | None = None,
     ) -> None:
         self.roster = roster if roster is not None else [make_player("Roster One")]
         self.stat_leaders = stat_leaders or {}
@@ -74,6 +85,8 @@ class FakeYahoo:
         self.searches: list[str] = []
         self.matchup_fetches = 0
         self.teams = teams if teams is not None else DEFAULT_TEAMS
+        self.available = available if available is not None else [make_player("Waiver One")]
+        self.available_error: Exception | None = None
 
     def get_user_team(self) -> Any:
         return SimpleNamespace(
@@ -87,6 +100,11 @@ class FakeYahoo:
     def league(self) -> Any:
         """yahoofantasy's League, of which only `teams()` is read here."""
         return SimpleNamespace(teams=lambda: self.teams)
+
+    def fetch_available(self, count: int = 100) -> list[Any]:
+        if self.available_error:
+            raise self.available_error
+        return self.available[:count]
 
     def get_matchup(self, my_team: Any) -> Any:
         from the_front_office.adapters.outbound.platforms.yahoo.types import MatchupInfo

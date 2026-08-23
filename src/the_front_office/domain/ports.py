@@ -17,6 +17,7 @@ from the_front_office.domain.models import (
     PlayerDetail,
     SportContext,
     Summary,
+    TeamRef,
     TradeProposal,
 )
 
@@ -132,6 +133,35 @@ class SportProvider(Protocol):
 
         Raises:
             FrontOfficeError: the league or the user's team within it is missing.
+        """
+        ...
+
+    def free_agents(self, league_id: str) -> list[PlayerCard]:
+        """Players nobody in this league has, best first.
+
+        The other half of a roster: what you hold is only half the question,
+        and the half that changes is what is still out there. Columns are the
+        sport's own, exactly as `roster` returns them, so one table renders
+        both.
+
+        Raises:
+            FrontOfficeError: the league or the user's team within it is missing.
+        """
+        ...
+
+    def teams(self, league_id: str) -> list[TeamRef]:
+        """Everyone in the league, so their rosters can be opened.
+
+        Raises:
+            FrontOfficeError: the league is missing.
+        """
+        ...
+
+    def roster_of(self, league_id: str, team_id: str) -> list[PlayerCard]:
+        """Somebody else's squad, in the same columns as your own.
+
+        Raises:
+            TeamNotFoundError: no team in this league has that identifier.
         """
         ...
 

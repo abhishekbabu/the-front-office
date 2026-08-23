@@ -35,7 +35,7 @@ from the_front_office.adapters.outbound.sports.nfl.lineup import (
 from the_front_office.adapters.outbound.sports.trades import resolve_sides
 from the_front_office.config.constants import NFL_SCOUT_PROMPT, NFL_TRADE_PROMPT
 from the_front_office.config.settings import settings
-from the_front_office.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError
+from the_front_office.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError, TeamNotFoundError
 from the_front_office.domain.models import (
     ActivityRow,
     LeagueSchedule,
@@ -51,6 +51,7 @@ from the_front_office.domain.models import (
     StatGroup,
     Summary,
     Swap,
+    TeamRef,
     Tone,
     TradeProposal,
 )
@@ -222,6 +223,14 @@ def _moment(epoch_ms: int) -> str:
 HAUL_POINTS = 20.0
 BLANK_POINTS = 5.0
 
+# What a fantasy league actually scores. The catalog carries every practice
+# squad body in the league, and none of them are a waiver decision.
+FANTASY_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K", "DEF"})
+
+# Enough to find somebody, few enough to read. Past this the projections are
+# indistinguishable from zero anyway.
+FREE_AGENT_LIMIT = 100
+
 REGULAR_SEASON_WEEKS = 18
 # "What did I miss", not the season's whole transaction log.
 ACTIVITY_WEEKS = 3
@@ -288,11 +297,67 @@ class SleeperNFLProvider:
     def roster(self, league_id: str) -> list[PlayerCard]:
         """The full roster, with the depth and experience a week view leaves out."""
         state = self._week(league_id)
-        starters = set(state.roster.starter_ids)
+        return self._cards(state, state.roster.player_ids, set(state.roster.starter_ids))
+
+    def teams(self, league_id: str) -> list[TeamRef]:
+        """Everyone in the league, yours first."""
+        state = self._week(league_id)
+        names = self.client.get_league_users(league_id)
+        refs = [
+            TeamRef(
+                team_id=str(r.roster_id),
+                name=names.get(r.owner_id, f"Roster {r.roster_id}"),
+                detail=f"{r.record} · {r.points_for:.1f} pts",
+                is_mine=r.roster_id == state.roster.roster_id,
+            )
+            for r in self.client.get_rosters(league_id)
+        ]
+        return sorted(refs, key=lambda ref: (not ref.is_mine, ref.name.lower()))
+
+    def roster_of(self, league_id: str, team_id: str) -> list[PlayerCard]:
+        """Somebody else's squad, in the same columns as your own."""
+        state = self._week(league_id)
+        roster = next((r for r in self.client.get_rosters(league_id) if str(r.roster_id) == team_id), None)
+        if roster is None:
+            raise TeamNotFoundError(f"roster {team_id}")
+        return self._cards(state, roster.player_ids, set(roster.starter_ids))
+
+    def free_agents(self, league_id: str) -> list[PlayerCard]:
+        """Everyone nobody in the league holds, best projection first.
+
+        The catalog is twelve thousand players and all but a couple of hundred
+        of them are free, so the list is only useful once it is cut down: no
+        practice-squad depth, nobody a fantasy league scores, and capped at
+        what somebody will actually read.
+        """
+        state = self._week(league_id)
+        owned = {pid for r in self.client.get_rosters(league_id) for pid in r.player_ids}
+
+        available = [
+            (state.projections.get(pid), pid, meta)
+            for pid, meta in state.players.items()
+            if pid not in owned and str(meta.get("position") or "") in FANTASY_POSITIONS
+        ]
+        # Ranked on the projection, and among the unprojected on depth chart —
+        # a starter with no projection yet is worth more than a fourth-stringer.
+        available.sort(
+            key=lambda row: (-(row[0].points if row[0] else 0.0), int(row[2].get("depth_chart_order") or 99))
+        )
+        ranked = [pid for _, pid, _ in available[:FREE_AGENT_LIMIT]]
+        return self._cards(state, ranked, starters=set(), owned_column=False)
+
+    def _cards(
+        self,
+        state: _Week,
+        player_ids: list[str],
+        starters: set[str],
+        owned_column: bool = True,
+    ) -> list[PlayerCard]:
+        """One table shape for every list of players this sport shows."""
         scheduled = any(p.opponent for p in state.projected)
 
         cards = []
-        for player_id in state.roster.player_ids:
+        for player_id in player_ids:
             meta = state.players.get(player_id)
             if not meta:
                 continue
@@ -307,7 +372,9 @@ class SleeperNFLProvider:
                         "Player": str(meta.get("name") or player_id),
                         "Pos": str(meta.get("position") or ""),
                         "Team": str(meta.get("team") or "FA"),
-                        "Slot": "START" if player_id in starters else "BN",
+                        # A free-agent list has no lineup to be in, so the
+                        # column would read "BN" down its whole length.
+                        **({"Slot": "START" if player_id in starters else "BN"} if owned_column else {}),
                         "Proj": f"{projection.points:.1f}" if projection else "0.0",
                         "Opponent": self._opponent_label(projection, scheduled),
                         "Depth": str(depth) if depth else "—",
@@ -611,6 +678,7 @@ class SleeperNFLProvider:
                 name=names.get(r.owner_id, f"Roster {r.roster_id}"),
                 record=r.record,
                 points=f"{r.points_for:.1f}",
+                team_id=str(r.roster_id),
                 is_mine=r.roster_id == state.roster.roster_id,
             )
             for i, r in enumerate(ordered, start=1)

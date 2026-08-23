@@ -41,7 +41,12 @@ from the_front_office.adapters.outbound.sports.fpl.squad import (
 )
 from the_front_office.config.constants import FPL_SCOUT_PROMPT
 from the_front_office.config.settings import settings
-from the_front_office.domain.errors import FPLAPIError, LeagueNotFoundError, PlayerNotFoundError
+from the_front_office.domain.errors import (
+    FPLAPIError,
+    LeagueNotFoundError,
+    PlayerNotFoundError,
+    TeamNotFoundError,
+)
 from the_front_office.domain.models import (
     LeagueSchedule,
     Match,
@@ -56,6 +61,7 @@ from the_front_office.domain.models import (
     StatGroup,
     Summary,
     Swap,
+    TeamRef,
     Tone,
 )
 from the_front_office.domain.ports import LeagueRef
@@ -79,6 +85,10 @@ HAUL = 10
 BLANK = 2
 
 MARKET_LIMIT = 20
+
+# Enough to find a transfer, few enough to read. The prompt's own shortlist is
+# far shorter; this is a list somebody scrolls.
+MARKET_BROWSE_LIMIT = 100
 """Top available players shown per report, across all positions."""
 
 TRANSFER_LIMIT = 10
@@ -327,7 +337,59 @@ class FPLProvider:
 
     def roster(self, league_id: str) -> list[PlayerCard]:
         """The squad in full, with the season numbers a week view leaves out."""
+        return self._squad_cards(self._resolve_entry_id())
+
+    def teams(self, league_id: str) -> list[TeamRef]:
+        """Everyone in the mini-league, yours first.
+
+        The table is the membership list — FPL has no separate one — so a
+        league whose table cannot be read has no teams to browse either.
+        """
         entry_id = self._resolve_entry_id()
+        league = self._find_league(league_id, entry_id)
+        if league is None:
+            return []
+        try:
+            table = self.client.get_standings(league.id, league.is_h2h)
+        except FPLAPIError as e:
+            logger.warning(f"Cannot list the league's teams: {e}")
+            return []
+        refs = [
+            TeamRef(
+                team_id=str(row.entry),
+                name=row.entry_name,
+                detail=row.manager,
+                is_mine=row.entry == entry_id,
+            )
+            for row in table
+        ]
+        return sorted(refs, key=lambda ref: (not ref.is_mine, ref.name.lower()))
+
+    def roster_of(self, league_id: str, team_id: str) -> list[PlayerCard]:
+        """Another manager's squad, in the same columns as your own."""
+        if not team_id.isdigit():
+            raise TeamNotFoundError(team_id)
+        return self._squad_cards(int(team_id))
+
+    def free_agents(self, league_id: str) -> list[PlayerCard]:
+        """The transfer market: everyone you do not already own.
+
+        FPL has no waiver wire — every player is buyable at a price — so the
+        question is not who is free but who is worth the money. Ranked on the
+        game's own projection, which is what a transfer is decided on.
+        """
+        entry_id = self._resolve_entry_id()
+        current = self.client.current_gameweek()
+        gameweek = current.id if current else self._last_completed_gameweek(self.client.upcoming_gameweek().id)
+        squad, _, _, _ = self._squad(entry_id, gameweek)
+        owned = {pick.element for pick in squad.picks}
+
+        market = [p for p in self.client.get_players().values() if p.id not in owned and p.is_available]
+        market.sort(key=lambda p: (-p.expected_points, -p.form))
+        return [self._market_card(p) for p in market[:MARKET_BROWSE_LIMIT]]
+
+    def _squad_cards(self, entry_id: int) -> list[PlayerCard]:
+        """One table shape for any manager's fifteen."""
         gameweek = self._last_completed_gameweek(self.client.upcoming_gameweek().id)
         squad, players, _, _ = self._squad(entry_id, gameweek)
 
@@ -341,21 +403,34 @@ class FPLProvider:
                     player_id=str(player.id),
                     tone="warning" if player.availability else "neutral",
                     columns={
-                        "Player": player.name,
-                        "Pos": player.position,
-                        "Club": player.team,
+                        **self._market_columns(player),
                         "Slot": ("C" if player.id == captain else "XI") if pick.is_starting else "BN",
-                        "Price": as_millions(player.cost),
-                        "xPts": f"{player.expected_points:.1f}",
-                        "Form": f"{player.form:.1f}",
-                        "Points": str(player.total_points),
-                        "xGI": f"{player.expected_goal_involvements:.2f}",
-                        "Owned": f"{player.selected_by:.1f}%",
-                        "Status": player.availability,
                     },
                 )
             )
         return cards
+
+    def _market_card(self, player: Player) -> PlayerCard:
+        return PlayerCard(
+            player_id=str(player.id),
+            tone="warning" if player.availability else "neutral",
+            columns=self._market_columns(player),
+        )
+
+    @staticmethod
+    def _market_columns(player: Player) -> dict[str, str]:
+        return {
+            "Player": player.name,
+            "Pos": player.position,
+            "Club": player.team,
+            "Price": as_millions(player.cost),
+            "xPts": f"{player.expected_points:.1f}",
+            "Form": f"{player.form:.1f}",
+            "Points": str(player.total_points),
+            "xGI": f"{player.expected_goal_involvements:.2f}",
+            "Owned": f"{player.selected_by:.1f}%",
+            "Status": player.availability,
+        }
 
     def summary(self, league_id: str) -> Summary:
         """The gameweek as it stands: both squads, the fixtures, the swaps.
@@ -513,6 +588,7 @@ class FPLProvider:
                 # In h2h the table is on league points and the FPL total is the
                 # tiebreak; in a classic league they are the same number.
                 points=f"{row.total:,}" if not league.is_h2h else f"{row.total} ({row.points_for:,} pts)",
+                team_id=str(row.entry),
                 is_mine=row.entry == entry_id,
             )
             for row in table
