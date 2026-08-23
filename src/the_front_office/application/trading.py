@@ -7,7 +7,7 @@ the registry, not tested here.
 
 import logging
 
-from the_front_office.domain.errors import AIResponseError, TradeParseError
+from the_front_office.domain.errors import AIResponseError, FrontOfficeError, TradeParseError
 from the_front_office.domain.models import TradeVerdict
 from the_front_office.domain.ports import AnalysisModel, ChatSession, TradeProvider
 
@@ -46,9 +46,13 @@ class TradeEngine:
         chat = self.ai.start_chat(enable_search=True)
         try:
             response = chat.send_message(context.prompt)
+        except FrontOfficeError:
+            raise
         except Exception as e:
+            # A vendor exception from the chat path, which has no translation of
+            # its own; the message is a payload repr, so it stays in the log.
             logger.error(f"Error evaluating trade: {e}")
-            raise AIResponseError(f"Trade evaluation failed: {e}") from e
+            raise AIResponseError() from e
 
         text = getattr(response, "text", None)
         if not text:

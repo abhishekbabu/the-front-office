@@ -198,7 +198,7 @@ def test_a_model_failure_is_a_bad_gateway_not_a_crash(client: TestClient) -> Non
     response = client.post(f"/api/chat/{chat_id}", json={"message": "Why?"})
 
     assert response.status_code == 502
-    assert "quota exhausted" in response.json()["detail"]
+    assert response.json()["detail"] == "The model did not answer. Try asking again."
 
 
 def test_an_empty_follow_up_is_rejected(client: TestClient) -> None:

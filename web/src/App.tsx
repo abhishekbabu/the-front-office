@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Moon, Settings, Sun, Trophy } from "lucide-react";
 import { api, type League, type Sport } from "@/lib/api";
@@ -31,6 +31,14 @@ export default function App() {
   // are not offered at all. Adding a key makes them appear; nothing explains
   // their absence, because from the outside there is nothing missing.
   const capabilities = useQuery({ queryKey: ["capabilities"], queryFn: api.capabilities });
+
+  // An error deep in a panel can send someone to Settings without every panel
+  // needing to know the shell exists.
+  useEffect(() => {
+    const open = () => setView("settings");
+    window.addEventListener("tfo:settings", open);
+    return () => window.removeEventListener("tfo:settings", open);
+  }, []);
   const ai = capabilities.data?.ai ?? false;
 
   // How many platforms carry each sport, so the rail shows the platform only
@@ -239,7 +247,7 @@ function RailItem({
 function Empty({ sports }: { sports: Sport[] }) {
   return (
     <div className="mx-auto max-w-xl p-10">
-      <h1 className="font-display text-2xl font-semibold tracking-tight">No sports configured</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight">Nothing connected yet</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         Set one of these in Settings, or in <code className="font-mono text-accent-foreground">.env</code> directly.
       </p>

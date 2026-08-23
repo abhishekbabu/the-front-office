@@ -43,7 +43,7 @@ export function Landing({
         </span>
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight">The Front Office</h1>
-          <p className="font-mono text-[12px] text-muted-foreground">Pick a league to scout</p>
+          <p className="font-mono text-[12px] text-muted-foreground">Pick a league</p>
         </div>
       </div>
 

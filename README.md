@@ -188,9 +188,9 @@ reporting success on an inert token.
 
 | Command | Description |
 |---------|-------------|
-| `/scout [sport]` | Scouting report. No sport runs every configured one |
-| `/roster [sport]` | Your roster |
-| `/leagues` | Every league, per sport |
+| `/leagues` | Every league you are in, per sport |
+| `/roster [sport]` | Your squad |
+| `/scout [sport]` | Analyze a week. No sport runs every configured one |
 | `/trade [sport] <text>` | Evaluate a trade, e.g. `/trade nfl Give Bijan, Get Puka`. The sport is optional when only one supports trades. FPL is excluded — its managers transfer against the market rather than trading each other |
 | `/help` · `/quit` | — |
 
@@ -200,10 +200,15 @@ follow-up chat. Everything read from the platforms works exactly as before.
 Adding a key makes those appear on the next request; nothing explains their
 absence, because from the outside there is nothing missing.
 
-The web UI covers the same ground with a sport picker in the sidebar, plus a
-Settings page for `.env` and a header strip of exact figures — rank, bank,
-transfers remaining, points sitting on the bench — read from league state rather
-than written by the model. Both front ends render the same validated models.
+The web UI opens on a league picker and splits into three views. **This week**
+is the matchup: both lineups side by side, the fixtures behind them, and the
+changes the projections already imply — all read or computed from league state,
+so it is complete before anything is asked of a model. **My team** is the squad
+in more depth, and any player opens. **Report** is the analysis, which exists
+only when a `GOOGLE_API_KEY` does.
+
+Commands and views are hidden rather than disabled when they cannot work, so
+the app is smaller without credentials and never explains an absence.
 
 Both drop you into a follow-up chat afterwards; press Enter on an empty line to
 move on.

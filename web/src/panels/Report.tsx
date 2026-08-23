@@ -47,7 +47,7 @@ export function ReportPanel({ sport, league }: { sport: Sport; league: League })
         <div className="flex flex-col gap-4 p-5">
           <Card>
             <CardHeader>
-              <span>Situation</span>
+              <span>What this week turns on</span>
               <span>
                 {run.data.report.moves.length} {run.data.report.moves.length === 1 ? "move" : "moves"}
               </span>

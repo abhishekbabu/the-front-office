@@ -17,7 +17,7 @@ export function TradePanel({ sport, league }: { sport: Sport; league: League }) 
 
   return (
     <>
-      <PageHeader title="Trade evaluation" meta={league.name} />
+      <PageHeader title="Trade" meta={league.name} />
 
       <form
         onSubmit={(e) => {
@@ -29,7 +29,7 @@ export function TradePanel({ sport, league }: { sport: Sport; league: League }) 
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Give Bijan Robinson, Get Puka Nacua"
+          placeholder="Give <player>, Get <player>"
           className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-[13.5px] placeholder:text-muted-foreground"
         />
         <Button type="submit" variant="primary" disabled={!text.trim() || run.isPending}>

@@ -6,13 +6,36 @@ import time
 from google import genai
 
 from the_front_office.config.settings import settings
-from the_front_office.domain.errors import AIResponseError, AIUnavailableError
+from the_front_office.domain.errors import (
+    AIKeyInvalidError,
+    AIQuotaError,
+    AIResponseError,
+    AIUnavailableError,
+    FrontOfficeError,
+)
 from the_front_office.domain.models import TradeProposal
 from the_front_office.domain.ports import AnalysisModel, ChatSession, HistoryTurn, TModel
 
 from .constants import MODEL_FLASH, MODEL_PRO
 
 logger = logging.getLogger(__name__)
+
+
+def translate(error: Exception) -> FrontOfficeError:
+    """Turn a vendor failure into a sentence.
+
+    The SDK raises with a Python repr of a Google RPC payload embedded in it —
+    nested dicts, type URLs, a locale — which is unreadable anywhere a person
+    is looking. The two cases worth telling apart are a key that was rejected
+    and a quota that ran out, because only the first is something to go and fix.
+    """
+    text = str(error)
+    if "API_KEY_INVALID" in text or "API key not valid" in text:
+        return AIKeyInvalidError()
+    if "RESOURCE_EXHAUSTED" in text or "quota" in text.lower() or "429" in text:
+        return AIQuotaError()
+    return AIResponseError()
+
 
 # The TypeVar the port declares, so the override types match exactly.
 
@@ -93,7 +116,7 @@ class GeminiClient(AnalysisModel):
             self._log_usage(MODEL_PRO, response, time.perf_counter() - started)
         except Exception as e:
             logger.error(f"Structured generation failed: {e}")
-            raise AIResponseError(f"Gemini call failed: {e}") from e
+            raise translate(e) from e
 
         return self._parsed_or_raise(response, schema)
 
@@ -124,7 +147,7 @@ class GeminiClient(AnalysisModel):
             self._log_usage(MODEL_FLASH, response, time.perf_counter() - started)
         except Exception as e:
             logger.error(f"Structuring failed: {e}")
-            raise AIResponseError(f"Could not structure the AI response: {e}") from e
+            raise translate(e) from e
 
         return self._parsed_or_raise(response, schema)
 
@@ -143,8 +166,8 @@ class GeminiClient(AnalysisModel):
                 return schema.model_validate_json(raw)
             except Exception as e:
                 logger.error(f"Response did not match {schema.__name__}: {e}")
-                raise AIResponseError(f"Gemini returned a {schema.__name__} that failed validation.") from e
-        raise AIResponseError(f"Gemini returned no usable {schema.__name__}.")
+                raise AIResponseError("The model's answer did not fit the expected shape. Try again.") from e
+        raise AIResponseError("The model returned nothing usable. Try again.")
 
     def start_chat(self, initial_history: list[HistoryTurn] | None = None, enable_search: bool = False) -> ChatSession:
         """Start a chat session with the model."""
@@ -204,4 +227,4 @@ class GeminiClient(AnalysisModel):
             return TradeProposal(giving=giving, receiving=receiving)
         except Exception as e:
             logger.error(f"Error parsing trade string: {e}")
-            raise AIResponseError(f"Trade parsing failed: {e}") from e
+            raise translate(e) from e

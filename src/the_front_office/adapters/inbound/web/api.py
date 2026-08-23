@@ -373,8 +373,10 @@ def _register_routes(app: FastAPI) -> None:
         try:
             answer = getattr(chat.send_message(request.message), "text", "") or ""
         except Exception as e:  # the model SDK raises its own error types
+            # Its message is a repr of a Google RPC payload; the log is where
+            # that belongs, not a panel someone is reading.
             logger.error(f"Follow-up failed: {e}")
-            raise HTTPException(status_code=502, detail=f"The model did not answer: {e}") from e
+            raise HTTPException(status_code=502, detail="The model did not answer. Try asking again.") from e
         return Reply(answer=answer or "(no answer)")
 
 

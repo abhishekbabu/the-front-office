@@ -109,6 +109,14 @@ export function ErrorNote({ error }: { error: unknown }) {
         {error instanceof Error ? error.message : "Something went wrong."}
       </p>
       {code === "yahoo_login_required" && <YahooLoginButton />}
+      {(code === "ai_key_invalid" || code === "ai_unavailable") && (
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("tfo:settings"))}
+          className="inline-flex h-9 items-center rounded-md border border-border bg-background px-4 text-sm font-medium hover:bg-muted"
+        >
+          Open Settings
+        </button>
+      )}
       {code === "yahoo_not_approved" && (
         <a
           href="https://sports.yahoo.com/developer/access/"
@@ -212,7 +220,7 @@ export function Chat({ chatId }: { chatId: string }) {
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Why that drop?"
+            placeholder="Why that move?"
             className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-[13.5px] placeholder:text-muted-foreground"
           />
           <Button type="submit" variant="primary" disabled={!draft.trim() || ask.isPending}>

@@ -134,5 +134,37 @@ class AIUnavailableError(FrontOfficeError):
         )
 
 
+class AIKeyInvalidError(FrontOfficeError):
+    """The model refused the key itself.
+
+    Distinct from having no key, which the app hides rather than reports: here
+    something was configured and is wrong, which only the person who typed it
+    can fix.
+    """
+
+    code = "ai_key_invalid"
+
+    def __init__(self) -> None:
+        super().__init__("Google rejected the API key. Check GOOGLE_API_KEY in Settings.")
+
+
+class AIQuotaError(FrontOfficeError):
+    """The model is reachable and the key is fine; there is no quota left."""
+
+    code = "ai_quota"
+
+    def __init__(self) -> None:
+        super().__init__("The Google API quota is exhausted. Analysis will work again once it resets.")
+
+
 class AIResponseError(FrontOfficeError):
-    """Gemini was reachable but the call failed or returned nothing usable."""
+    """The model was reachable and the call still did not produce a report.
+
+    The vendor's own message is a Python repr of a Google RPC payload, which is
+    unreadable and belongs in the log. This carries a sentence instead.
+    """
+
+    code = "ai_failed"
+
+    def __init__(self, detail: str = "") -> None:
+        super().__init__(detail or "The model did not return a usable answer. Try again.")

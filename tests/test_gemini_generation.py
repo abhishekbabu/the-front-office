@@ -57,19 +57,19 @@ def test_raw_json_is_used_when_the_sdk_does_not_populate_parsed() -> None:
 
 def test_json_that_does_not_match_the_schema_raises() -> None:
     c, _ = _client(SimpleNamespace(parsed=None, text='{"matchup_insight": "x"}'))
-    with pytest.raises(AIResponseError, match="failed validation"):
+    with pytest.raises(AIResponseError, match="did not fit the expected shape"):
         c.generate_structured("p", ScoutReport)
 
 
 def test_empty_response_raises() -> None:
     c, _ = _client(SimpleNamespace(parsed=None, text=""))
-    with pytest.raises(AIResponseError, match="no usable"):
+    with pytest.raises(AIResponseError, match="nothing usable"):
         c.generate_structured("p", ScoutReport)
 
 
 def test_api_failure_is_wrapped_as_a_domain_error() -> None:
     c, _ = _client(error=RuntimeError("503 backend error"))
-    with pytest.raises(AIResponseError, match="Gemini call failed"):
+    with pytest.raises(AIResponseError, match="did not return a usable answer"):
         c.generate_structured("p", ScoutReport)
 
 
@@ -100,7 +100,7 @@ def test_structuring_passes_the_prose_and_instruction_through() -> None:
 
 def test_structuring_failure_is_wrapped() -> None:
     c, _ = _client(error=RuntimeError("bad request"))
-    with pytest.raises(AIResponseError, match="Could not structure"):
+    with pytest.raises(AIResponseError, match="did not return a usable answer"):
         c.structure_text("prose", TradeVerdict, instruction="x")
 
 
@@ -131,7 +131,7 @@ def test_trade_parsing_coerces_a_bare_string_into_a_list() -> None:
 
 def test_trade_parsing_failure_raises() -> None:
     c, _ = _client(error=RuntimeError("boom"))
-    with pytest.raises(AIResponseError, match="Trade parsing failed"):
+    with pytest.raises(AIResponseError, match="did not return a usable answer"):
         c.parse_trade_string("x")
 
 
@@ -185,3 +185,38 @@ def test_cached_tokens_are_reported_when_present(caplog: pytest.LogCaptureFixtur
     with caplog.at_level("INFO"):
         c.generate_structured("p", ScoutReport)
     assert "1200 cached" in caplog.text
+
+
+# ── what a person is told when the model refuses ────────────────────────
+
+
+def test_a_rejected_key_is_named_as_such() -> None:
+    """Distinct from having no key, which the app hides: something was
+    configured and is wrong, and only the person who typed it can fix it."""
+    from the_front_office.adapters.outbound.llm.gemini.client import translate
+    from the_front_office.domain.errors import AIKeyInvalidError
+
+    error = translate(Exception("400 INVALID_ARGUMENT ... 'reason': 'API_KEY_INVALID' ..."))
+
+    assert isinstance(error, AIKeyInvalidError)
+    assert error.code == "ai_key_invalid"
+
+
+def test_an_exhausted_quota_is_told_apart_from_a_bad_key() -> None:
+    from the_front_office.adapters.outbound.llm.gemini.client import translate
+    from the_front_office.domain.errors import AIQuotaError
+
+    assert isinstance(translate(Exception("429 RESOURCE_EXHAUSTED")), AIQuotaError)
+
+
+def test_no_vendor_payload_reaches_the_message() -> None:
+    """The SDK embeds a repr of a Google RPC payload — nested dicts, type URLs,
+    a locale — which is unreadable anywhere a person is looking."""
+    from the_front_office.adapters.outbound.llm.gemini.client import translate
+
+    raw = "500 INTERNAL {'error': {'details': [{'@type': 'type.googleapis.com/google.rpc.ErrorInfo'}]}}"
+    message = str(translate(Exception(raw)))
+
+    assert "@type" not in message
+    assert "googleapis" not in message
+    assert "{" not in message

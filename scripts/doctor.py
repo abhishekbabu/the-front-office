@@ -93,7 +93,8 @@ def main() -> int:
     print()
     print("  Features")
     print("  " + "─" * (width + 22))
-    print(f"  {'AI (Gemini)'.ljust(width)}   {'ready' if settings.gemini_api_key else 'not set — --mock still works'}")
+    ai = "ready" if settings.gemini_api_key else "no key — reports and trades are not offered"
+    print(f"  {'AI (Gemini)'.ljust(width)}   {ai}")
     telemetry = "exporting" if settings.logfire_token else "inert — no token, nothing leaves this machine"
     print(f"  {'Tracing (Logfire)'.ljust(width)}   {telemetry}")
     if settings.logfire_capture_prompts:

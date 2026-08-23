@@ -95,7 +95,7 @@ def test_a_model_failure_is_wrapped_as_a_domain_error() -> None:
 
             return SimpleNamespace(send_message=_boom)
 
-    with pytest.raises(AIResponseError, match="Trade evaluation failed"):
+    with pytest.raises(AIResponseError, match="did not return a usable answer"):
         _engine(ai=Broken()).evaluate("L1", "x")
 
 

@@ -8,20 +8,32 @@ from the_front_office.domain.errors import FrontOfficeError
 
 
 def _print_help(entries: list[SportEntry]) -> None:
-    """Print available commands, naming the sports that are configured."""
+    """Print the commands that will actually work here.
+
+    Anything needing a model is omitted without one, the same way the web UI
+    omits it — listing a command that can only refuse is worse than a shorter
+    list, and the absence needs no explaining because nothing is missing.
+    """
+    from the_front_office.bootstrap import ai_available
+
     keys = " | ".join(e.sport for e in entries) or "none configured"
     tradeable = " | ".join(e.sport for e in entries if e.supports_trades) or "none"
+    rows = [
+        ("/leagues", "Every league you are in, per sport"),
+        ("/roster [sport]", "Your squad"),
+    ]
+    if ai_available():
+        rows.append((f"/scout [{keys}]", "Analyze a week. No sport runs every configured one"))
+        if tradeable != "none":
+            rows.append((f"/trade [{tradeable}] <txt>", "Evaluate a trade in plain language"))
+    rows += [
+        ("/help", "Show this message"),
+        ("/quit", "Exit"),
+    ]
+
     print()
     print("  Available commands:")
     print("  ─────────────────────────────────────")
-    rows = [
-        (f"/scout [{keys}]", "Scouting report. No sport runs every configured one."),
-        ("/roster [sport]", "Your roster"),
-        ("/leagues", "Every league, per sport"),
-        (f"/trade [{tradeable}] <txt>", "Evaluate a trade"),
-        ("/help", "Show this help message"),
-        ("/quit", "Exit the program"),
-    ]
     width = max(len(c) for c, _ in rows)
     for command, description in rows:
         print(f"  {command.ljust(width)}   {description}")

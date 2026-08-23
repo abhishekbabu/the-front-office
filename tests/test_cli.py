@@ -146,7 +146,8 @@ def test_unknown_command_is_reported(capsys: pytest.CaptureFixture[str]) -> None
     assert "Unknown command" in capsys.readouterr().out
 
 
-def test_help_names_the_configured_sports(capsys: pytest.CaptureFixture[str]) -> None:
+def test_help_names_the_configured_sports(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("the_front_office.bootstrap.ai_available", lambda: True)
     cmd._print_help([fake_entry("nfl"), fake_entry("nba", "NBA (Yahoo)")])
     assert "nfl | nba" in capsys.readouterr().out
 
@@ -173,10 +174,31 @@ def test_trade_usage_is_shown_without_arguments(capsys: pytest.CaptureFixture[st
     assert "Usage: /trade" in capsys.readouterr().out
 
 
-def test_help_names_which_sports_can_trade(capsys: pytest.CaptureFixture[str]) -> None:
-    """`fake_entry` does not declare trade support, so there is nothing to name."""
+def test_help_omits_a_command_with_nothing_to_run_it_on(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`fake_entry` declares no trade support, so listing /trade could only
+    refuse — and a shorter list beats a command that explains itself away."""
+    monkeypatch.setattr("the_front_office.bootstrap.ai_available", lambda: True)
+
     cmd._print_help([fake_entry("nfl")])
-    assert "/trade [none]" in capsys.readouterr().out
+
+    assert "/trade" not in capsys.readouterr().out
+
+
+def test_help_omits_everything_needing_a_model_without_one(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same rule the web UI follows: nothing is offered that cannot work,
+    and the absence needs no explaining because nothing is missing."""
+    monkeypatch.setattr("the_front_office.bootstrap.ai_available", lambda: False)
+
+    cmd._print_help([_tradeable("nfl")])
+    out = capsys.readouterr().out
+
+    assert "/scout" not in out
+    assert "/trade" not in out
+    assert "/roster" in out
 
 
 # ── command bodies ──────────────────────────────────────────────────────
