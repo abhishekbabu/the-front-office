@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { m } from "motion/react";
-import { api, type League, type LeagueSchedule, type PlayerCard, type Sport, type TeamRef } from "@/lib/api";
+import { api, type League, type LeagueSchedule, type PlayerCard, type Competition, type TeamRef } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Empty, Loading } from "@/components/ui/state";
@@ -30,7 +30,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "activity", label: "Activity" },
 ];
 
-export function LeaguePanel({ sport, league }: { sport: Sport; league: League }) {
+export function LeaguePanel({ sport, league }: { sport: Competition; league: League }) {
   const schedule = useQuery<LeagueSchedule, Error>({
     queryKey: ["schedule", sport.key, league.league_id],
     queryFn: () => api.schedule(sport.key, league.league_id),
@@ -159,7 +159,7 @@ function Rosters({
   team,
   onPick,
 }: {
-  sport: Sport;
+  sport: Competition;
   league: League;
   teams: TeamRef[];
   team: string | null;

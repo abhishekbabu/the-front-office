@@ -2,7 +2,7 @@
 
 import pytest
 
-from the_front_office.adapters.outbound.sports.trades import resolve_sides
+from the_front_office.adapters.outbound.competitions.trades import resolve_sides
 from the_front_office.domain.errors import PlayerNotFoundError
 from the_front_office.domain.models import TradeProposal
 
@@ -55,8 +55,8 @@ def test_an_empty_side_resolves_to_an_empty_list() -> None:
 def test_both_providers_use_the_shared_policy() -> None:
     import inspect
 
-    from the_front_office.adapters.outbound.sports.nba import yahoo
-    from the_front_office.adapters.outbound.sports.nfl import sleeper
+    from the_front_office.adapters.outbound.competitions.nba import yahoo
+    from the_front_office.adapters.outbound.competitions.nfl import sleeper
 
     for module in (yahoo, sleeper):
         assert "resolve_sides(" in inspect.getsource(module)

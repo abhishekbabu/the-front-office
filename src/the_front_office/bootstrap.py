@@ -15,29 +15,34 @@ from dataclasses import dataclass
 from the_front_office.application.scouting import ScoutEngine
 from the_front_office.application.trading import TradeEngine
 from the_front_office.config.settings import settings
-from the_front_office.domain.ports import AnalysisModel, SportProvider, TradeProvider
+from the_front_office.domain.ports import AnalysisModel, CompetitionProvider, TradeProvider
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
-class SportEntry:
-    """One sport on one platform.
+class CompetitionEntry:
+    """One competition on one platform.
 
-    Keyed by the pair, not by the sport: the same sport runs on more than one
-    platform — basketball on Yahoo and on Sleeper — and those are separate
-    accounts, separate credentials and separate leagues. A registry keyed by
-    sport alone can hold only one of them, and quietly loses the rest.
+    Keyed by that pair rather than by the sport. Two things make the sport too
+    coarse to identify an entry: one competition runs on several platforms —
+    the NBA on Yahoo and on Sleeper, separate accounts and separate leagues —
+    and one sport has several competitions, so college football beside the NFL
+    would collide on `football-sleeper` and quietly lose one of them.
     """
 
     sport: str
-    """Short key for the game itself: 'nba', 'nfl', 'fpl'."""
+    """The game itself: 'basketball', 'football', 'soccer'. For grouping the
+    competitions that are the same sport; never an identity on its own."""
+
+    competition: str
+    """Which competition: 'nba', 'nfl', 'premier-league'."""
 
     platform: str
-    """Where these leagues live: 'yahoo', 'sleeper', 'fpl'."""
+    """Where these fantasy leagues live: 'yahoo', 'sleeper', 'fpl'."""
 
     label: str
-    build: Callable[[], SportProvider]
+    build: Callable[[], CompetitionProvider]
     is_configured: Callable[[], bool]
     requires: str
     """What to put in .env to enable it, quoted in the 'not configured' message."""
@@ -63,14 +68,14 @@ class SportEntry:
     def key(self) -> str:
         """What identifies this entry everywhere outside the registry.
 
-        A sport alone is ambiguous once two platforms carry it, so every route,
-        picker and stored preference uses the pair.
+        A competition alone is ambiguous once two platforms carry it, so every
+        route, picker and stored preference uses the pair.
         """
-        return f"{self.sport}-{self.platform}"
+        return f"{self.competition}-{self.platform}"
 
 
-def _build_nfl() -> SportProvider:
-    from the_front_office.adapters.outbound.sports.nfl.sleeper import SleeperNFLProvider
+def _build_nfl() -> CompetitionProvider:
+    from the_front_office.adapters.outbound.competitions.nfl.sleeper import SleeperNFLProvider
 
     return SleeperNFLProvider()
 
@@ -82,13 +87,13 @@ def _check_yahoo_ready() -> None:
     YahooClient.ensure_authorized()
 
 
-def _build_fpl() -> SportProvider:
-    from the_front_office.adapters.outbound.sports.fpl.fpl import FPLProvider
+def _build_fpl() -> CompetitionProvider:
+    from the_front_office.adapters.outbound.competitions.premier_league.fpl import FPLProvider
 
     return FPLProvider()
 
 
-def _build_nba() -> SportProvider:
+def _build_nba() -> CompetitionProvider:
     """Yahoo needs an authorized context and a specific league object.
 
     Deferred to here so that constructing the registry — which every entry point
@@ -96,8 +101,8 @@ def _build_nba() -> SportProvider:
     an absent token is reported rather than obtained, because the handshake
     opens a browser and this runs inside a request handler as often as not.
     """
+    from the_front_office.adapters.outbound.competitions.nba.yahoo import YahooNBAProvider
     from the_front_office.adapters.outbound.platforms.yahoo import client as yahoo
-    from the_front_office.adapters.outbound.sports.nba.yahoo import YahooNBAProvider
     from the_front_office.domain.errors import LeagueNotFoundError
 
     yahoo.YahooClient.ensure_authorized()
@@ -116,9 +121,10 @@ def _build_nba() -> SportProvider:
     return YahooNBAProvider(leagues[0], all_leagues=leagues)
 
 
-REGISTRY: tuple[SportEntry, ...] = (
-    SportEntry(
-        sport="nba",
+REGISTRY: tuple[CompetitionEntry, ...] = (
+    CompetitionEntry(
+        sport="basketball",
+        competition="nba",
         platform="yahoo",
         label="NBA (Yahoo)",
         build=_build_nba,
@@ -127,8 +133,9 @@ REGISTRY: tuple[SportEntry, ...] = (
         check_ready=_check_yahoo_ready,
         supports_trades=True,
     ),
-    SportEntry(
-        sport="nfl",
+    CompetitionEntry(
+        sport="football",
+        competition="nfl",
         platform="sleeper",
         label="NFL (Sleeper)",
         build=_build_nfl,
@@ -136,8 +143,9 @@ REGISTRY: tuple[SportEntry, ...] = (
         requires="SLEEPER_USERNAME",
         supports_trades=True,
     ),
-    SportEntry(
-        sport="fpl",
+    CompetitionEntry(
+        sport="soccer",
+        competition="premier-league",
         platform="fpl",
         label="FPL (Fantasy Premier League)",
         build=_build_fpl,
@@ -150,11 +158,11 @@ REGISTRY: tuple[SportEntry, ...] = (
 )
 
 
-def all_sports() -> tuple[SportEntry, ...]:
+def all_sports() -> tuple[CompetitionEntry, ...]:
     return REGISTRY
 
 
-def configured_sports() -> list[SportEntry]:
+def configured_sports() -> list[CompetitionEntry]:
     """Only the sports this user has credentials for."""
     return [entry for entry in REGISTRY if entry.is_configured()]
 
@@ -164,7 +172,7 @@ def requirements_summary() -> str:
     return "; ".join(f"{e.label}: {e.requires}" for e in REGISTRY)
 
 
-def find(key: str) -> SportEntry | None:
+def find(key: str) -> CompetitionEntry | None:
     """The entry a token names, by pair or by sport alone.
 
     Typing "nba" stays meaningful while only one platform carries it, and
@@ -174,7 +182,7 @@ def find(key: str) -> SportEntry | None:
     token = key.lower().lstrip("/")
     return next(
         (e for e in REGISTRY if e.key == token),
-        next((e for e in REGISTRY if e.sport == token), None),
+        next((e for e in REGISTRY if e.competition == token), None),
     )
 
 
@@ -204,7 +212,7 @@ def ai_available() -> bool:
     return GeminiClient().is_available
 
 
-def scout_engine(provider: SportProvider) -> ScoutEngine:
+def scout_engine(provider: CompetitionProvider) -> ScoutEngine:
     """A scouting engine wired to the configured model."""
     return ScoutEngine(provider, ai=default_model())
 

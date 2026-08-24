@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Moon, Settings, Sun, Trophy } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
-import { api, type League, type Sport } from "@/lib/api";
+import { api, type League, type Competition } from "@/lib/api";
 import { useTheme } from "@/lib/useTheme";
 import { IconButton } from "@/components/ui/icon-button";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -57,7 +57,7 @@ export default function App() {
   const usable = useMemo(() => (sports.data ?? []).filter((s) => s.ready), [sports.data]);
   // No fallback to the first configured sport: until one is chosen the landing
   // page is what shows, and choosing for the user is what it exists to avoid.
-  const active: Sport | undefined = usable.find((s) => s.key === sport);
+  const active: Competition | undefined = usable.find((s) => s.key === sport);
 
   const leagues = useQuery({
     queryKey: ["leagues", active?.key],
@@ -96,7 +96,10 @@ export default function App() {
           <span className="font-display text-[15px] font-semibold tracking-tight">The Front Office</span>
         </button>
 
-        <Group label="Sport">
+        {/* Competition, not sport: these are the NBA, the NFL and the Premier
+            League. "League" is taken by the group below, which holds the
+            fantasy leagues you actually play in. */}
+        <Group label="Competition">
           {sports.isLoading && <Skeleton className="mx-2 h-7" />}
           {(sports.data ?? []).map((s) => (
             <RailItem
@@ -283,7 +286,7 @@ function RailItem({
 }
 
 /** Nothing is configured — say what to set rather than showing an empty shell. */
-function Empty({ sports }: { sports: Sport[] }) {
+function Empty({ sports }: { sports: Competition[] }) {
   return (
     <div className="mx-auto max-w-xl p-10">
       <h1 className="font-display text-2xl font-semibold tracking-tight">Nothing connected yet</h1>

@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 import pytest
 
+from the_front_office.adapters.outbound.competitions.premier_league.fpl import FPLProvider
 from the_front_office.adapters.outbound.platforms.fpl.types import (
     Chip,
     ChipPlay,
@@ -26,7 +27,6 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
     Squad,
     TableRow,
 )
-from the_front_office.adapters.outbound.sports.fpl.fpl import FPLProvider
 from the_front_office.domain.errors import FPLAPIError, LeagueNotFoundError, PlayerNotFoundError, TeamNotFoundError
 from the_front_office.domain.models import PlayerQuery
 
@@ -516,7 +516,7 @@ def test_the_briefing_keeps_the_squad_and_only_the_players_named() -> None:
 
 def test_an_optimal_eleven_produces_no_change_recommendations() -> None:
     """Silence would read as "we did not check", so the absence is stated."""
-    from the_front_office.adapters.outbound.sports.fpl.squad import best_lineup
+    from the_front_office.adapters.outbound.competitions.premier_league.squad import best_lineup
 
     best = best_lineup(list(SQUAD_PLAYERS.values()))
     optimal = [Pick(element=p.id, position=i, multiplier=1) for i, p in enumerate(best.starters, start=1)]
@@ -557,7 +557,7 @@ def test_points_left_on_the_bench_are_the_figure_that_warns() -> None:
 
 
 def test_an_optimal_eleven_leaves_nothing_on_the_bench_to_report() -> None:
-    from the_front_office.adapters.outbound.sports.fpl.squad import best_lineup
+    from the_front_office.adapters.outbound.competitions.premier_league.squad import best_lineup
 
     best = best_lineup(list(SQUAD_PLAYERS.values()))
     # Captained, because FPL always is — and the comparison only holds between

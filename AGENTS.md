@@ -40,7 +40,7 @@ Sport-specific constants lead with the sport: `NBA_SCOUT_PROMPT`,
 `MOCK_NFL_REPORT`. The word for a set of players a manager owns is **roster**,
 everywhere. Test modules mirror the module they cover.
 
-Under `adapters/outbound/sports/<sport>/`, the provider file is named for the
+Under `adapters/outbound/competitions/<sport>/`, the provider file is named for the
 platform that owns the **league** — `nba/yahoo.py`, `nfl/sleeper.py`. Other
 platforms a sport reads from are role-named helpers (`projections.py`,
 `lineup.py`), never a second file named after a platform. A provider that
@@ -64,8 +64,8 @@ callers use `ensure_authorized`.
 generation prompt, and say what was left out.
 
 **Player identity across platforms.** Yahoo and Sleeper share no identifier, so
-basketball joins by normalized name — twice, in `sports/nba/projections.py` and
-`sports/nba/form.py`. Never guess: an ambiguous surname must resolve to nothing
+basketball joins by normalized name — twice, in `competitions/nba/projections.py` and
+`competitions/nba/form.py`. Never guess: an ambiguous surname must resolve to nothing
 rather than to whichever player was indexed first, and an unmatched player
 carries no line rather than borrowing someone else's.
 
@@ -83,7 +83,7 @@ System CLIs go in the `Brewfile`. Use `just install` / `just lock` (`uv sync`) �
 **Portability.** Never hardcode `.venv/bin/...` or `.venv/Scripts/...`; `uv run`
 resolves it everywhere. No POSIX-only commands in tooling and no `strftime`
 dash-modifiers (`%-d`) — both are glibc-only and the project supports Windows.
-Format dates through `sports/dates.py`; put scripts in `scripts/`.
+Format dates through `competitions/dates.py`; put scripts in `scripts/`.
 
 **Secrets.** Never commit `.env`, `.yahoofantasy`, or any `.*_cache.json`. Read
 config through the `settings` singleton, never `os.getenv` at a call site.
@@ -124,7 +124,7 @@ shared. When you find yourself writing something a second time, extract it then
   `http.py` (cached, retried JSON GETs), `retry.py` (transient-failure policy),
   `cache.py` (the one disk cache every platform reads through; expiry is a
   `Freshness` predicate — `within(ttl)`, or a rule a duration cannot express).
-- `adapters/outbound/sports/` — policy every sport needs: `names.py`
+- `adapters/outbound/competitions/` — policy every sport needs: `names.py`
   (cross-platform player matching), `trades.py` (resolving a proposal).
 - `domain/` — rules that hold regardless of sport or platform.
 
@@ -159,8 +159,8 @@ same sport runs on more than one platform, with separate credentials and
 separate leagues. Address entries by `entry.key` everywhere outside the
 registry; `find` accepts a bare sport only while one platform carries it.
 
-**Adding a sport.** See the `adding-a-sport` skill: a provider under
-`adapters/outbound/sports/`, a prompt template, one `SportEntry` in
+**Adding a sport.** See the `adding-a-competition` skill: a provider under
+`adapters/outbound/competitions/`, a prompt template, one `CompetitionEntry` in
 `bootstrap.py`. Never name a provider in an entry point, nor put sport specifics
 in `domain/`, `application/` or the inbound adapters. If a sport needs a field
 the shared models lack, widen them — in the league's own vocabulary, `gains`

@@ -11,25 +11,17 @@ is the only configuration.
 import logging
 from collections.abc import Callable
 
-from the_front_office.adapters.outbound.platforms.sleeper.client import NFL, SleeperClient
-from the_front_office.adapters.outbound.platforms.sleeper.types import (
-    PlayerMeta,
-    SeasonStats,
-    SleeperLeague,
-    SleeperRoster,
-    WeeklyProjection,
-)
-from the_front_office.adapters.outbound.sports import paging
-from the_front_office.adapters.outbound.sports.names import NameIndex
-from the_front_office.adapters.outbound.sports.nfl import league, prompt
-from the_front_office.adapters.outbound.sports.nfl.lineup import (
+from the_front_office.adapters.outbound.competitions import paging
+from the_front_office.adapters.outbound.competitions.names import NameIndex
+from the_front_office.adapters.outbound.competitions.nfl import league, prompt
+from the_front_office.adapters.outbound.competitions.nfl.lineup import (
     LineupSlot,
     current_lineup,
     lineup_changes,
     lineup_points,
     optimal_lineup,
 )
-from the_front_office.adapters.outbound.sports.nfl.week import (
+from the_front_office.adapters.outbound.competitions.nfl.week import (
     SCORING_LABELS,
     Live,
     Week,
@@ -38,7 +30,15 @@ from the_front_office.adapters.outbound.sports.nfl.week import (
     week_dates,
     zero_projection,
 )
-from the_front_office.adapters.outbound.sports.trades import resolve_sides
+from the_front_office.adapters.outbound.competitions.trades import resolve_sides
+from the_front_office.adapters.outbound.platforms.sleeper.client import NFL, SleeperClient
+from the_front_office.adapters.outbound.platforms.sleeper.types import (
+    PlayerMeta,
+    SeasonStats,
+    SleeperLeague,
+    SleeperRoster,
+    WeeklyProjection,
+)
 from the_front_office.config.constants import NFL_TRADE_PROMPT
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError, TeamNotFoundError
@@ -140,9 +140,10 @@ FANTASY_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K", "DEF"})
 
 
 class SleeperNFLProvider:
-    """SportProvider for Sleeper points-league football."""
+    """CompetitionProvider for Sleeper points-league football."""
 
-    sport = "nfl"
+    sport = "football"
+    competition = "nfl"
     label = "NFL (Sleeper)"
 
     def __init__(self, username: str | None = None, *, client: SleeperClient | None = None):
@@ -167,7 +168,7 @@ class SleeperNFLProvider:
             LeagueRef(
                 league_id=lg.league_id,
                 name=lg.name,
-                sport=self.sport,
+                competition=self.competition,
                 detail=f"{lg.total_rosters}-team · {SCORING_LABELS.get(lg.scoring_format, lg.scoring_format)}",
                 url=LEAGUE_URL.format(league_id=lg.league_id),
             )

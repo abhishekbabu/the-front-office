@@ -42,7 +42,8 @@ from the_front_office.domain.models import PlayerCard  # noqa: E402
 
 
 class FakeProvider:
-    sport = "nfl"
+    sport = "football"
+    competition = "nfl"
     label = "NFL (Sleeper)"
 
     def list_leagues(self) -> Any:
@@ -54,27 +55,31 @@ class FakeProvider:
         return [PlayerCard(player_id="qb1", columns={"Player": "Star QB", "Pos": "QB"})]
 
 
+SPORT_OF = {"nfl": "football", "nba": "basketball", "premier-league": "soccer"}
+
+
 def fake_entry(
-    sport: str = "nfl",
+    competition: str = "nfl",
     label: str = "NFL (Sleeper)",
     build: Any = None,
     counter: list[int] | None = None,
 ) -> Any:
-    """A real SportEntry with a stubbed build, so the CLI sees what it expects."""
-    from the_front_office.bootstrap import SportEntry
+    """A real CompetitionEntry with a stubbed build, so the CLI sees what it expects."""
+    from the_front_office.bootstrap import CompetitionEntry
 
     def _build() -> Any:
         if counter is not None:
             counter.append(1)
         return FakeProvider()
 
-    return SportEntry(
-        sport=sport,
-        platform=sport,
+    return CompetitionEntry(
+        sport=SPORT_OF.get(competition, "football"),
+        competition=competition,
+        platform=competition,
         label=label,
         build=build or _build,
         is_configured=lambda: True,
-        requires="SLEEPER_USERNAME" if sport == "nfl" else "YAHOO_CLIENT_ID",
+        requires="SLEEPER_USERNAME" if competition == "nfl" else "YAHOO_CLIENT_ID",
     )
 
 
@@ -96,7 +101,7 @@ def test_no_sport_argument_runs_every_configured_sport() -> None:
 def test_a_named_sport_runs_only_that_one() -> None:
     nfl, nba = fake_entry("nfl"), fake_entry("nba", "NBA (Yahoo)")
     resolved = cmd._resolve_sports(["nfl"], [nfl, nba])
-    assert [e.sport for e in resolved] == ["nfl"]
+    assert [e.competition for e in resolved] == ["nfl"]
 
 
 def test_an_unknown_sport_resolves_to_nothing(capsys: pytest.CaptureFixture[str]) -> None:
@@ -225,12 +230,13 @@ class RecordingProvider(FakeProvider):
         return SportContext(prompt="TRADE PROMPT")
 
 
-def _entry_with(provider: Any, sport: str = "nfl", trades: bool = False) -> Any:
-    from the_front_office.bootstrap import SportEntry
+def _entry_with(provider: Any, competition: str = "nfl", trades: bool = False) -> Any:
+    from the_front_office.bootstrap import CompetitionEntry
 
-    return SportEntry(
-        sport=sport,
-        platform=sport,
+    return CompetitionEntry(
+        sport=SPORT_OF.get(competition, "football"),
+        competition=competition,
+        platform=competition,
         label="NFL (Sleeper)",
         build=lambda: provider,
         is_configured=lambda: True,
@@ -299,16 +305,17 @@ def test_trade_reports_a_domain_error(monkeypatch: pytest.MonkeyPatch, capsys: p
 # ── trade sport selection ───────────────────────────────────────────────
 
 
-def _tradeable(sport: str) -> Any:
-    from the_front_office.bootstrap import SportEntry
+def _tradeable(competition: str) -> Any:
+    from the_front_office.bootstrap import CompetitionEntry
 
     def _build() -> Any:
         return FakeProvider()
 
-    return SportEntry(
-        sport=sport,
-        platform=sport,
-        label=f"{sport.upper()} label",
+    return CompetitionEntry(
+        sport=SPORT_OF.get(competition, "football"),
+        competition=competition,
+        platform=competition,
+        label=f"{competition.upper()} label",
         build=_build,
         is_configured=lambda: True,
         requires="X",
@@ -320,7 +327,7 @@ def test_a_lone_trading_sport_needs_no_argument() -> None:
     """Nothing to disambiguate, so the whole line is the trade description."""
     entry, args = cmd._trade_sport([_tradeable("nfl")], ["Give", "A,", "Get", "B"])
     assert entry is not None
-    assert entry.sport == "nfl"
+    assert entry.competition == "nfl"
     assert args == ["Give", "A,", "Get", "B"]
 
 
@@ -328,7 +335,7 @@ def test_a_named_sport_is_split_off_the_description() -> None:
     entries = [_tradeable("nba"), _tradeable("nfl")]
     entry, args = cmd._trade_sport(entries, ["nfl", "Give", "A,", "Get", "B"])
     assert entry is not None
-    assert entry.sport == "nfl"
+    assert entry.competition == "nfl"
     assert args == ["Give", "A,", "Get", "B"]
 
 
@@ -371,8 +378,8 @@ def test_usage_is_shown_when_only_a_sport_is_given(capsys: pytest.CaptureFixture
 
 def test_a_sport_that_cannot_trade_at_all_says_so(capsys: pytest.CaptureFixture[str]) -> None:
     """FPL managers transfer against the market, so there is no trade to price."""
-    entry, args = cmd._trade_sport([_tradeable("nfl")], ["fpl", "Give", "Saka"])
+    entry, args = cmd._trade_sport([_tradeable("nfl")], ["premier-league", "Give", "Saka"])
 
     assert entry is None
     assert "does not support trade evaluation" in capsys.readouterr().out
-    assert args == ["fpl", "Give", "Saka"]
+    assert args == ["premier-league", "Give", "Saka"]

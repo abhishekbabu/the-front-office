@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, type League, type PlayerCard, type Sport } from "@/lib/api";
+import { api, type League, type PlayerCard, type Competition } from "@/lib/api";
 import { Card, CardHeader } from "@/components/ui/card";
 import { RosterTable } from "@/components/ui/roster-table";
 import { Loading } from "@/components/ui/state";
@@ -13,7 +13,7 @@ import { ErrorNote, PageHeader } from "@/panels/shared";
  * This is where you look at your players rather than at this week: the season
  * numbers, the ownership, the depth chart. Any row opens.
  */
-export function TeamPanel({ sport, league }: { sport: Sport; league: League }) {
+export function TeamPanel({ sport, league }: { sport: Competition; league: League }) {
   const [open, setOpen] = useState<string | null>(null);
 
   const roster = useQuery<PlayerCard[], Error>({

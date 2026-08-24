@@ -7,7 +7,7 @@ Layered ports and adapters:
     adapters/
       inbound/    things that call us: the CLI and the web UI.
       outbound/   things we call: platform APIs, the language model, and the
-                  per-sport providers implementing the SportProvider port.
+                  per-sport providers implementing the CompetitionProvider port.
     bootstrap.py  the composition root: the sport registry and engine wiring.
 
 Dependencies point inward only. `bootstrap` is the one module that names a

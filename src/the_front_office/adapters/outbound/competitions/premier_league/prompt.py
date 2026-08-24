@@ -7,16 +7,7 @@ The provider fetches and the prompt describes.
 
 import logging
 
-from the_front_office.adapters.outbound.platforms.fpl.client import FPLClient, free_transfers
-from the_front_office.adapters.outbound.platforms.fpl.types import (
-    TRANSFER_HIT,
-    Entry,
-    Gameweek,
-    Player,
-    Squad,
-    as_millions,
-)
-from the_front_office.adapters.outbound.sports.fpl.squad import (
+from the_front_office.adapters.outbound.competitions.premier_league.squad import (
     Lineup,
     LineupChange,
     Transfer,
@@ -25,6 +16,15 @@ from the_front_office.adapters.outbound.sports.fpl.squad import (
     effective_points,
     lineup_changes,
     points_with_captain,
+)
+from the_front_office.adapters.outbound.platforms.fpl.client import FPLClient, free_transfers
+from the_front_office.adapters.outbound.platforms.fpl.types import (
+    TRANSFER_HIT,
+    Entry,
+    Gameweek,
+    Player,
+    Squad,
+    as_millions,
 )
 from the_front_office.config.constants import FPL_SCOUT_PROMPT
 from the_front_office.domain.errors import FPLAPIError

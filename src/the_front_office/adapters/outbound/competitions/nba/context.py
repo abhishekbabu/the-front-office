@@ -11,8 +11,8 @@ from datetime import date
 
 from yahoofantasy import Player  # type: ignore[import-untyped]
 
-from the_front_office.adapters.outbound.sports.nba.form import NineCatStats, PlayerStats, SleeperNBAForm
-from the_front_office.adapters.outbound.sports.nba.projections import ProjectionIndex
+from the_front_office.adapters.outbound.competitions.nba.form import NineCatStats, PlayerStats, SleeperNBAForm
+from the_front_office.adapters.outbound.competitions.nba.projections import ProjectionIndex
 
 
 class PlayerContextBuilder:
