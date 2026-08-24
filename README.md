@@ -52,8 +52,10 @@ network call is made.
 FastAPI. Shared pieces live in `components/ui/`: cards, badges, a table that
 reads its columns off the data, one loading vocabulary, and `IconButton`, whose
 single required `label` is both tooltip and accessible name. Animation is
-Motion, loaded lazily so the entry bundle stays near 128 kB gzip — `just
-check-web` fails if it grows past 140. Color is themed in two orthogonal dimensions: a palette (`data-theme` on
+Motion, loaded lazily so the entry bundle stays near 145 kB gzip — `just
+check-web` fails if it grows past 150, and ESLint refuses the eager import that
+would put the whole library there. Color is themed in two orthogonal
+dimensions: a palette (`data-theme` on
 `<html>`) and light/dark (`color-scheme`, driven by a class), so every token is a
 single `light-dark(light, dark)` declaration and no component branches on either.
 Status colors are shared across palettes rather than re-themed, and chosen so
@@ -233,7 +235,7 @@ move on.
 ```bash
 just doctor             # what this machine is configured for; flags typo'd .env keys
 just check              # lint + format + types + tests + 95% coverage floor (Python)
-just check-web          # typecheck + tests (UI)
+just check-web          # lint + typecheck + tests + bundle budget (UI)
 just fmt                # auto-fix lint findings, then format
 just test               # hermetic suite (args pass through: just test "-k scout")
 just coverage           # coverage report
@@ -252,8 +254,9 @@ too — one source of truth, discovered by each tool at the path it expects.
 CI runs the same `just` recipes on Linux, macOS and Windows for every push and
 PR, on the Python version `.python-version` pins plus one newer leg, with
 `uv sync --locked` so a dependency change that skipped `just lock` cannot land.
-A separate `web` job typechecks, tests and builds the UI with
-`pnpm install --frozen-lockfile`, the same guarantee on that side.
+A separate `web` job installs with `pnpm install --frozen-lockfile` — the same
+guarantee on that side — and then runs `just check-web` itself, so adding a gate
+to the justfile extends CI here too rather than only on the Python side.
 If `just check` and `just check-web` pass locally they pass in CI.
 
 Tests are hermetic — no network, no credentials, no cache file on disk. Engines
