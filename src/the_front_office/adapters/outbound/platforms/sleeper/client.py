@@ -412,10 +412,13 @@ class SleeperClient:
         This is the forward-looking number the whole football report rests on:
         start/sit and waiver value are both "who will score most this week".
         """
-        url = f"{PROJECTIONS_URL}/{season}/{week}?season_type=regular&order_by={scoring}" + "".join(
+        # The sport segment is required, and its absence is not an error: the
+        # path without it answers 200 with an empty list, so every projection
+        # silently became a zero and every player read as having no game.
+        url = f"{PROJECTIONS_URL}/{NFL}/{season}/{week}?season_type=regular&order_by={scoring}" + "".join(
             f"&position[]={p}" for p in ("QB", "RB", "WR", "TE", "K", "DEF")
         )
-        data = self._cached(f"proj_{season}_{week}_{scoring}", url, PROJECTIONS_TTL)
+        data = self._cached(f"proj_{NFL}_{season}_{week}_{scoring}", url, PROJECTIONS_TTL)
 
         projections: dict[str, WeeklyProjection] = {}
         for row in data or []:
