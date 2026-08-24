@@ -90,19 +90,19 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: web
 
-      - name: Type check
-        run: pnpm exec tsc -b
-        working-directory: web
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
 
-      - name: Tests
-        run: pnpm test
-        working-directory: web
-
-      - name: Build
-        # Catches anything only the production build sees — a bad import path,
-        # a Tailwind class that resolves to nothing.
-        run: pnpm build
-        working-directory: web
+      - name: Lint, type check, test and build
+        # One recipe rather than four steps, so adding a gate to the justfile
+        # extends CI the way it already does for Python. Listing them here
+        # separately is how the bundle budget came to run in CI and not
+        # locally: `just check-web` passed on a change this job then rejected.
+        # The install above already ran with --frozen-lockfile, so the one
+        # inside the recipe is a no-op.
+        run: uvx --from rust-just just check-web
 
   hygiene:
     name: hygiene
@@ -127,6 +127,7 @@ jobs:
         env:
           # no-commit-to-branch is a local guardrail against committing straight
           # to main; by the time CI runs, the commit exists and the check would
-          # fail every push to main.
-          SKIP: no-commit-to-branch,ruff,ruff-format,pyrefly,pytest
+          # fail every push to main. The rest each have a job of their own —
+          # eslint runs in `web`, which is the one with pnpm on it.
+          SKIP: no-commit-to-branch,ruff,ruff-format,pyrefly,pytest,eslint
         run: uv run pre-commit run --all-files --show-diff-on-failure

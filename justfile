@@ -116,8 +116,9 @@ web-install:
 web-build: web-install
     cd web && pnpm build
 
-# Typecheck, test and build the front end — the same gates CI runs
+# Lint, typecheck, test and build the front end — this is what CI runs
 check-web: web-install
+    cd web && pnpm lint
     cd web && pnpm exec tsc -b
     cd web && pnpm test
     # Builds because the bundle budget is checked by the build and nothing

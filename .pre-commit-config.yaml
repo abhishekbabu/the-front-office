@@ -42,6 +42,16 @@ repos:
             pass_filenames: false
             files: (AGENTS\.md|CLAUDE\.md|\.agents/|scripts/check_agent_docs\.py)$
 
+          - id: eslint
+            name: eslint (front end)
+            language: system
+            # The whole tree rather than the staged files: it takes under two
+            # seconds, and the config lives in web/ so a path relative to the
+            # repo root would not resolve against it.
+            entry: pnpm --dir web run lint
+            pass_filenames: false
+            files: ^web/(src/.*\.tsx?|eslint\.config\.js|package\.json)$
+
           - id: pytest
             name: pytest (hermetic suite)
             language: system
