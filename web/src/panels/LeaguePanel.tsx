@@ -8,9 +8,10 @@ import { Empty, Loading } from "@/components/ui/state";
 import { RosterTable } from "@/components/ui/roster-table";
 import { usePlayerDrawer } from "@/components/ui/player";
 import { ExternalLink } from "@/components/ui/external-link";
-import { ErrorNote, LeagueHeader } from "@/panels/shared";
 import { list, listItem, rise } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { ErrorNote } from "@/components/ui/error-note";
+import { LeagueHeader } from "@/components/ui/page-header";
 
 /**
  * The league beyond this week.

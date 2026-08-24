@@ -1,10 +1,15 @@
 import { useMutation } from "@tanstack/react-query";
-import { api, type Analysis, type League, type Competition } from "@/lib/api";
+import { api, type Analysis, type League, type Competition, type Move } from "@/lib/api";
 import { Play, RotateCw } from "lucide-react";
 import { IconButton } from "@/components/ui/icon-button";
 import { Empty, Working } from "@/components/ui/state";
 import { Card, CardHeader } from "@/components/ui/card";
-import { Chat, Chips, ErrorNote, MoveRow, PageHeader } from "@/panels/shared";
+import { Badge, Chips } from "@/components/ui/badge";
+import { Chat } from "@/components/ui/chat";
+import { ErrorNote } from "@/components/ui/error-note";
+import { PageHeader } from "@/components/ui/page-header";
+import { moveTone } from "@/lib/tone";
+import { splitMetric } from "@/lib/metric";
 
 /**
  * The analysis, on its own.
@@ -76,5 +81,58 @@ export function ReportPanel({ competition, league }: { competition: Competition;
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * One recommendation.
+ *
+ * Three columns rather than a stack: the action reads as a chip on the left,
+ * the reasoning takes the middle at prose width, and the number is right-aligned
+ * so the figures form a column you scan down instead of hunting for.
+ */
+function MoveRow({ move }: { move: Move }) {
+  return (
+    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-start gap-4 border-t border-border px-4 py-3.5">
+      <Badge variant={moveTone(move.action)} appearance="pill">
+        {move.action}
+      </Badge>
+
+      <div className="min-w-0">
+        <div className="font-display text-base font-semibold leading-snug tracking-tight">{move.player}</div>
+        <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+          {[move.position, move.team].filter(Boolean).join(" · ")}
+        </div>
+        <p className="mt-1.5 max-w-[54ch] text-[13.5px] leading-relaxed text-muted-foreground">{move.rationale}</p>
+        {move.replaces && (
+          <div className="mt-2 rounded-md bg-muted px-2.5 py-1.5 text-[12.5px] text-muted-foreground">
+            <b className="font-semibold text-foreground">{move.replaces}</b>
+            {move.replaces_rationale && ` · ${move.replaces_rationale}`}
+          </div>
+        )}
+      </div>
+
+      <MetricValue metric={move.metric} />
+    </div>
+  );
+}
+
+function MetricValue({ metric }: { metric: string }) {
+  const parsed = splitMetric(metric);
+  if (parsed.figure === null) {
+    return <div className="max-w-[9rem] text-right font-mono text-[11px] text-muted-foreground">{parsed.text}</div>;
+  }
+  return (
+    <div className="text-right">
+      <div className="font-display text-[19px] font-semibold tracking-tight tabular-nums text-ok">{parsed.figure}</div>
+      {parsed.unit && (
+        // Written by the model and often a phrase rather than a unit —
+        // "proj pts, +4.1 over Smith". Uppercasing and letter-spacing that
+        // makes a long one harder to read, not more label-like.
+        <div className="mt-0.5 max-w-[11rem] font-mono text-[10px] leading-snug text-muted-foreground">
+          {parsed.unit}
+        </div>
+      )}
+    </div>
   );
 }

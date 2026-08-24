@@ -6,8 +6,9 @@ import { Loading } from "@/components/ui/state";
 import { StatStrip } from "@/components/ui/stat";
 import { LineupCard, SideCard } from "@/components/ui/lineup";
 import { usePlayerDrawer } from "@/components/ui/player";
-import { ErrorNote, LeagueHeader } from "@/panels/shared";
 import { cn } from "@/lib/utils";
+import { ErrorNote } from "@/components/ui/error-note";
+import { LeagueHeader } from "@/components/ui/page-header";
 
 /**
  * The week: where you stand, what you are fielding, and who against.

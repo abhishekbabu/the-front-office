@@ -4,7 +4,8 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { RosterTable } from "@/components/ui/roster-table";
 import { Loading } from "@/components/ui/state";
 import { usePlayerDrawer } from "@/components/ui/player";
-import { ErrorNote, LeagueHeader } from "@/panels/shared";
+import { ErrorNote } from "@/components/ui/error-note";
+import { LeagueHeader } from "@/components/ui/page-header";
 
 /**
  * The whole squad, in more depth than the week view.

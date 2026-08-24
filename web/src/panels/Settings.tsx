@@ -6,10 +6,11 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Loading } from "@/components/ui/state";
 import { Card, CardHeader } from "@/components/ui/card";
 import { ArrowLeft, Check, Save } from "lucide-react";
-import { ErrorNote, PageHeader } from "@/panels/shared";
 import { useTheme } from "@/lib/useTheme";
 import { PALETTES } from "@/themes/registry";
 import { cn } from "@/lib/utils";
+import { ErrorNote } from "@/components/ui/error-note";
+import { PageHeader } from "@/components/ui/page-header";
 
 /**
  * Grouped by what each key unlocks, in the order someone sets them up, rather
@@ -30,7 +31,7 @@ const GROUPS: { title: string; note: string; keys: string[] }[] = [
   },
   {
     title: "NBA on Yahoo",
-    note: "From a Yahoo developer app with Fantasy Sports read permission and redirect URI https://localhost:8080. Yahoo also reviews each application before granting API access. Authorizing is a button on the sport itself, once.",
+    note: "From a Yahoo developer app with Fantasy Sports read permission and redirect URI https://localhost:8080. Yahoo also reviews each application before granting API access. Authorizing is a button on the competition itself, once.",
     keys: ["YAHOO_CLIENT_ID", "YAHOO_CLIENT_SECRET", "YAHOO_REDIRECT_URI", "YAHOO_MAX_WEEKLY_ADDS"],
   },
   {
