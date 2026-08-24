@@ -7,8 +7,8 @@ import { IconButton } from "@/components/ui/icon-button";
 import { RosterTable } from "@/components/ui/roster-table";
 import type { SortState } from "@/components/ui/data-table";
 import { Loading } from "@/components/ui/state";
-import { PlayerPanel } from "@/components/ui/player";
-import { ErrorNote, PageHeader } from "@/panels/shared";
+import { usePlayerDrawer } from "@/components/ui/player";
+import { ErrorNote, LeagueHeader } from "@/panels/shared";
 import { cn } from "@/lib/utils";
 
 const PAGE = 50;
@@ -24,7 +24,7 @@ const PAGE = 50;
  * column header appears to ask.
  */
 export function FreeAgentsPanel({ competition, league }: { competition: Competition; league: League }) {
-  const [open, setOpen] = useState<string | null>(null);
+  const { openPlayer, drawer } = usePlayerDrawer(competition, league);
   const [search, setSearch] = useState("");
   const [position, setPosition] = useState("");
   const [sort, setSort] = useState<SortState | null>(null);
@@ -58,12 +58,7 @@ export function FreeAgentsPanel({ competition, league }: { competition: Competit
 
   return (
     <>
-      <PageHeader
-        title={league.name}
-        meta={league.detail}
-        href={league.url}
-        hrefLabel={`Open ${league.name} on the platform`}
-      />
+      <LeagueHeader league={league} />
 
       {page.isError && <ErrorNote error={page.error} />}
       {page.isLoading && <Loading lines={6} />}
@@ -136,7 +131,7 @@ export function FreeAgentsPanel({ competition, league }: { competition: Competit
               }}
               sort={sort}
               onSort={reset(setSort)}
-              onOpen={setOpen}
+              onOpen={openPlayer}
             />
 
             {total > PAGE && (
@@ -163,13 +158,7 @@ export function FreeAgentsPanel({ competition, league }: { competition: Competit
           </Card>
         </div>
       )}
-
-      <PlayerPanel
-        competition={competition.key}
-        league={league.league_id}
-        playerId={open}
-        onClose={() => setOpen(null)}
-      />
+      {drawer}
     </>
   );
 }

@@ -6,9 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Empty, Loading } from "@/components/ui/state";
 import { RosterTable } from "@/components/ui/roster-table";
-import { PlayerPanel } from "@/components/ui/player";
+import { usePlayerDrawer } from "@/components/ui/player";
 import { ExternalLink } from "@/components/ui/external-link";
-import { ErrorNote, PageHeader } from "@/panels/shared";
+import { ErrorNote, LeagueHeader } from "@/panels/shared";
 import { list, listItem, rise } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -55,11 +55,7 @@ export function LeaguePanel({ competition, league }: { competition: Competition;
 
   return (
     <>
-      <PageHeader
-        title={league.name}
-        meta={league.detail}
-        href={league.url}
-        hrefLabel={`Open ${league.name} on the platform`}>
+      <LeagueHeader league={league}>
         {available.length > 1 && (
           <div className="flex items-center gap-1" role="tablist">
             {available.map((t) => (
@@ -78,7 +74,7 @@ export function LeaguePanel({ competition, league }: { competition: Competition;
             ))}
           </div>
         )}
-      </PageHeader>
+      </LeagueHeader>
 
       {schedule.isLoading && <Loading lines={6} />}
       {schedule.isError && <ErrorNote error={schedule.error} />}
@@ -165,7 +161,7 @@ function Rosters({
   team: string | null;
   onPick: (teamId: string) => void;
 }) {
-  const [open, setOpen] = useState<string | null>(null);
+  const { openPlayer, drawer } = usePlayerDrawer(competition, league);
   const selected = teams.find((t) => t.team_id === team) ?? teams[0];
 
   const roster = useQuery<PlayerCard[], Error>({
@@ -212,18 +208,12 @@ function Rosters({
             <RosterTable
               players={roster.data}
               empty={{ title: "Nothing on this roster" }}
-              onOpen={setOpen}
+              onOpen={openPlayer}
             />
           )}
         </Card>
       )}
-
-      <PlayerPanel
-        competition={competition.key}
-        league={league.league_id}
-        playerId={open}
-        onClose={() => setOpen(null)}
-      />
+      {drawer}
     </div>
   );
 }

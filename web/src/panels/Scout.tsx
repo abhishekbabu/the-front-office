@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type League, type Competition, type Summary } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -6,8 +5,8 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Loading } from "@/components/ui/state";
 import { StatStrip } from "@/components/ui/stat";
 import { LineupCard, SideCard } from "@/components/ui/lineup";
-import { PlayerPanel } from "@/components/ui/player";
-import { ErrorNote, PageHeader } from "@/panels/shared";
+import { usePlayerDrawer } from "@/components/ui/player";
+import { ErrorNote, LeagueHeader } from "@/panels/shared";
 import { cn } from "@/lib/utils";
 
 /**
@@ -19,7 +18,7 @@ import { cn } from "@/lib/utils";
  * only thing on it.
  */
 export function ScoutPanel({ competition, league }: { competition: Competition; league: League }) {
-  const [open, setOpen] = useState<string | null>(null);
+  const { openPlayer, drawer } = usePlayerDrawer(competition, league);
 
   const week = useQuery<Summary, Error>({
     queryKey: ["summary", competition.key, league.league_id],
@@ -30,12 +29,7 @@ export function ScoutPanel({ competition, league }: { competition: Competition; 
     <>
       {/* The week is what this page is about, so it belongs in the header
           rather than a row down among the figures. */}
-      <PageHeader
-        title={league.name}
-        meta={[week.data?.window, league.detail].filter(Boolean).join(" · ")}
-        href={league.url}
-        hrefLabel={`Open ${league.name} on the platform`}
-      />
+      <LeagueHeader league={league} meta={[week.data?.window, league.detail].filter(Boolean).join(" · ")} />
       <StatStrip stats={week.data?.headline ?? []} />
 
       {week.isLoading && <Loading lines={4} />}
@@ -45,8 +39,8 @@ export function ScoutPanel({ competition, league }: { competition: Competition; 
         <div className="flex flex-col gap-4 p-5">
           {week.data.opponent ? (
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <SideCard side={week.data.mine} label="You" onOpen={setOpen} />
-              <SideCard side={week.data.opponent} label="Opponent" onOpen={setOpen} />
+              <SideCard side={week.data.mine} label="You" onOpen={openPlayer} />
+              <SideCard side={week.data.opponent} label="Opponent" onOpen={openPlayer} />
             </div>
           ) : (
             <LineupCard
@@ -54,7 +48,7 @@ export function ScoutPanel({ competition, league }: { competition: Competition; 
               lineup={week.data.mine?.lineup ?? []}
               bench={week.data.mine?.bench ?? []}
               swaps={week.data.swaps}
-              onOpen={setOpen}
+              onOpen={openPlayer}
             />
           )}
 
@@ -138,13 +132,7 @@ export function ScoutPanel({ competition, league }: { competition: Competition; 
           )}
         </div>
       )}
-
-      <PlayerPanel
-        competition={competition.key}
-        league={league.league_id}
-        playerId={open}
-        onClose={() => setOpen(null)}
-      />
+      {drawer}
     </>
   );
 }
