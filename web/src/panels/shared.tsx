@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink as ExternalLinkIcon, SendHorizontal } from "lucide-react";
 import { IconButton } from "@/components/ui/icon-button";
-import { ApiError, api, type Move } from "@/lib/api";
+import { ApiError, api, type League, type Move } from "@/lib/api";
 import { moveTone } from "@/lib/tone";
 import { splitMetric } from "@/lib/metric";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +64,36 @@ export function PageHeader({
       </div>
       {children}
     </div>
+  );
+}
+
+/**
+ * The header for a page about a league, which is most of them.
+ *
+ * Four panels set the same four props, and each spelled the link's label out
+ * again — so the one sentence a screen reader hears for "open this on the
+ * platform" lived in four places and could drift in any of them. `meta`
+ * defaults to the league's own detail line, which is what three of the four
+ * wanted; the week overrides it to lead with the window.
+ */
+export function LeagueHeader({
+  league,
+  meta,
+  children,
+}: {
+  league: League;
+  meta?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <PageHeader
+      title={league.name}
+      meta={meta ?? league.detail}
+      href={league.url}
+      hrefLabel={`Open ${league.name} on the platform`}
+    >
+      {children}
+    </PageHeader>
   );
 }
 

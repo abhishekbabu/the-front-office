@@ -6,7 +6,14 @@ import { fade, list, listItem, slideOver } from "@/lib/motion";
 import { IconButton } from "@/components/ui/icon-button";
 import { ExternalLink } from "@/components/ui/external-link";
 import { Loading } from "@/components/ui/state";
-import { NOT_APPLICABLE, api, type PlayerDetail, type StatTable } from "@/lib/api";
+import {
+  NOT_APPLICABLE,
+  api,
+  type Competition,
+  type League,
+  type PlayerDetail,
+  type StatTable,
+} from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -283,4 +290,30 @@ export function PlayerPanel({
       )}
     </AnimatePresence>
   );
+}
+
+/**
+ * The drawer, and the one piece of state that opens it.
+ *
+ * Every table in the app opens a player, and each panel was wiring the same
+ * three things by hand: a nullable id, the callback that sets it, and a
+ * `<PlayerPanel>` whose four props were identical everywhere. Forgetting the
+ * `onClose` half leaves a drawer that opens and never shuts, which is exactly
+ * the kind of mistake a repeated block invites.
+ *
+ * Returns the opener to hand to a table's `onOpen`, and the drawer to render.
+ */
+export function usePlayerDrawer(competition: Competition, league: League) {
+  const [playerId, setPlayerId] = useState<string | null>(null);
+  return {
+    openPlayer: setPlayerId,
+    drawer: (
+      <PlayerPanel
+        competition={competition.key}
+        league={league.league_id}
+        playerId={playerId}
+        onClose={() => setPlayerId(null)}
+      />
+    ),
+  };
 }
