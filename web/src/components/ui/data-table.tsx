@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { m } from "motion/react";
 import { list, listItem } from "@/lib/motion";
@@ -31,45 +32,109 @@ export function DataTable<Row extends { player_id: string; columns: Record<strin
   /** The column currently ordering the rows, where anything is. */
   sort?: SortState | null;
   /**
-   * Called when a header is clicked. Its presence is what makes the table
-   * sortable: a caller holding the whole list passes one that sorts locally,
-   * and a caller holding one page of four thousand passes one that asks the
-   * server — which is the only correct answer there, since sorting fifty rows
-   * of a ranking answers a different question than sorting the ranking.
+   * Called when a header is clicked, with null where the click cleared the
+   * sort. Its presence is what makes the table sortable: a caller holding the
+   * whole list passes one that sorts locally, and a caller holding one page of
+   * four thousand passes one that asks the server — which is the only correct
+   * answer there, since sorting fifty rows of a ranking answers a different
+   * question than sorting the ranking.
    */
-  onSort?: (next: SortState) => void;
+  onSort?: (next: SortState | null) => void;
 }) {
   const columns = rows[0] ? Object.keys(rows[0].columns) : [];
   const isNumeric = (column: string) => numeric?.has(column) ?? false;
   const isActive = (column: string) => sort?.column === column;
 
+  /**
+   * Column widths, measured once from the real content and then held.
+   *
+   * Left to itself the browser sizes a table from the cells it can see, and
+   * sorting changes which cells those are — so every column shifted a little
+   * and the sorted one jumped, moving whatever you meant to click next.
+   *
+   * A proportional rule was the obvious fix and cannot work: `Status` carries
+   * a pill and `Pos` carries three letters, and no rule that knows only
+   * "not a number" can give one 145px and the other 65. So the first paint is
+   * measured — with the browser doing what it is good at — and every render
+   * after it uses that answer. Stored as percentages, so the table still
+   * follows its container without being measured again.
+   *
+   * Re-measured only when the columns themselves change, which is a different
+   * competition or a different league, and never on a sort.
+   */
+  const key = columns.join("|");
+  const [frozen, setFrozen] = useState<{ key: string; widths: string[] } | null>(null);
+  const head = useRef<HTMLTableRowElement>(null);
+  const widths = frozen?.key === key ? frozen.widths : null;
+
+  useLayoutEffect(() => {
+    if (!head.current || widths) return;
+    const cells = [...head.current.children] as HTMLElement[];
+    const sizes = cells.map((cell) => cell.getBoundingClientRect().width);
+    const total = sizes.reduce((sum, size) => sum + size, 0);
+    if (!total) return;
+    setFrozen({ key, widths: sizes.map((size) => `${((size / total) * 100).toFixed(3)}%`) });
+  }, [key, widths]);
+
+  /**
+   * Biggest first, then smallest, then back to the order it arrived in.
+   *
+   * The third click is the one that matters: the order rows come in is an
+   * answer of its own — the competition's own ranking, or the lineup in the
+   * order it is played — and without a way back the only route to it was to
+   * leave the page and return.
+   */
+  const nextSort = (column: string): SortState | null => {
+    if (!isActive(column)) return { column, descending: true };
+    if (sort?.descending) return { column, descending: false };
+    return null;
+  };
+
+  const sortLabel = (column: string) => {
+    if (!isActive(column)) return `Sort by ${column}, highest first`;
+    return sort?.descending ? `Sort by ${column}, lowest first` : `Clear sorting by ${column}`;
+  };
+
   return (
-    <Table>
+    // Fixed only once the widths are known: until then the browser sizes the
+    // columns from the content, which is the measurement being taken.
+    <Table className={cn(widths && "table-fixed")}>
+      {widths && (
+        <colgroup>
+          {columns.map((column, i) => (
+            <col key={column} style={{ width: widths[i] }} />
+          ))}
+        </colgroup>
+      )}
       <thead>
-        <tr>
+        <tr ref={head}>
           {columns.map((column) => (
             <Th key={column} className={cn(isNumeric(column) && "text-right", onSort && "p-0")}>
               {onSort ? (
                 <button
                   type="button"
-                  onClick={() => onSort({ column, descending: !isActive(column) || !sort?.descending })}
-                  aria-label={`Sort by ${column}`}
+                  onClick={() => onSort(nextSort(column))}
+                  aria-label={sortLabel(column)}
+                  title={sortLabel(column)}
+                  // px-4 to match a cell's, so a heading sits over its column
+                  // rather than four pixels inside it. Reversed in a figures
+                  // column so the label stays flush with the digits under it
+                  // and the arrow's reserved space falls on the far side.
                   className={cn(
-                    "flex w-full items-center gap-1 px-3 py-2 transition-colors hover:text-foreground",
-                    isNumeric(column) && "justify-end",
+                    "flex w-full items-center gap-1 px-4 py-2 transition-colors hover:text-foreground",
+                    isNumeric(column) && "flex-row-reverse justify-start",
                     isActive(column) && "text-foreground",
                   )}
                 >
-                  {column}
-                  {/* Only the active column carries an arrow. One on every
-                      header is decoration; one on the sorted column is the
-                      answer to "what am I looking at". */}
-                  {isActive(column) &&
-                    (sort?.descending ? (
-                      <ArrowDown className="size-3 shrink-0" aria-hidden />
-                    ) : (
-                      <ArrowUp className="size-3 shrink-0" aria-hidden />
-                    ))}
+                  <span className="truncate">{column}</span>
+                  {/* Only the sorted column shows an arrow — one on every
+                      header is decoration, one here answers "what am I looking
+                      at". The space is kept on all of them regardless, or
+                      sorting a column widens it by the width of an arrow. */}
+                  <span className="size-3 shrink-0" aria-hidden>
+                    {isActive(column) &&
+                      (sort?.descending ? <ArrowDown className="size-3" /> : <ArrowUp className="size-3" />)}
+                  </span>
                 </button>
               ) : (
                 column
@@ -93,7 +158,7 @@ export function DataTable<Row extends { player_id: string; columns: Record<strin
             {columns.map((column) => {
               const value = row.columns[column] ?? "";
               return (
-                <Td key={column} className={cn(isNumeric(column) && "text-right")}>
+                <Td key={column} className={cn("truncate", isNumeric(column) && "text-right")}>
                   {render?.(column, value, row) ?? value}
                 </Td>
               );
