@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Setting } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip } from "@/components/ui/tooltip";
 import { IconButton } from "@/components/ui/icon-button";
 import { Loading } from "@/components/ui/state";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -215,13 +216,11 @@ function Row({
           </Badge>
         )}
         {setting.shadowed && (
-          <Badge
-            variant="warn"
-            appearance="status"
-            title="This is exported in your shell, which pydantic reads ahead of .env — saving here will not change the running value."
-          >
-            shell wins
-          </Badge>
+          <Tooltip label="This is exported in your shell, which pydantic reads ahead of .env — saving here will not change the running value.">
+            <Badge variant="warn" appearance="status">
+              shell wins
+            </Badge>
+          </Tooltip>
         )}
       </div>
       <Control setting={setting} draft={draft} onChange={onChange} />
