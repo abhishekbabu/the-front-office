@@ -255,7 +255,7 @@ PROJECTION_PAYLOAD = [
 
 
 def test_projections_are_keyed_by_player_and_use_the_league_currency(tmp_path: Path) -> None:
-    client, _ = _client({"projections": PROJECTION_PAYLOAD}, tmp_path)
+    client, _ = _client({"projections/nfl": PROJECTION_PAYLOAD}, tmp_path)
     proj = client.get_projections("2026", 1, "pts_ppr")
     assert proj["1"].points == 22.4
     assert proj["1"].opponent == "MIA"
@@ -263,21 +263,33 @@ def test_projections_are_keyed_by_player_and_use_the_league_currency(tmp_path: P
 
 
 def test_a_different_scoring_format_reads_a_different_field(tmp_path: Path) -> None:
-    client, _ = _client({"projections": PROJECTION_PAYLOAD}, tmp_path)
+    client, _ = _client({"projections/nfl": PROJECTION_PAYLOAD}, tmp_path)
     assert client.get_projections("2026", 1, "pts_std")["1"].points == 18.1
 
 
 def test_players_without_a_projection_are_omitted(tmp_path: Path) -> None:
-    client, _ = _client({"projections": PROJECTION_PAYLOAD}, tmp_path)
+    client, _ = _client({"projections/nfl": PROJECTION_PAYLOAD}, tmp_path)
     assert "2" not in client.get_projections("2026", 1, "pts_ppr")
 
 
 def test_projection_requests_cover_every_fantasy_position(tmp_path: Path) -> None:
-    client, session = _client({"projections": []}, tmp_path)
+    client, session = _client({"projections/nfl": []}, tmp_path)
     client.get_projections("2026", 1, "pts_ppr")
     url = session.requests[0]
     for position in ("QB", "RB", "WR", "TE", "K", "DEF"):
         assert f"position[]={position}" in url
+
+
+def test_projections_are_asked_for_by_sport(tmp_path: Path) -> None:
+    """The sport segment is required and its absence is not an error.
+
+    Sleeper answers the path without it with 200 and an empty list, so every
+    projection silently became a zero: no points, no opponent, and a lineup
+    that read as though no game had been scheduled all season.
+    """
+    client, session = _client({"projections/nfl": []}, tmp_path)
+    client.get_projections("2026", 1, "pts_ppr")
+    assert "/projections/nfl/2026/1" in session.requests[0]
 
 
 def test_injury_status_marks_a_player_questionable(tmp_path: Path) -> None:
@@ -288,12 +300,12 @@ def test_injury_status_marks_a_player_questionable(tmp_path: Path) -> None:
             "stats": {"pts_ppr": 9.0},
         }
     ]
-    client, _ = _client({"projections": payload}, tmp_path)
+    client, _ = _client({"projections/nfl": payload}, tmp_path)
     assert client.get_projections("2026", 1, "pts_ppr")["1"].is_questionable
 
 
 def test_a_healthy_player_is_not_questionable(tmp_path: Path) -> None:
-    client, _ = _client({"projections": PROJECTION_PAYLOAD}, tmp_path)
+    client, _ = _client({"projections/nfl": PROJECTION_PAYLOAD}, tmp_path)
     assert not client.get_projections("2026", 1, "pts_ppr")["1"].is_questionable
 
 
