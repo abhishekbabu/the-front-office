@@ -28,7 +28,7 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
 )
 from the_front_office.config.constants import FPL_SCOUT_PROMPT
 from the_front_office.domain.errors import FPLAPIError
-from the_front_office.domain.models import SportContext, Stat
+from the_front_office.domain.models import CompetitionContext, Stat
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ def build(
     players: list[Player],
     current_starters: list[Player],
     current_bench: list[Player],
-) -> SportContext:
+) -> CompetitionContext:
     """The scouting prompt, and the parts it was assembled from."""
     entry = client.get_entry(entry_id)
     catalog = client.get_players()
@@ -73,7 +73,7 @@ def build(
     situation = _situation(entry, league_id, squad, upcoming.name, upcoming.average_score)
     constraints = _constraints(squad, allowance, best, current_points)
 
-    return SportContext(
+    return CompetitionContext(
         headline=headline(entry, league_id, squad, allowance, best, current_points, upcoming),
         prompt=FPL_SCOUT_PROMPT.format(
             situation=situation,

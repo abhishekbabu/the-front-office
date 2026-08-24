@@ -13,7 +13,7 @@ from reports import MOCK_NBA_VERDICT
 
 from the_front_office.application.trading import TradeEngine
 from the_front_office.domain.errors import AIResponseError, PlayerNotFoundError, TradeParseError
-from the_front_office.domain.models import SportContext, TradeProposal, TradeVerdict
+from the_front_office.domain.models import CompetitionContext, TradeProposal, TradeVerdict
 
 
 class FakeTradeProvider:
@@ -24,11 +24,11 @@ class FakeTradeProvider:
         self.error = error
         self.calls: list[tuple[str, TradeProposal]] = []
 
-    def build_trade_context(self, league_id: str, proposal: TradeProposal) -> SportContext:
+    def build_trade_context(self, league_id: str, proposal: TradeProposal) -> CompetitionContext:
         self.calls.append((league_id, proposal))
         if self.error:
             raise self.error
-        return SportContext(prompt="TRADE PROMPT", situation="matchup")
+        return CompetitionContext(prompt="TRADE PROMPT", situation="matchup")
 
 
 def _engine(provider: Any = None, ai: Any = None) -> TradeEngine:

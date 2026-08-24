@@ -21,7 +21,7 @@ from the_front_office.adapters.outbound.platforms.sleeper.types import (
 )
 from the_front_office.config.constants import NFL_SCOUT_PROMPT
 from the_front_office.domain.errors import SleeperAPIError
-from the_front_office.domain.models import SportContext, Stat
+from the_front_office.domain.models import CompetitionContext, Stat
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ AVAILABLE_PLAYER_LIMIT = 25
 TRENDING_LIMIT = 10
 
 
-def build(client: SleeperClient, state: Week, league_id: str) -> SportContext:
+def build(client: SleeperClient, state: Week, league_id: str) -> CompetitionContext:
     """The scouting prompt, and the parts it was assembled from."""
     league, roster, week = state.league, state.roster, state.week
     projections, players, projected = state.projections, state.players, state.projected
@@ -80,7 +80,7 @@ def build(client: SleeperClient, state: Week, league_id: str) -> SportContext:
         trending_str=trending_str,
     )
 
-    return SportContext(
+    return CompetitionContext(
         prompt=prompt,
         situation=situation,
         constraints=constraints,

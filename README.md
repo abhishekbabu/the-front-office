@@ -20,9 +20,9 @@ application/  use cases over ports: ScoutEngine, TradeEngine.
 adapters/
   inbound/    drivers — the CLI and the Streamlit UI.
   outbound/   driven — platform clients, the language model, and the
-              per-sport providers implementing CompetitionProvider.
+              per-competition providers implementing CompetitionProvider.
 bootstrap.py  the composition root: the only module naming a concrete
-              implementation. Registers sports and wires engines.
+              implementation. Registers competitions and wires engines.
 ```
 
 No adapter is named anywhere in `domain/` or `application/`; the engines take an
@@ -89,7 +89,7 @@ Without `just`: `uv sync && uv run pre-commit install`.
 The UI's **Settings** page writes `.env` directly, so a fresh machine can be
 configured without opening an editor. Secrets are write-only there: the server
 reports whether one is set, never what it is. Saving re-reads configuration into
-the running process, so a sport becomes available without a restart.
+the running process, so a competition becomes available without a restart.
 
 **On a second machine**, copy `.env` across by hand — the four secrets
 (`YAHOO_CLIENT_ID`, `YAHOO_CLIENT_SECRET`, `GOOGLE_API_KEY`, `LOGFIRE_TOKEN`)
@@ -203,10 +203,10 @@ reporting success on an inert token.
 
 | Command | Description |
 |---------|-------------|
-| `/leagues` | Every league you are in, per sport |
-| `/roster [sport]` | Your squad |
-| `/scout [sport]` | Analyze a week. No sport runs every configured one |
-| `/trade [sport] <text>` | Evaluate a trade, e.g. `/trade nfl Give Bijan, Get Puka`. The sport is optional when only one supports trades. FPL is excluded — its managers transfer against the market rather than trading each other |
+| `/leagues` | Every league you are in, per competition |
+| `/roster [competition]` | Your squad |
+| `/scout [competition]` | Analyze a week. No competition runs every configured one |
+| `/trade [competition] <text>` | Evaluate a trade, e.g. `/trade nfl Give Bijan, Get Puka`. The competition is optional when only one supports trades. FPL is excluded — its managers transfer against the market rather than trading each other |
 | `/help` · `/quit` | — |
 
 `GOOGLE_API_KEY` is optional. Without it the app has no analysis to offer, so
@@ -271,7 +271,7 @@ the-front-office/
 │   ├── adapters/
 │   │   ├── inbound/       # drivers: cli/, web/
 │   │   └── outbound/      # driven: llm/, platforms/, competitions/
-│   ├── bootstrap.py       # composition root: sport registry + engine wiring
+│   ├── bootstrap.py       # composition root: competition registry + engine wiring
 │   └── config/            # validated settings + prompt templates
 ├── web/                   # React UI: src/{components,panels,themes,lib}
 ├── tests/                 # hermetic pytest suite

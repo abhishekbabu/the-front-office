@@ -61,7 +61,7 @@ export default function App() {
   const path = useLocation().pathname;
   const route = parse(path);
 
-  const competitions = useQuery({ queryKey: ["competitions"], queryFn: api.sports });
+  const competitions = useQuery({ queryKey: ["competitions"], queryFn: api.competitions });
   const capabilities = useQuery({ queryKey: ["capabilities"], queryFn: api.capabilities });
   const ai = capabilities.data?.ai ?? false;
 

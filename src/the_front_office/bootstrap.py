@@ -158,11 +158,11 @@ REGISTRY: tuple[CompetitionEntry, ...] = (
 )
 
 
-def all_sports() -> tuple[CompetitionEntry, ...]:
+def all_competitions() -> tuple[CompetitionEntry, ...]:
     return REGISTRY
 
 
-def configured_sports() -> list[CompetitionEntry]:
+def configured_competitions() -> list[CompetitionEntry]:
     """Only the sports this user has credentials for."""
     return [entry for entry in REGISTRY if entry.is_configured()]
 

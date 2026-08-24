@@ -26,7 +26,7 @@ async function waitForServer(timeoutMs = 60_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`${BASE}/api/sports`);
+      const response = await fetch(`${BASE}/api/competitions`);
       if (response.ok) return;
     } catch {
       /* not up yet */
@@ -46,7 +46,7 @@ async function waitForServer(timeoutMs = 60_000) {
  */
 async function refuseStaleServer() {
   try {
-    await fetch(`${BASE}/api/sports`);
+    await fetch(`${BASE}/api/competitions`);
   } catch {
     return; // nothing listening, which is what we want
   }
@@ -103,7 +103,7 @@ async function main() {
     // screenshot run that depends on finding a control by its label breaks
     // whenever that control changes shape — as it did when the rail became
     // links rather than buttons.
-    const competitions = await (await fetch(`${BASE}/api/sports`)).json();
+    const competitions = await (await fetch(`${BASE}/api/competitions`)).json();
     // Both analysis views need a model. Without one the app does not offer
     // them, so the address falls back to this week — and a shot taken there
     // would be filed under a name for a page nobody can reach.

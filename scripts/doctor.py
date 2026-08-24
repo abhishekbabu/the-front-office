@@ -17,7 +17,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from the_front_office.bootstrap import all_sports  # noqa: E402
+from the_front_office.bootstrap import all_competitions  # noqa: E402
 from the_front_office.config.settings import PROJECT_ROOT as SETTINGS_ROOT  # noqa: E402
 from the_front_office.config.settings import AppSettings, settings  # noqa: E402
 
@@ -74,7 +74,9 @@ def main() -> int:
     declared = _declared()
     # One column width across all three tables, so a long sport label does not
     # push its own row out of alignment with the rest.
-    width = max([len(var) for var in declared] + [len(e.label) for e in all_sports()] + [len("Tracing (Logfire)")])
+    width = max(
+        [len(var) for var in declared] + [len(e.label) for e in all_competitions()] + [len("Tracing (Logfire)")]
+    )
 
     print("  Settings")
     print("  " + "─" * (width + 22))
@@ -86,7 +88,7 @@ def main() -> int:
     print()
     print("  Sports")
     print("  " + "─" * (width + 22))
-    for entry in all_sports():
+    for entry in all_competitions():
         state = "ready" if entry.is_configured() else f"needs {entry.requires}"
         print(f"  {entry.label.ljust(width)}   {state}")
 

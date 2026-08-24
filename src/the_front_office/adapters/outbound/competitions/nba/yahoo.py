@@ -31,12 +31,12 @@ from the_front_office.domain.errors import (
     TeamNotFoundError,
 )
 from the_front_office.domain.models import (
+    CompetitionContext,
     LeagueSchedule,
     PlayerCard,
     PlayerDetail,
     PlayerPage,
     PlayerQuery,
-    SportContext,
     StandingRow,
     Stat,
     StatGroup,
@@ -212,14 +212,14 @@ class YahooNBAProvider:
         base = f"{wins}-{losses}"
         return f"{base}-{ties}" if ties else base
 
-    def build_context(self, league_id: str = "") -> SportContext:
+    def build_context(self, league_id: str = "") -> CompetitionContext:
         """Gather league state and render the scouting prompt."""
         self._select_into(league_id)
         return self._build_context()
 
     # ── trades ──────────────────────────────────────────────────────
 
-    def build_trade_context(self, league_id: str, proposal: TradeProposal) -> SportContext:
+    def build_trade_context(self, league_id: str, proposal: TradeProposal) -> CompetitionContext:
         """Price both sides of a trade against the current roster."""
         self._select_into(league_id)
 
@@ -246,7 +246,7 @@ class YahooNBAProvider:
             matchup_context=matchup.context,
             roster_str=roster_str,
         )
-        return SportContext(prompt=prompt, situation=matchup.context)
+        return CompetitionContext(prompt=prompt, situation=matchup.context)
 
     def _find_player(self, name: str) -> Player | None:
         """The Yahoo player a name refers to, or None."""
@@ -416,7 +416,7 @@ class YahooNBAProvider:
         logger.debug(f"Matched projections for {len(index)} players")
         return index
 
-    def _build_context(self) -> SportContext:
+    def _build_context(self) -> CompetitionContext:
         """Gather all data and build the initial AI prompt.
 
         Returns the prompt plus the pieces that make it up, so a follow-up
@@ -511,7 +511,7 @@ class YahooNBAProvider:
             recommendation_instructions=recommendation_instructions,
         )
 
-        return SportContext(
+        return CompetitionContext(
             prompt=prompt,
             situation=matchup.context,
             constraints=trans_context,

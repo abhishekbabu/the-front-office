@@ -279,7 +279,7 @@ const put = <T,>(path: string, body: unknown) =>
   request<T>(path, { method: "PUT", body: JSON.stringify(body) });
 
 export const api = {
-  sports: () => request<Competition[]>("/api/sports"),
+  competitions: () => request<Competition[]>("/api/competitions"),
   leagues: (competition: string) => request<League[]>(`/api/${competition}/leagues`),
   roster: (competition: string, league: string) => request<PlayerCard[]>(`/api/${competition}/leagues/${league}/roster`),
   player: (competition: string, league: string, id: string) =>

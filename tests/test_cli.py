@@ -95,23 +95,23 @@ def test_providers_are_built_once_per_session() -> None:
 
 def test_no_sport_argument_runs_every_configured_sport() -> None:
     entries = [fake_entry("nfl"), fake_entry("nba", "NBA (Yahoo)")]
-    assert cmd._resolve_sports([], entries) == entries
+    assert cmd._resolve_competitions([], entries) == entries
 
 
 def test_a_named_sport_runs_only_that_one() -> None:
     nfl, nba = fake_entry("nfl"), fake_entry("nba", "NBA (Yahoo)")
-    resolved = cmd._resolve_sports(["nfl"], [nfl, nba])
+    resolved = cmd._resolve_competitions(["nfl"], [nfl, nba])
     assert [e.competition for e in resolved] == ["nfl"]
 
 
-def test_an_unknown_sport_resolves_to_nothing(capsys: pytest.CaptureFixture[str]) -> None:
-    assert cmd._resolve_sports(["cricket"], [fake_entry()]) == []
-    assert "Unknown sport" in capsys.readouterr().out
+def test_an_unknown_competition_resolves_to_nothing(capsys: pytest.CaptureFixture[str]) -> None:
+    assert cmd._resolve_competitions(["cricket"], [fake_entry()]) == []
+    assert "Unknown competition" in capsys.readouterr().out
 
 
 def test_an_unconfigured_sport_names_what_to_set(capsys: pytest.CaptureFixture[str]) -> None:
     """Asking for a sport you have no credentials for must explain, not crash."""
-    assert cmd._resolve_sports(["nba"], [fake_entry("nfl")]) == []
+    assert cmd._resolve_competitions(["nba"], [fake_entry("nfl")]) == []
     out = capsys.readouterr().out
     assert "not configured" in out
     assert "YAHOO_CLIENT_ID" in out
@@ -151,7 +151,9 @@ def test_unknown_command_is_reported(capsys: pytest.CaptureFixture[str]) -> None
     assert "Unknown command" in capsys.readouterr().out
 
 
-def test_help_names_the_configured_sports(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+def test_help_names_the_configured_competitions(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr("the_front_office.bootstrap.ai_available", lambda: True)
     cmd._print_help([fake_entry("nfl"), fake_entry("nba", "NBA (Yahoo)")])
     assert "nfl | nba" in capsys.readouterr().out
@@ -216,18 +218,18 @@ class RecordingProvider(FakeProvider):
         self.error = error
 
     def build_context(self, league_id: str) -> Any:
-        from the_front_office.domain.models import SportContext
+        from the_front_office.domain.models import CompetitionContext
 
         if self.error:
             raise self.error
-        return SportContext(prompt="PROMPT")
+        return CompetitionContext(prompt="PROMPT")
 
     def build_trade_context(self, league_id: str, proposal: Any) -> Any:
-        from the_front_office.domain.models import SportContext
+        from the_front_office.domain.models import CompetitionContext
 
         if self.error:
             raise self.error
-        return SportContext(prompt="TRADE PROMPT")
+        return CompetitionContext(prompt="TRADE PROMPT")
 
 
 def _entry_with(provider: Any, competition: str = "nfl", trades: bool = False) -> Any:
@@ -325,7 +327,7 @@ def _tradeable(competition: str) -> Any:
 
 def test_a_lone_trading_sport_needs_no_argument() -> None:
     """Nothing to disambiguate, so the whole line is the trade description."""
-    entry, args = cmd._trade_sport([_tradeable("nfl")], ["Give", "A,", "Get", "B"])
+    entry, args = cmd._trade_competition([_tradeable("nfl")], ["Give", "A,", "Get", "B"])
     assert entry is not None
     assert entry.competition == "nfl"
     assert args == ["Give", "A,", "Get", "B"]
@@ -333,7 +335,7 @@ def test_a_lone_trading_sport_needs_no_argument() -> None:
 
 def test_a_named_sport_is_split_off_the_description() -> None:
     entries = [_tradeable("nba"), _tradeable("nfl")]
-    entry, args = cmd._trade_sport(entries, ["nfl", "Give", "A,", "Get", "B"])
+    entry, args = cmd._trade_competition(entries, ["nfl", "Give", "A,", "Get", "B"])
     assert entry is not None
     assert entry.competition == "nfl"
     assert args == ["Give", "A,", "Get", "B"]
@@ -344,7 +346,7 @@ def test_several_sports_without_one_named_refuses_to_guess(
 ) -> None:
     """A trade names players on one platform; running it against both is meaningless."""
     entries = [_tradeable("nba"), _tradeable("nfl")]
-    entry, _ = cmd._trade_sport(entries, ["Give", "A,", "Get", "B"])
+    entry, _ = cmd._trade_competition(entries, ["Give", "A,", "Get", "B"])
     assert entry is None
     out = capsys.readouterr().out
     assert "Name one" in out
@@ -352,14 +354,14 @@ def test_several_sports_without_one_named_refuses_to_guess(
 
 
 def test_a_leading_word_that_is_not_a_sport_stays_in_the_description() -> None:
-    entry, args = cmd._trade_sport([_tradeable("nfl")], ["Give", "nfl-ish", "player"])
+    entry, args = cmd._trade_competition([_tradeable("nfl")], ["Give", "nfl-ish", "player"])
     assert entry is not None
     assert args == ["Give", "nfl-ish", "player"]
 
 
 def test_an_unconfigured_trading_sport_says_what_to_set(capsys: pytest.CaptureFixture[str]) -> None:
     """`nba` trades, but is absent from the trade-capable list here."""
-    entry, args = cmd._trade_sport([_tradeable("nfl")], ["nba", "Give", "A"])
+    entry, args = cmd._trade_competition([_tradeable("nfl")], ["nba", "Give", "A"])
 
     assert entry is None
     assert "is not configured" in capsys.readouterr().out
@@ -378,7 +380,7 @@ def test_usage_is_shown_when_only_a_sport_is_given(capsys: pytest.CaptureFixture
 
 def test_a_sport_that_cannot_trade_at_all_says_so(capsys: pytest.CaptureFixture[str]) -> None:
     """FPL managers transfer against the market, so there is no trade to price."""
-    entry, args = cmd._trade_sport([_tradeable("nfl")], ["premier-league", "Give", "Saka"])
+    entry, args = cmd._trade_competition([_tradeable("nfl")], ["premier-league", "Give", "Saka"])
 
     assert entry is None
     assert "does not support trade evaluation" in capsys.readouterr().out

@@ -44,13 +44,13 @@ from the_front_office.config.settings import settings
 from the_front_office.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError, TeamNotFoundError
 from the_front_office.domain.models import (
     NOT_APPLICABLE,
+    CompetitionContext,
     LeagueSchedule,
     PlayerCard,
     PlayerDetail,
     PlayerPage,
     PlayerQuery,
     Side,
-    SportContext,
     Spot,
     Stat,
     StatGroup,
@@ -377,7 +377,7 @@ class SleeperNFLProvider:
 
     # ── trades ──────────────────────────────────────────────────────
 
-    def build_trade_context(self, league_id: str, proposal: TradeProposal) -> SportContext:
+    def build_trade_context(self, league_id: str, proposal: TradeProposal) -> CompetitionContext:
         """Price both sides of a trade against the current roster."""
         league = self._league(league_id)
         roster = self._my_roster(league_id)
@@ -409,7 +409,7 @@ class SleeperNFLProvider:
             roster_str="".join(roster_lines.values()),
             scoring_label=SCORING_LABELS.get(league.scoring_format, league.scoring_format),
         )
-        return SportContext(prompt=text, situation=situation, constraints=constraints, roster_lines=roster_lines)
+        return CompetitionContext(prompt=text, situation=situation, constraints=constraints, roster_lines=roster_lines)
 
     @staticmethod
     def _name_index(
@@ -428,7 +428,7 @@ class SleeperNFLProvider:
 
     # ── context ─────────────────────────────────────────────────────
 
-    def build_context(self, league_id: str) -> SportContext:
+    def build_context(self, league_id: str) -> CompetitionContext:
         """Gather the week, then render it as the text a model reads."""
         return prompt.build(self.client, self._week(league_id), league_id)
 

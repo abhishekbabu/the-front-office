@@ -1,9 +1,9 @@
-"""Sport-agnostic report types.
+"""Competition-agnostic report types.
 
-Sports differ in almost every detail — categories versus points, adds versus a
-transfer budget, head-to-head versus league rank — but a report has the same
-shape in each: read the situation, propose a ranked set of moves, summarize the
-plan. One renderer, one chat-seeding path and one UI serve them all.
+Competitions differ in almost every detail — categories versus points, adds
+versus a transfer budget, head-to-head versus league rank — but a report has
+the same shape in each: read the situation, propose a ranked set of moves,
+summarize the plan. One renderer, one chat-seeding path and one UI serve them all.
 """
 
 from dataclasses import dataclass, field
@@ -68,14 +68,15 @@ class Stat(BaseModel):
 class Spot(BaseModel):
     """One place in a lineup, or one player on a bench.
 
-    Sport-neutral on purpose: a slot is "FLEX" in football and "" in FPL, where
-    a formation has positions but not named places, and both render the same.
+    Competition-neutral on purpose: a slot is "FLEX" in the NFL and "" in the
+    Premier League, where a formation has positions but not named places, and
+    both render the same.
     """
 
-    player_id: str = Field(default="", description="Identifier this sport uses, for opening the player.")
-    slot: str = Field(default="", description="Named place in the lineup, where the sport has them.")
+    player_id: str = Field(default="", description="Identifier this competition uses, for opening the player.")
+    slot: str = Field(default="", description="Named place in the lineup, where the competition has them.")
     player: str
-    detail: str = Field(description="Position, club and opponent, as that sport words it.")
+    detail: str = Field(description="Position, club and opponent, as that competition words it.")
     value: str = Field(description="The forward-looking number, with its unit.")
     tone: Tone = "neutral"
 
@@ -101,7 +102,7 @@ class PlayerQuery(BaseModel):
 
     offset: int = Field(default=0, ge=0)
     limit: int = Field(default=50, ge=1, le=200)
-    sort: str = Field(default="", description="Column to order by. Empty means the sport's own ranking.")
+    sort: str = Field(default="", description="Column to order by. Empty means the competition's own ranking.")
     descending: bool = True
     position: str = Field(default="", description="Keep only this position. Empty keeps all.")
     search: str = Field(default="", description="Substring match across a row's own values.")
@@ -122,10 +123,11 @@ class PlayerPage(BaseModel):
 class PlayerCard(BaseModel):
     """A player as a row in a roster table.
 
-    `columns` is the sport's own vocabulary — FPL sends Price and xPts, football
-    sends Slot — so a client renders whatever keys arrive rather than being
-    taught each sport. What sits beside it is what a table needs and a column
-    should not be: an identifier to open, and whether the row wants attention.
+    `columns` is the competition's own vocabulary — the Premier League sends
+    Price and xPts, the NFL sends Slot — so a client renders whatever keys
+    arrive rather than being taught each one. What sits beside it is what a
+    table needs and a column should not be: an identifier to open, and whether
+    the row wants attention.
     """
 
     player_id: str
@@ -136,7 +138,7 @@ class PlayerCard(BaseModel):
             "The number behind a formatted column, for the columns that have one — "
             "'Price' reads '£15.5m' and sorts as 15.5. Sorting the string instead puts "
             "£9.0m above £15.5m, and parsing it back means teaching every client each "
-            "sport's units."
+            "competition's units."
         ),
     )
     tone: Tone = "neutral"
@@ -192,7 +194,7 @@ class PlayerDetail(BaseModel):
     """Everything worth knowing about one player, on demand.
 
     Fetched when someone asks rather than carried by every row: the interesting
-    numbers differ per sport and there are a dozen of them, which is a table
+    numbers differ per competition and there are a dozen of them, which is a table
     nobody can read attached to a payload nobody needs.
     """
 
@@ -223,7 +225,7 @@ class PlayerDetail(BaseModel):
     image_url: str = Field(
         default="",
         description=(
-            "Portrait on the platform's own CDN, or empty where that sport has none. "
+            "Portrait on the platform's own CDN, or empty where that competition has none. "
             "A URL rather than bytes: it is the client that has a cache for it."
         ),
     )
@@ -267,7 +269,7 @@ class Summary(BaseModel):
         description=(
             "One-time advantages the manager can spend, and what has become of each — "
             "carrying its own title, because the league names them: FPL calls them chips. "
-            "None in a sport that has no such thing."
+            "None in a competition that has no such thing."
         ),
     )
 
@@ -329,7 +331,7 @@ class Match(BaseModel):
     label: str = Field(default="", description="When it kicks off, already formatted.")
     home: str
     away: str
-    detail: str = Field(default="", description="Difficulty, status, or whatever that sport reads off a fixture.")
+    detail: str = Field(default="", description="Difficulty, status, or whatever that competition reads off a fixture.")
     tone: Tone = "neutral"
 
 
@@ -359,7 +361,7 @@ class LeagueSchedule(BaseModel):
 
 
 class ScoutReport(BaseModel):
-    """A scouting report for any sport."""
+    """A scouting report for any competition."""
 
     situation: str = Field(description="Where the team stands: the matchup, the run of fixtures, the league position.")
     focus: list[str] = Field(
@@ -381,7 +383,7 @@ class ScoutReport(BaseModel):
 
 
 class TradeVerdict(BaseModel):
-    """Evaluation of a proposed trade, in any sport.
+    """Evaluation of a proposed trade, in any competition.
 
     Field names are in whatever currency the league scores in: `gains` holds
     categories in a 9-cat league and position depth in a points league.
@@ -428,7 +430,7 @@ class TradeProposal:
 
 
 @dataclass
-class SportContext:
+class CompetitionContext:
     """A rendered prompt plus the parts it was assembled from.
 
     Keeping the parts lets a follow-up chat be seeded with a briefing rather

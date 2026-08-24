@@ -31,8 +31,8 @@ def test_nba_season_rolls_over_in_september(when: datetime, expected: int) -> No
 # ── provider construction ───────────────────────────────────────────────
 
 
-def test_unknown_sport_raises() -> None:
-    with pytest.raises(LeagueNotFoundError, match="unknown sport"):
+def test_unknown_competition_raises() -> None:
+    with pytest.raises(LeagueNotFoundError, match="unknown competition"):
         data.build_provider("cricket")
 
 
@@ -43,7 +43,7 @@ def test_an_unconfigured_sport_names_what_to_set(monkeypatch: pytest.MonkeyPatch
         data.build_provider("nba")
 
 
-def test_configured_sports_reflect_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_configured_competitions_reflect_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     from the_front_office.config.settings import settings
 
     assert data.available_sports() == []

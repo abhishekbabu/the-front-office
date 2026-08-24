@@ -34,15 +34,15 @@ and FPL timestamps have one, so parse via `_parse_deadline`. Keep a date label
 publishes no tip-off time, so whether a game has happened is settled by its date
 against today, and only a game today reads its `status`.
 
-**Naming.** `<Platform>Client` for API clients, `<Platform><Sport>Provider` for
+**Naming.** `<Platform>Client` for API clients, `<Platform><Competition>Provider` for
 providers, `<Verb>Engine` for use cases, `<What>Error` for domain errors.
-Sport-specific constants lead with the sport: `NBA_SCOUT_PROMPT`,
+Competition-specific constants lead with it: `NBA_SCOUT_PROMPT`,
 `MOCK_NFL_REPORT`. The word for a set of players a manager owns is **roster**,
 everywhere. Test modules mirror the module they cover.
 
-Under `adapters/outbound/competitions/<sport>/`, the provider file is named for the
+Under `adapters/outbound/competitions/<competition>/`, the provider file is named for the
 platform that owns the **league** — `nba/yahoo.py`, `nfl/sleeper.py`. Other
-platforms a sport reads from are role-named helpers (`projections.py`,
+platforms a competition reads from are role-named helpers (`projections.py`,
 `lineup.py`), never a second file named after a platform. A provider that
 outgrows one file splits the same way each time — `week.py` (state),
 `league.py` (season, table), `prompt.py` (model text) — leaving the port behind.
@@ -115,7 +115,7 @@ palettes: they encode meaning, are tuned for color-blind legibility, and clear
 WCAG AA against their own ground. State carried in color must also be carried
 in text or shape.
 
-**Extract on the second instance.** This app is deliberately shaped so sports
+**Extract on the second instance.** This app is deliberately shaped so competitions
 and platforms differ only where they genuinely differ; everything else is
 shared. When you find yourself writing something a second time, extract it then
 — not on the third. Existing seams:
@@ -124,9 +124,9 @@ shared. When you find yourself writing something a second time, extract it then
   `http.py` (cached, retried JSON GETs), `retry.py` (transient-failure policy),
   `cache.py` (the one disk cache every platform reads through; expiry is a
   `Freshness` predicate — `within(ttl)`, or a rule a duration cannot express).
-- `adapters/outbound/competitions/` — policy every sport needs: `names.py`
+- `adapters/outbound/competitions/` — policy every competition needs: `names.py`
   (cross-platform player matching), `trades.py` (resolving a proposal).
-- `domain/` — rules that hold regardless of sport or platform.
+- `domain/` — rules that hold regardless of competition or platform.
 
 **Prefer composition to a base class.** The outbound clients share behaviors,
 not a shape: three go through different vendor SDKs and cache differently, while
@@ -143,7 +143,7 @@ user's roster and leagues. Each `instrument_*` needs its matching dependency
 extra, or it imports fine and raises at call time.
 
 **Headline figures.** `ScoutReport.headline` is filled by the engine from the
-provider's `SportContext`, never by the model, which is told to leave it empty
+provider's `CompetitionContext`, never by the model, which is told to leave it empty
 and overwritten regardless — a hallucinated rank sits in the header looking
 exactly as authoritative as a real one.
 
@@ -154,15 +154,15 @@ Never import an adapter from `domain/` or `application/` — if an engine needs 
 capability, add a port and let `bootstrap` wire it. Engines take their
 collaborators as required arguments rather than constructing defaults.
 
-**Sports and platforms.** The registry is keyed by the pair, not the sport: the
-same sport runs on more than one platform, with separate credentials and
+**Competitions and platforms.** The registry is keyed by the pair, not the
+competition: the same one runs on more than one platform, with separate credentials and
 separate leagues. Address entries by `entry.key` everywhere outside the
-registry; `find` accepts a bare sport only while one platform carries it.
+registry; `find` accepts a bare competition only while one platform carries it.
 
-**Adding a sport.** See the `adding-a-competition` skill: a provider under
+**Adding a competition.** See the `adding-a-competition` skill: a provider under
 `adapters/outbound/competitions/`, a prompt template, one `CompetitionEntry` in
-`bootstrap.py`. Never name a provider in an entry point, nor put sport specifics
-in `domain/`, `application/` or the inbound adapters. If a sport needs a field
+`bootstrap.py`. Never name a provider in an entry point, nor put competition specifics
+in `domain/`, `application/` or the inbound adapters. If a competition needs a field
 the shared models lack, widen them — in the league's own vocabulary, `gains`
 rather than `categories_gained`.
 
