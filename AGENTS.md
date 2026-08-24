@@ -98,13 +98,13 @@ type for something `domain/models.py` already models. Provider access lives in
 The model is optional: without `GOOGLE_API_KEY` nothing needing one is offered,
 rather than offered and refused. Never ship a canned report in the package.
 
-Reach for `components/ui/` before writing a card, table, loading state or
-control: those existed per panel first and drifted, and waiting should look the
-same everywhere because it means the same thing. Controls are `IconButton`,
-whose one required `label` is both tooltip and accessible name — an icon without
-one is a guess. Motion lives in `lib/motion.ts`, loaded via `LazyMotion` from
-its own module or the whole library lands in the entry bundle, which
-`check-web` budgets.
+`panels/` holds one page each; `components/ui/` all reused across them — a
+second caller moves a component there, never a file shared with whatever else
+had no home. Reach for it before writing a card, table, loading state or
+control: those drifted per panel, and waiting should look the same everywhere.
+Controls are `IconButton`, whose one required `label` is both tooltip and
+accessible name. Motion lives in `lib/motion.ts`, via `LazyMotion` from its own
+module, or the library lands in the entry bundle.
 
 In `web/`, color comes only from semantic tokens (`bg-card`,
 `text-muted-foreground`) — never a raw Tailwind palette utility, which cannot
