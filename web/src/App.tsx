@@ -1,9 +1,10 @@
-import { useEffect, useMemo } from "react";
-import { matchPath, useLocation, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Moon, Settings, Sun, Trophy } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { api, type League, type Competition } from "@/lib/api";
+import { DEFAULT_VIEW, LANDING, SETTINGS, VIEWS, type View, href, parse } from "@/lib/route";
 import { useTheme } from "@/lib/useTheme";
 import { IconButton } from "@/components/ui/icon-button";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -20,59 +21,57 @@ import { SettingsPanel } from "@/panels/Settings";
 import { Landing } from "@/panels/Landing";
 import { cn } from "@/lib/utils";
 
-/** The views that need a sport and a league behind them. */
+type PanelProps = { sport: Competition; league: League };
+
 /**
- * The views a competition has, and the slugs they are addressed by.
+ * Every view in one table: what the rail calls it, what renders it, and whether
+ * this competition offers it at all.
  *
- * One vocabulary rather than two: the id in the code is the word in the URL,
- * so there is no table mapping "scout" to "week" for somebody to get wrong.
+ * These three used to live apart — an array for the order, a map for the
+ * labels, and a chain of ternaries for the panel — so adding a view meant
+ * editing three places that had no way of telling you when they disagreed.
+ * `Record<View, …>` now makes a missing entry a type error.
  */
-type SportView = "week" | "league" | "team" | "free-agents" | "report" | "trade";
+const PANELS: Record<
+  View,
+  {
+    label: string;
+    Panel: (props: PanelProps) => React.ReactNode;
+    /** Absent means always. A view that is not offered is not shown at all,
+     *  rather than shown and then refusing — from the outside, with no model
+     *  configured, there is nothing missing. */
+    offered?: (context: { ai: boolean; competition: Competition }) => boolean;
+  }
+> = {
+  week: { label: "This week", Panel: ScoutPanel },
+  league: { label: "League", Panel: LeaguePanel },
+  team: { label: "My team", Panel: TeamPanel },
+  "free-agents": { label: "Free agents", Panel: FreeAgentsPanel },
+  report: { label: "Report", Panel: ReportPanel, offered: ({ ai }) => ai },
+  trade: {
+    label: "Trade",
+    Panel: TradePanel,
+    offered: ({ ai, competition }) => ai && competition.supports_trades,
+  },
+};
 
-/** What a league opens on, and what an unrecognised view falls back to. */
-const DEFAULT_VIEW: SportView = "week";
-
-/** Settings works with nothing configured, which is exactly when it is needed. */
 export default function App() {
   const { mode, setMode } = useTheme();
   const navigate = useNavigate();
   const path = useLocation().pathname;
-  // Every page is a URL, so a view can be linked, bookmarked and reloaded, and
-  // Back means what it says. The shape is /{competition}/{league}/{view}, with
-  // the default view left off so the short link and the long one are one page.
-  // Matched by hand rather than rendered through <Routes>: the shell is one
-  // layout whose rail and panel both read the same three values, so routing
-  // here is reading the address, not choosing which subtree to render.
-  const params = matchPath("/:competition/:league/:view?", path)?.params;
-  const settings = path === "/settings";
-  // A competition on its own is a real place to arrive — the rail links there,
-  // and so does anybody who trims a URL — but it is not addressable until a
-  // league is chosen, so it resolves to the first one below. Settings is
-  // excluded by name: a one-segment path is otherwise indistinguishable from a
-  // competition, and it would resolve to a league and bounce off this page.
-  const bare = settings ? undefined : matchPath("/:competition", path)?.params;
-
-  const sport = params?.competition ?? bare?.competition ?? null;
-  const leagueId = params?.league ?? null;
-  const view = (params?.view as SportView | undefined) ?? DEFAULT_VIEW;
-
-  const openLeague = (competition: string, id: string, next: SportView = DEFAULT_VIEW, replace = false) =>
-    navigate(next === DEFAULT_VIEW ? `/${competition}/${id}` : `/${competition}/${id}/${next}`, { replace });
+  const route = parse(path);
 
   const sports = useQuery({ queryKey: ["sports"], queryFn: api.sports });
-  // Without a model there is no analysis to give, so the views that produce one
-  // are not offered at all. Adding a key makes them appear; nothing explains
-  // their absence, because from the outside there is nothing missing.
   const capabilities = useQuery({ queryKey: ["capabilities"], queryFn: api.capabilities });
+  const ai = capabilities.data?.ai ?? false;
 
   // An error deep in a panel can send someone to Settings without every panel
   // needing to know the shell exists.
   useEffect(() => {
-    const open = () => navigate("/settings");
+    const open = () => navigate(SETTINGS);
     window.addEventListener("tfo:settings", open);
     return () => window.removeEventListener("tfo:settings", open);
   }, [navigate]);
-  const ai = capabilities.data?.ai ?? false;
 
   // How many platforms carry each sport, so the rail shows the platform only
   // where it distinguishes something.
@@ -82,54 +81,100 @@ export default function App() {
   }, {});
   // Ready, not merely configured: credentials being set says nothing about
   // whether a platform will actually answer.
-  const usable = useMemo(() => (sports.data ?? []).filter((s) => s.ready), [sports.data]);
-  // No fallback to the first configured sport: until one is chosen the landing
-  // page is what shows, and choosing for the user is what it exists to avoid.
-  const active: Competition | undefined = usable.find((s) => s.key === sport);
+  const usable = (sports.data ?? []).filter((s) => s.ready);
+  // No fallback to the first usable competition: until one is chosen the
+  // landing page is what shows, and choosing for the user is what it avoids.
+  const active: Competition | undefined =
+    route.page === "competition" ? usable.find((s) => s.key === route.competition) : undefined;
 
   const leagues = useQuery({
     queryKey: ["leagues", active?.key],
     queryFn: () => api.leagues(active!.key),
     enabled: Boolean(active),
   });
-  const league: League | undefined = (leagues.data ?? []).find((l) => l.league_id === leagueId) ?? leagues.data?.[0];
+  // Falling back to the first league is what makes /nfl-sleeper a real address;
+  // the effect below then writes the one it resolved into the URL.
+  const league: League | undefined =
+    route.page === "competition"
+      ? ((leagues.data ?? []).find((l) => l.league_id === route.leagueId) ?? leagues.data?.[0])
+      : undefined;
 
-  // A sport that cannot trade must not leave the tab selected behind it.
-  const panelKey = `${active?.key}:${league?.league_id}`;
-  const views: SportView[] = [
-    "week",
-    "league",
-    "team",
-    "free-agents",
-    // Both need a model, so neither is offered without one.
-    ...(ai ? (["report"] as const) : []),
-    ...(ai && active?.supports_trades ? (["trade"] as const) : []),
-  ];
-  const current: SportView = views.find((v) => v === view) ?? DEFAULT_VIEW;
+  const views = active ? VIEWS.filter((v) => PANELS[v].offered?.({ ai, competition: active }) ?? true) : [];
+  const view = route.page === "competition" && views.includes(route.view) ? route.view : DEFAULT_VIEW;
 
-  // Put the resolved league in the URL, so what is on screen is what the
-  // address bar says and a reload lands in the same place. Replaced rather
-  // than pushed: arriving at a competition and resolving its first league is
-  // a correction, not a move, and pushing it would make Back bounce here again.
+  // Make the address say what is on screen.
+  //
+  // One comparison against the canonical link rather than a branch per way of
+  // being wrong: it covers the league that /nfl-sleeper resolved to, a view
+  // this competition does not offer, and /a/b/week spelled the long way. All
+  // by replacing, not pushing — being corrected off an address that does not
+  // name a page is not a move you should have to press Back through.
   useEffect(() => {
-    // A competition nobody can play — a typo, or one whose credentials have
-    // since gone — has no shell to render, so the address goes back to the
-    // page that lists what there is. Only once the list has actually arrived:
-    // before that every competition looks equally unavailable.
-    if (sport && sports.data && !active) navigate("/", { replace: true });
-    else if (sport && league && league.league_id !== leagueId) {
-      openLeague(sport, league.league_id, current, true);
+    if (route.page !== "competition") return;
+    if (sports.data && !active) {
+      // A competition nobody can play: a typo, or one whose credentials have
+      // gone. Only once the list has arrived — before that they all look alike.
+      navigate(LANDING, { replace: true });
+      return;
     }
-  }, [sport, sports.data, active, league, leagueId, current, navigate]);
+    if (!active || !league) return;
+    const settled = href(active.key, league.league_id, view);
+    if (settled !== path) navigate(settled, { replace: true });
+  }, [route.page, path, sports.data, active, league, view, navigate]);
+
+  /**
+   * The column beside the rail: one `if` per state, rather than a ternary
+   * chain seven levels deep inside the layout.
+   *
+   * Called, not rendered as `<Shell />`. A component declared inside another
+   * is a new function on every render, so React sees a new element type and
+   * remounts the whole subtree — every panel would refetch and lose its
+   * scroll position each time anything in the shell changed.
+   */
+  function shell() {
+    if (route.page === "settings") return <SettingsPanel onBack={() => navigate(LANDING)} />;
+    if (sports.isSuccess && usable.length === 0) return <Empty sports={sports.data} />;
+
+    if (route.page !== "competition") {
+      return sports.isSuccess ? (
+        <Landing sports={sports.data} onPick={(picked, l) => navigate(href(picked.key, l.league_id))} />
+      ) : (
+        <Loading />
+      );
+    }
+
+    if (!active || !league) {
+      return leagues.isError ? (
+        <div className="p-6">
+          <Badge variant="fail" appearance="status">
+            {(leagues.error as Error).message}
+          </Badge>
+        </div>
+      ) : (
+        <Loading />
+      );
+    }
+
+    // Keyed so a competition or league change remounts the panel. Without it
+    // the panel keeps the report it already fetched, and the previous
+    // competition's analysis renders under the new league's name — a stale FPL
+    // report headed "Huge Euge RR FF", with FPL's figures in the strip.
+    const { Panel } = PANELS[view];
+    return (
+      <m.div key={`${active.key}:${league.league_id}:${view}`} variants={rise} initial="hidden" animate="shown">
+        <Panel sport={active} league={league} />
+      </m.div>
+    );
+  }
 
   return (
     // Fixed to the viewport, with each column scrolling on its own. A single
-    // page scroll takes the rail with it, so the sport you are on and the way
-    // back leave the screen exactly when a long table makes you want them.
+    // page scroll takes the rail with it, so the competition you are on and the
+    // way back leave the screen exactly when a long table makes you want them.
     <div className="grid h-full grid-cols-[13rem_minmax(0,1fr)] overflow-hidden">
       <nav className="flex flex-col gap-6 overflow-y-auto border-r border-border bg-card px-3 py-4">
-        <button
-          onClick={() => navigate("/")}
+        <Link
+          to={LANDING}
           aria-label="Back to all leagues"
           className="flex items-center gap-2.5 rounded-md px-1 py-1 text-left transition-colors hover:bg-muted"
         >
@@ -137,141 +182,100 @@ export default function App() {
             <Trophy className="size-3.5" strokeWidth={2.25} aria-hidden />
           </span>
           <span className="font-display text-[15px] font-semibold tracking-tight">The Front Office</span>
-        </button>
+        </Link>
 
         {/* Competition, not sport: these are the NBA, the NFL and the Premier
             League. "League" is taken by the group below, which holds the
             fantasy leagues you actually play in. */}
         <Group label="Competition">
           {sports.isLoading && <Skeleton className="mx-2 h-7" />}
-          {(sports.data ?? []).map((s) => (
-            <RailItem
-              key={s.key}
-              active={s.key === active?.key}
-              disabled={!s.ready}
-              tooltip={
-                s.ready ? "" : s.configured ? s.blocked_reason : `Not configured — set ${s.requires} in .env`
-              }
-              onClick={() => navigate(`/${s.key}`)}
-            >
-              {/* Two platforms under one sport need telling apart; one does not. */}
-              {(sportCounts[s.sport] ?? 0) > 1 ? s.label : s.label.replace(/\s*\(.*\)$/, "")}
-              {!s.ready && (
+          {(sports.data ?? []).map((s) => {
+            // Two platforms under one sport need telling apart; one does not.
+            const label = (sportCounts[s.sport] ?? 0) > 1 ? s.label : s.label.replace(/\s*\(.*\)$/, "");
+            return s.ready ? (
+              <RailLink key={s.key} to={`/${s.key}`} active={s.key === active?.key}>
+                {label}
+              </RailLink>
+            ) : (
+              <RailButton
+                key={s.key}
+                disabled
+                tooltip={s.configured ? s.blocked_reason : `Not configured — set ${s.requires} in .env`}
+              >
+                {label}
                 <span className="font-mono text-[10px] opacity-60">{s.configured ? "blocked" : "off"}</span>
-              )}
-            </RailItem>
-          ))}
+              </RailButton>
+            );
+          })}
         </Group>
 
-        {active && (
+        {/* Only once there is a league to address: a tab that cannot be linked
+            to yet would render as a control that does nothing. */}
+        {active && league && (
           <Group label="View">
             {views.map((v) => (
-              <RailItem key={v} active={v === current} onClick={() => sport && leagueId && openLeague(sport, leagueId, v)}>
-                {
-                  {
-                    week: "This week",
-                    league: "League",
-                    team: "My team",
-                    "free-agents": "Free agents",
-                    report: "Report",
-                    trade: "Trade",
-                  }[v]
-                }
-              </RailItem>
+              <RailLink key={v} to={href(active.key, league.league_id, v)} active={v === view}>
+                {PANELS[v].label}
+              </RailLink>
             ))}
           </Group>
         )}
 
-        {(leagues.data?.length ?? 0) > 1 && (
+        {active && (leagues.data?.length ?? 0) > 1 && (
           <Group label="League">
             {leagues.data!.map((l) => (
-              <RailItem
+              <RailLink
                 key={l.league_id}
+                to={href(active.key, l.league_id, view)}
                 active={l.league_id === league?.league_id}
-                onClick={() => sport && openLeague(sport, l.league_id, current)}
               >
                 <span className="truncate">{l.name}</span>
-              </RailItem>
+              </RailLink>
             ))}
           </Group>
         )}
 
-        <div className="mt-auto flex flex-col gap-2">
-          <div className="flex items-center gap-1">
-            <RailItem className="flex-1" active={settings} onClick={() => navigate("/settings")}>
-              <span className="flex items-center gap-2">
-                <Settings className="size-3.5" aria-hidden />
-                Settings
-              </span>
-            </RailItem>
-            <IconButton
-              label={mode === "dark" ? "Switch to light" : "Switch to dark"}
-              side="top"
-              icon={mode === "dark" ? <Sun /> : <Moon />}
-              onClick={() => setMode(mode === "dark" ? "light" : "dark")}
-            />
-          </div>
+        <div className="mt-auto flex items-center gap-1">
+          <RailLink className="flex-1" to={SETTINGS} active={route.page === "settings"}>
+            <span className="flex items-center gap-2">
+              <Settings className="size-3.5" aria-hidden />
+              Settings
+            </span>
+          </RailLink>
+          <IconButton
+            label={mode === "dark" ? "Switch to light" : "Switch to dark"}
+            side="top"
+            icon={mode === "dark" ? <Sun /> : <Moon />}
+            onClick={() => setMode(mode === "dark" ? "light" : "dark")}
+          />
         </div>
       </nav>
 
       <main className="min-w-0 overflow-y-auto">
-        {/* One presence around the whole column, keyed on the view. Settings is
+        {/* One presence around the whole column, keyed on the page. Settings is
             a place you go and come back from, so it earns the same in-and-out
-            as everything else — previously it swapped in with no transition at
+            as everything else — it previously swapped in with no transition at
             all because it sat outside the only AnimatePresence here. */}
         <AnimatePresence mode="wait">
-        <m.div key={settings ? "settings" : "app"} variants={rise} initial="hidden" animate="shown" exit="gone">
-        {settings ? (
-          <SettingsPanel onBack={() => navigate(sport && leagueId ? `/${sport}/${leagueId}` : "/")} />
-        ) : sports.isSuccess && usable.length === 0 ? (
-          <Empty sports={sports.data} />
-        ) : !sport ? (
-          sports.isSuccess ? (
-            <Landing
-              sports={sports.data}
-              onPick={(picked, picked_league) => openLeague(picked.key, picked_league.league_id)}
-            />
-          ) : (
-            <div className="p-6">
-              <Skeleton className="h-40 w-full" />
-            </div>
-          )
-        ) : active && league ? (
-          // Keyed so a sport or league change remounts the panel. Without it the
-          // panel keeps the report it already fetched, and the previous sport's
-          // analysis renders under the new league's name — a stale FPL report
-          // headed "Huge Euge RR FF", with FPL's figures in the strip.
-          <AnimatePresence mode="wait">
-            <m.div key={`${panelKey}:${current}`} variants={rise} initial="hidden" animate="shown">
-              {current === "week" ? (
-                <ScoutPanel sport={active} league={league} />
-              ) : current === "league" ? (
-                <LeaguePanel sport={active} league={league} />
-              ) : current === "team" ? (
-                <TeamPanel sport={active} league={league} />
-              ) : current === "free-agents" ? (
-                <FreeAgentsPanel sport={active} league={league} />
-              ) : current === "report" ? (
-                <ReportPanel sport={active} league={league} />
-              ) : (
-                <TradePanel sport={active} league={league} />
-              )}
-            </m.div>
-          </AnimatePresence>
-        ) : (
-          <div className="p-6">
-            {leagues.isError ? (
-              <Badge variant="fail" appearance="status">
-                {(leagues.error as Error).message}
-              </Badge>
-            ) : (
-              <Skeleton className="h-40 w-full" />
-            )}
-          </div>
-        )}
-        </m.div>
+          <m.div
+            key={route.page === "settings" ? "settings" : "app"}
+            variants={rise}
+            initial="hidden"
+            animate="shown"
+            exit="gone"
+          >
+            {shell()}
+          </m.div>
         </AnimatePresence>
       </main>
+    </div>
+  );
+}
+
+function Loading() {
+  return (
+    <div className="p-6">
+      <Skeleton className="h-40 w-full" />
     </div>
   );
 }
@@ -287,7 +291,43 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function RailItem({
+/** One look for everything in the rail, whether it navigates or not. */
+function railItem(active?: boolean, disabled?: boolean, className?: string) {
+  return cn(
+    "flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[13.5px] transition-colors",
+    active ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted",
+    disabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
+    className,
+  );
+}
+
+/**
+ * A rail item that goes somewhere, which is most of them.
+ *
+ * A real link rather than a button that navigates: every view has an address
+ * now, and an address you cannot open in a new tab, middle-click or preview on
+ * hover is only half of one.
+ */
+function RailLink({
+  to,
+  active,
+  className,
+  children,
+}: {
+  to: string;
+  active?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link to={to} className={railItem(active, false, className)} aria-current={active ? "page" : undefined}>
+      {children}
+    </Link>
+  );
+}
+
+/** A rail item that goes nowhere — a competition you cannot play, and why. */
+function RailButton({
   active,
   disabled,
   className,
@@ -296,16 +336,7 @@ function RailItem({
   ...props
 }: React.ComponentProps<"button"> & { active?: boolean; tooltip?: string }) {
   const button = (
-    <button
-      disabled={disabled}
-      className={cn(
-        "flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[13.5px] transition-colors",
-        active ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted",
-        disabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
-        className,
-      )}
-      {...props}
-    >
+    <button disabled={disabled} className={railItem(active, disabled, className)} {...props}>
       {children}
     </button>
   );

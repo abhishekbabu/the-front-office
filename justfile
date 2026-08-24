@@ -116,10 +116,13 @@ web-install:
 web-build: web-install
     cd web && pnpm build
 
-# Typecheck and test the front end
+# Typecheck, test and build the front end — the same gates CI runs
 check-web: web-install
     cd web && pnpm exec tsc -b
     cd web && pnpm test
+    # Builds because the bundle budget is checked by the build and nothing
+    # else. Without this the recipe passes on a change CI then rejects.
+    cd web && pnpm build
 
 # ============================================================================
 # Housekeeping
