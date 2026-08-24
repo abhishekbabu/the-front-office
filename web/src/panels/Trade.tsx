@@ -7,7 +7,10 @@ import { ArrowRight } from "lucide-react";
 import { IconButton } from "@/components/ui/icon-button";
 import { Working } from "@/components/ui/state";
 import { Card, CardHeader } from "@/components/ui/card";
-import { Chat, Chips, ErrorNote, PageHeader } from "@/panels/shared";
+import { Chips } from "@/components/ui/badge";
+import { Chat } from "@/components/ui/chat";
+import { ErrorNote } from "@/components/ui/error-note";
+import { PageHeader } from "@/components/ui/page-header";
 
 export function TradePanel({ competition, league }: { competition: Competition; league: League }) {
   const [text, setText] = useState("");

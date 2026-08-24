@@ -7,7 +7,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { m } from "motion/react";
 import { list, listItem } from "@/lib/motion";
-import { YahooLoginButton } from "@/panels/shared";
+import { YahooLoginButton } from "@/components/ui/error-note";
 
 /**
  * What the app opens on: every league you are in, across every competition.

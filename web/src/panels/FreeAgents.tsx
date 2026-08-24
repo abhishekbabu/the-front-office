@@ -8,8 +8,9 @@ import { RosterTable } from "@/components/ui/roster-table";
 import type { SortState } from "@/components/ui/data-table";
 import { Loading } from "@/components/ui/state";
 import { usePlayerDrawer } from "@/components/ui/player";
-import { ErrorNote, LeagueHeader } from "@/panels/shared";
 import { cn } from "@/lib/utils";
+import { ErrorNote } from "@/components/ui/error-note";
+import { LeagueHeader } from "@/components/ui/page-header";
 
 const PAGE = 50;
 
