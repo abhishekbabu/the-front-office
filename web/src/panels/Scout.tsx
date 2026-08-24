@@ -18,12 +18,12 @@ import { cn } from "@/lib/utils";
  * view, is then an argument about what is already on screen rather than the
  * only thing on it.
  */
-export function ScoutPanel({ sport, league }: { sport: Competition; league: League }) {
+export function ScoutPanel({ competition, league }: { competition: Competition; league: League }) {
   const [open, setOpen] = useState<string | null>(null);
 
   const week = useQuery<Summary, Error>({
-    queryKey: ["summary", sport.key, league.league_id],
-    queryFn: () => api.summary(sport.key, league.league_id),
+    queryKey: ["summary", competition.key, league.league_id],
+    queryFn: () => api.summary(competition.key, league.league_id),
   });
 
   return (
@@ -140,7 +140,7 @@ export function ScoutPanel({ sport, league }: { sport: Competition; league: Leag
       )}
 
       <PlayerPanel
-        sport={sport.key}
+        competition={competition.key}
         league={league.league_id}
         playerId={open}
         onClose={() => setOpen(null)}

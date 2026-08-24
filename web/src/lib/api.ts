@@ -68,7 +68,7 @@ export type Summary = {
   opponent: Side | null;
   swaps: Swap[];
   fixtures: Stat[];
-  /** One-time advantages the manager can spend; null in a sport with none. */
+  /** One-time advantages the manager can spend; null in a competition with none. */
   boosts: StatGroup | null;
   /** When this week actually is, already formatted. A week with no dates on it
       is a number, and the number is the one thing already known. */
@@ -118,7 +118,7 @@ export type Setting = {
   effective: string;
 };
 export type Evaluation = { verdict: TradeVerdict; chat_id: string };
-/** A player as a table row: the sport's own columns, plus what a column cannot be. */
+/** A player as a table row: the competition's own columns, plus what a column cannot be. */
 export type PlayerCard = {
   player_id: string;
   columns: Record<string, string>;
@@ -127,7 +127,7 @@ export type PlayerCard = {
   tone: Tone;
 };
 
-/** What to ask for: the sport's own ranking unless a column is named. */
+/** What to ask for: the competition's own ranking unless a column is named. */
 export type FreeAgentQuery = {
   offset?: number;
   limit?: number;

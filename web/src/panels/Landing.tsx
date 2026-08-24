@@ -10,31 +10,31 @@ import { list, listItem } from "@/lib/motion";
 import { YahooLoginButton } from "@/panels/shared";
 
 /**
- * What the app opens on: every league you are in, across every sport.
+ * What the app opens on: every league you are in, across every competition.
  *
- * The alternative — dropping straight into whichever sport happened to be
- * configured first — silently picks for you, and with three sports and several
+ * The alternative — dropping straight into whichever competition happened to be
+ * configured first — silently picks for you, and with three competitions and several
  * leagues each it is picking wrong most of the time.
  */
 export function Landing({
-  sports,
+  competitions,
   onPick,
 }: {
-  sports: Competition[];
-  onPick: (sport: Competition, league: League) => void;
+  competitions: Competition[];
+  onPick: (competition: Competition, league: League) => void;
 }) {
-  const configured = sports.filter((s) => s.configured);
+  const configured = competitions.filter((s) => s.configured);
 
-  // One query per sport rather than one combined endpoint: they fail
+  // One query per competition rather than one combined endpoint: they fail
   // independently — one platform being down must not take the page down — and
-  // each is cached under the same key the panels already use. A sport that is
+  // each is cached under the same key the panels already use. A competition that is
   // not ready is not asked at all; the request could only fail, and the reason
   // is already known.
   const results = useQueries({
-    queries: configured.map((sport) => ({
-      queryKey: ["leagues", sport.key],
-      queryFn: () => api.leagues(sport.key),
-      enabled: sport.ready,
+    queries: configured.map((competition) => ({
+      queryKey: ["leagues", competition.key],
+      queryFn: () => api.leagues(competition.key),
+      enabled: competition.ready,
     })),
   });
 
@@ -51,19 +51,19 @@ export function Landing({
       </div>
 
       <m.div variants={list} initial="hidden" animate="shown" className="mt-8 flex flex-col gap-4">
-        {configured.map((sport, i) => {
+        {configured.map((competition, i) => {
           const result = results[i];
           return (
-            <m.div key={sport.key} variants={listItem}>
+            <m.div key={competition.key} variants={listItem}>
             <Card>
               <CardHeader>
-                <span>{sport.label}</span>
-                {sport.ready && result?.isSuccess && (
+                <span>{competition.label}</span>
+                {competition.ready && result?.isSuccess && (
                   <span>
                     {result.data.length} {result.data.length === 1 ? "league" : "leagues"}
                   </span>
                 )}
-                {!sport.ready && (
+                {!competition.ready && (
                   <Badge variant="warn" appearance="status">
                     unavailable
                   </Badge>
@@ -71,16 +71,16 @@ export function Landing({
               </CardHeader>
 
               {/* Stated once, with the action, rather than left to fail on the
-                  first click into the sport. */}
-              {!sport.ready && (
+                  first click into the competition. */}
+              {!competition.ready && (
                 <div className="flex flex-col items-start gap-3 px-4 py-3">
                   <p className="max-w-[70ch] text-[13px] leading-relaxed text-muted-foreground">
-                    {sport.blocked_reason}
+                    {competition.blocked_reason}
                   </p>
-                  {sport.blocked_code === "yahoo_login_required" && <YahooLoginButton />}
-                  {sport.blocked_code === "yahoo_not_approved" && (
+                  {competition.blocked_code === "yahoo_login_required" && <YahooLoginButton />}
+                  {competition.blocked_code === "yahoo_not_approved" && (
                     <a
-                      href="https://sports.yahoo.com/developer/access/"
+                      href="https://competitions.yahoo.com/developer/access/"
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex h-9 items-center rounded-md border border-border bg-background px-4 text-sm font-medium hover:bg-muted"
@@ -91,11 +91,11 @@ export function Landing({
                 </div>
               )}
 
-              {sport.ready && result?.isLoading && <Skeleton className="m-4 h-14" />}
+              {competition.ready && result?.isLoading && <Skeleton className="m-4 h-14" />}
 
               {result?.isError && (
                 // Shown in place rather than as a page-level failure: the other
-                // sports are still usable, and this one names its own fix.
+                // competitions are still usable, and this one names its own fix.
                 <p className="px-4 py-3 text-[13px] leading-relaxed text-destructive">
                   {(result.error as Error).message}
                 </p>
@@ -110,7 +110,7 @@ export function Landing({
               {result?.data?.map((league) => (
                 <button
                   key={league.league_id}
-                  onClick={() => onPick(sport, league)}
+                  onClick={() => onPick(competition, league)}
                   className="flex w-full items-center gap-3 border-t border-border px-4 py-3 text-left transition-colors hover:bg-muted"
                 >
                   <div className="min-w-0 flex-1">
@@ -123,7 +123,7 @@ export function Landing({
                       </div>
                     )}
                   </div>
-                  {!sport.supports_trades && (
+                  {!competition.supports_trades && (
                     <Badge variant="muted" appearance="label">
                       no trades
                     </Badge>
@@ -140,13 +140,13 @@ export function Landing({
         })}
       </m.div>
 
-      {sports.some((s) => !s.configured) && (
+      {competitions.some((s) => !s.configured) && (
         <p className="mt-6 text-[13px] text-muted-foreground">
-          {sports
+          {competitions
             .filter((s) => !s.configured)
             .map((s) => s.label)
             .join(" and ")}{" "}
-          {sports.filter((s) => !s.configured).length === 1 ? "is" : "are"} not configured — add
+          {competitions.filter((s) => !s.configured).length === 1 ? "is" : "are"} not configured — add
           credentials in Settings.
         </p>
       )}

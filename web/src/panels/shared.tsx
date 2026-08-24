@@ -192,7 +192,7 @@ export function YahooLoginButton() {
   useEffect(() => {
     if (state.data?.status !== "ok") return;
     setWatching(false);
-    // Everything about this sport failed on the missing authorization; none of
+    // Everything about this competition failed on the missing authorization; none of
     // those answers are worth keeping now that it exists.
     queryClient.invalidateQueries();
   }, [state.data?.status, queryClient]);

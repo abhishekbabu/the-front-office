@@ -21,7 +21,7 @@ import { SettingsPanel } from "@/panels/Settings";
 import { Landing } from "@/panels/Landing";
 import { cn } from "@/lib/utils";
 
-type PanelProps = { sport: Competition; league: League };
+type PanelProps = { competition: Competition; league: League };
 
 /**
  * Every view in one table: what the rail calls it, what renders it, and whether
@@ -61,7 +61,7 @@ export default function App() {
   const path = useLocation().pathname;
   const route = parse(path);
 
-  const sports = useQuery({ queryKey: ["sports"], queryFn: api.sports });
+  const competitions = useQuery({ queryKey: ["competitions"], queryFn: api.sports });
   const capabilities = useQuery({ queryKey: ["capabilities"], queryFn: api.capabilities });
   const ai = capabilities.data?.ai ?? false;
 
@@ -73,15 +73,15 @@ export default function App() {
     return () => window.removeEventListener("tfo:settings", open);
   }, [navigate]);
 
-  // How many platforms carry each sport, so the rail shows the platform only
+  // How many platforms carry each sport, so the rail names the platform only
   // where it distinguishes something.
-  const sportCounts = (sports.data ?? []).reduce<Record<string, number>>((counts, s) => {
+  const sportCounts = (competitions.data ?? []).reduce<Record<string, number>>((counts, s) => {
     counts[s.sport] = (counts[s.sport] ?? 0) + 1;
     return counts;
   }, {});
   // Ready, not merely configured: credentials being set says nothing about
   // whether a platform will actually answer.
-  const usable = (sports.data ?? []).filter((s) => s.ready);
+  const usable = (competitions.data ?? []).filter((s) => s.ready);
   // No fallback to the first usable competition: until one is chosen the
   // landing page is what shows, and choosing for the user is what it avoids.
   const active: Competition | undefined =
@@ -111,7 +111,7 @@ export default function App() {
   // name a page is not a move you should have to press Back through.
   useEffect(() => {
     if (route.page !== "competition") return;
-    if (sports.data && !active) {
+    if (competitions.data && !active) {
       // A competition nobody can play: a typo, or one whose credentials have
       // gone. Only once the list has arrived — before that they all look alike.
       navigate(LANDING, { replace: true });
@@ -120,7 +120,7 @@ export default function App() {
     if (!active || !league) return;
     const settled = href(active.key, league.league_id, view);
     if (settled !== path) navigate(settled, { replace: true });
-  }, [route.page, path, sports.data, active, league, view, navigate]);
+  }, [route.page, path, competitions.data, active, league, view, navigate]);
 
   /**
    * The column beside the rail: one `if` per state, rather than a ternary
@@ -133,11 +133,11 @@ export default function App() {
    */
   function shell() {
     if (route.page === "settings") return <SettingsPanel onBack={() => navigate(LANDING)} />;
-    if (sports.isSuccess && usable.length === 0) return <Empty sports={sports.data} />;
+    if (competitions.isSuccess && usable.length === 0) return <Empty competitions={competitions.data} />;
 
     if (route.page !== "competition") {
-      return sports.isSuccess ? (
-        <Landing sports={sports.data} onPick={(picked, l) => navigate(href(picked.key, l.league_id))} />
+      return competitions.isSuccess ? (
+        <Landing competitions={competitions.data} onPick={(picked, l) => navigate(href(picked.key, l.league_id))} />
       ) : (
         <Loading />
       );
@@ -162,7 +162,7 @@ export default function App() {
     const { Panel } = PANELS[view];
     return (
       <m.div key={`${active.key}:${league.league_id}:${view}`} variants={rise} initial="hidden" animate="shown">
-        <Panel sport={active} league={league} />
+        <Panel competition={active} league={league} />
       </m.div>
     );
   }
@@ -188,8 +188,8 @@ export default function App() {
             League. "League" is taken by the group below, which holds the
             fantasy leagues you actually play in. */}
         <Group label="Competition">
-          {sports.isLoading && <Skeleton className="mx-2 h-7" />}
-          {(sports.data ?? []).map((s) => {
+          {competitions.isLoading && <Skeleton className="mx-2 h-7" />}
+          {(competitions.data ?? []).map((s) => {
             // Two platforms under one sport need telling apart; one does not.
             const label = (sportCounts[s.sport] ?? 0) > 1 ? s.label : s.label.replace(/\s*\(.*\)$/, "");
             return s.ready ? (
@@ -352,7 +352,7 @@ function RailButton({
 }
 
 /** Nothing is configured — say what to set rather than showing an empty shell. */
-function Empty({ sports }: { sports: Competition[] }) {
+function Empty({ competitions }: { competitions: Competition[] }) {
   return (
     <div className="mx-auto max-w-xl p-10">
       <h1 className="font-display text-2xl font-semibold tracking-tight">Nothing connected yet</h1>
@@ -360,7 +360,7 @@ function Empty({ sports }: { sports: Competition[] }) {
         Set one of these in Settings, or in <code className="font-mono text-accent-foreground">.env</code> directly.
       </p>
       <ul className="mt-5 flex flex-col gap-2">
-        {sports.map((s) => (
+        {competitions.map((s) => (
           <li key={s.sport} className="flex items-baseline justify-between gap-4 border-b border-border py-2 text-sm">
             <span>{s.label}</span>
             <code className="font-mono text-[12px] text-muted-foreground">{s.requires}</code>
