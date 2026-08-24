@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LazyMotion, MotionConfig } from "motion/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -24,7 +25,8 @@ const client = new QueryClient({
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <QueryClientProvider client={client}>
+    <BrowserRouter>
+      <QueryClientProvider client={client}>
       {/* Loaded after first paint, not bundled into it: `m` components carry
           no animation code of their own, and the feature set arrives in a
           second chunk. It has to come from its own module: an import of
@@ -40,6 +42,7 @@ createRoot(document.getElementById("root")!).render(
           </TooltipProvider>
         </MotionConfig>
       </LazyMotion>
-    </QueryClientProvider>
+      </QueryClientProvider>
+    </BrowserRouter>
   </StrictMode>,
 );
