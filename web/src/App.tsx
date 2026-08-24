@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
+import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Moon, Settings, Sun, Trophy } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
@@ -20,16 +21,43 @@ import { Landing } from "@/panels/Landing";
 import { cn } from "@/lib/utils";
 
 /** The views that need a sport and a league behind them. */
-type SportView = "scout" | "league" | "team" | "agents" | "report" | "trade";
+/**
+ * The views a competition has, and the slugs they are addressed by.
+ *
+ * One vocabulary rather than two: the id in the code is the word in the URL,
+ * so there is no table mapping "scout" to "week" for somebody to get wrong.
+ */
+type SportView = "week" | "league" | "team" | "free-agents" | "report" | "trade";
+
+/** What a league opens on, and what an unrecognised view falls back to. */
+const DEFAULT_VIEW: SportView = "week";
 
 /** Settings works with nothing configured, which is exactly when it is needed. */
-type View = SportView | "settings" | "home";
-
 export default function App() {
   const { mode, setMode } = useTheme();
-  const [sport, setSport] = useState<string | null>(null);
-  const [view, setView] = useState<View>("home");
-  const [leagueId, setLeagueId] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const path = useLocation().pathname;
+  // Every page is a URL, so a view can be linked, bookmarked and reloaded, and
+  // Back means what it says. The shape is /{competition}/{league}/{view}, with
+  // the default view left off so the short link and the long one are one page.
+  // Matched by hand rather than rendered through <Routes>: the shell is one
+  // layout whose rail and panel both read the same three values, so routing
+  // here is reading the address, not choosing which subtree to render.
+  const params = matchPath("/:competition/:league/:view?", path)?.params;
+  const settings = path === "/settings";
+  // A competition on its own is a real place to arrive — the rail links there,
+  // and so does anybody who trims a URL — but it is not addressable until a
+  // league is chosen, so it resolves to the first one below. Settings is
+  // excluded by name: a one-segment path is otherwise indistinguishable from a
+  // competition, and it would resolve to a league and bounce off this page.
+  const bare = settings ? undefined : matchPath("/:competition", path)?.params;
+
+  const sport = params?.competition ?? bare?.competition ?? null;
+  const leagueId = params?.league ?? null;
+  const view = (params?.view as SportView | undefined) ?? DEFAULT_VIEW;
+
+  const openLeague = (competition: string, id: string, next: SportView = DEFAULT_VIEW, replace = false) =>
+    navigate(next === DEFAULT_VIEW ? `/${competition}/${id}` : `/${competition}/${id}/${next}`, { replace });
 
   const sports = useQuery({ queryKey: ["sports"], queryFn: api.sports });
   // Without a model there is no analysis to give, so the views that produce one
@@ -40,10 +68,10 @@ export default function App() {
   // An error deep in a panel can send someone to Settings without every panel
   // needing to know the shell exists.
   useEffect(() => {
-    const open = () => setView("settings");
+    const open = () => navigate("/settings");
     window.addEventListener("tfo:settings", open);
     return () => window.removeEventListener("tfo:settings", open);
-  }, []);
+  }, [navigate]);
   const ai = capabilities.data?.ai ?? false;
 
   // How many platforms carry each sport, so the rail shows the platform only
@@ -69,15 +97,30 @@ export default function App() {
   // A sport that cannot trade must not leave the tab selected behind it.
   const panelKey = `${active?.key}:${league?.league_id}`;
   const views: SportView[] = [
-    "scout",
+    "week",
     "league",
     "team",
-    "agents",
+    "free-agents",
     // Both need a model, so neither is offered without one.
     ...(ai ? (["report"] as const) : []),
     ...(ai && active?.supports_trades ? (["trade"] as const) : []),
   ];
-  const current: SportView = views.find((v) => v === view) ?? "scout";
+  const current: SportView = views.find((v) => v === view) ?? DEFAULT_VIEW;
+
+  // Put the resolved league in the URL, so what is on screen is what the
+  // address bar says and a reload lands in the same place. Replaced rather
+  // than pushed: arriving at a competition and resolving its first league is
+  // a correction, not a move, and pushing it would make Back bounce here again.
+  useEffect(() => {
+    // A competition nobody can play — a typo, or one whose credentials have
+    // since gone — has no shell to render, so the address goes back to the
+    // page that lists what there is. Only once the list has actually arrived:
+    // before that every competition looks equally unavailable.
+    if (sport && sports.data && !active) navigate("/", { replace: true });
+    else if (sport && league && league.league_id !== leagueId) {
+      openLeague(sport, league.league_id, current, true);
+    }
+  }, [sport, sports.data, active, league, leagueId, current, navigate]);
 
   return (
     // Fixed to the viewport, with each column scrolling on its own. A single
@@ -86,7 +129,7 @@ export default function App() {
     <div className="grid h-full grid-cols-[13rem_minmax(0,1fr)] overflow-hidden">
       <nav className="flex flex-col gap-6 overflow-y-auto border-r border-border bg-card px-3 py-4">
         <button
-          onClick={() => setView("home")}
+          onClick={() => navigate("/")}
           aria-label="Back to all leagues"
           className="flex items-center gap-2.5 rounded-md px-1 py-1 text-left transition-colors hover:bg-muted"
         >
@@ -109,11 +152,7 @@ export default function App() {
               tooltip={
                 s.ready ? "" : s.configured ? s.blocked_reason : `Not configured — set ${s.requires} in .env`
               }
-              onClick={() => {
-                setSport(s.key);
-                setLeagueId(null);
-                if (view === "home") setView("scout");
-              }}
+              onClick={() => navigate(`/${s.key}`)}
             >
               {/* Two platforms under one sport need telling apart; one does not. */}
               {(sportCounts[s.sport] ?? 0) > 1 ? s.label : s.label.replace(/\s*\(.*\)$/, "")}
@@ -127,13 +166,13 @@ export default function App() {
         {active && (
           <Group label="View">
             {views.map((v) => (
-              <RailItem key={v} active={v === current} onClick={() => setView(v)}>
+              <RailItem key={v} active={v === current} onClick={() => sport && leagueId && openLeague(sport, leagueId, v)}>
                 {
                   {
-                    scout: "This week",
+                    week: "This week",
                     league: "League",
                     team: "My team",
-                    agents: "Free agents",
+                    "free-agents": "Free agents",
                     report: "Report",
                     trade: "Trade",
                   }[v]
@@ -149,7 +188,7 @@ export default function App() {
               <RailItem
                 key={l.league_id}
                 active={l.league_id === league?.league_id}
-                onClick={() => setLeagueId(l.league_id)}
+                onClick={() => sport && openLeague(sport, l.league_id, current)}
               >
                 <span className="truncate">{l.name}</span>
               </RailItem>
@@ -159,7 +198,7 @@ export default function App() {
 
         <div className="mt-auto flex flex-col gap-2">
           <div className="flex items-center gap-1">
-            <RailItem className="flex-1" active={view === "settings"} onClick={() => setView("settings")}>
+            <RailItem className="flex-1" active={settings} onClick={() => navigate("/settings")}>
               <span className="flex items-center gap-2">
                 <Settings className="size-3.5" aria-hidden />
                 Settings
@@ -181,20 +220,16 @@ export default function App() {
             as everything else — previously it swapped in with no transition at
             all because it sat outside the only AnimatePresence here. */}
         <AnimatePresence mode="wait">
-        <m.div key={view === "settings" ? "settings" : "app"} variants={rise} initial="hidden" animate="shown" exit="gone">
-        {view === "settings" ? (
-          <SettingsPanel onBack={() => setView(sport ? "scout" : "home")} />
+        <m.div key={settings ? "settings" : "app"} variants={rise} initial="hidden" animate="shown" exit="gone">
+        {settings ? (
+          <SettingsPanel onBack={() => navigate(sport && leagueId ? `/${sport}/${leagueId}` : "/")} />
         ) : sports.isSuccess && usable.length === 0 ? (
           <Empty sports={sports.data} />
-        ) : view === "home" ? (
+        ) : !sport ? (
           sports.isSuccess ? (
             <Landing
               sports={sports.data}
-              onPick={(picked, picked_league) => {
-                setSport(picked.key);
-                setLeagueId(picked_league.league_id);
-                setView("scout");
-              }}
+              onPick={(picked, picked_league) => openLeague(picked.key, picked_league.league_id)}
             />
           ) : (
             <div className="p-6">
@@ -208,13 +243,13 @@ export default function App() {
           // headed "Huge Euge RR FF", with FPL's figures in the strip.
           <AnimatePresence mode="wait">
             <m.div key={`${panelKey}:${current}`} variants={rise} initial="hidden" animate="shown">
-              {current === "scout" ? (
+              {current === "week" ? (
                 <ScoutPanel sport={active} league={league} />
               ) : current === "league" ? (
                 <LeaguePanel sport={active} league={league} />
               ) : current === "team" ? (
                 <TeamPanel sport={active} league={league} />
-              ) : current === "agents" ? (
+              ) : current === "free-agents" ? (
                 <FreeAgentsPanel sport={active} league={league} />
               ) : current === "report" ? (
                 <ReportPanel sport={active} league={league} />

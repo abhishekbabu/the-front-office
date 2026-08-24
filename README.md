@@ -130,6 +130,19 @@ just ui     # build the UI and serve it at http://localhost:8000
 just run    # interactive CLI
 ```
 
+Every page has an address, so a view can be linked, bookmarked or reloaded and
+the browser's Back button means what it says:
+
+| Path | Page |
+|------|------|
+| `/` | every league you can play, to pick from |
+| `/{competition}-{platform}/{league}` | this week, the default view |
+| `/{competition}-{platform}/{league}/{view}` | `league`, `team`, `free-agents`, `report`, `trade` |
+| `/settings` | credentials and appearance |
+
+A competition with no league (`/nfl-sleeper`) resolves to your first one, and a
+path naming a competition you cannot play returns to `/`.
+
 For UI work, run the two halves separately so the front end hot-reloads:
 
 ```bash
