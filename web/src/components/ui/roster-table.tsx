@@ -74,7 +74,7 @@ export function RosterTable({
   onOpen?: (playerId: string) => void;
   /** Supplied by a caller that sorts server-side; omitted to sort in place. */
   sort?: SortState | null;
-  onSort?: (next: SortState) => void;
+  onSort?: (next: SortState | null) => void;
 }) {
   const [local, setLocal] = useState<SortState | null>(null);
   // A complete list sorts itself; a page of a longer one has to ask the
