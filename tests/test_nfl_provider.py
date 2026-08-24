@@ -324,3 +324,24 @@ def test_a_free_agent_carries_the_numbers_behind_its_columns() -> None:
     card = _provider(client).free_agents("L1", PlayerQuery()).players[0]
 
     assert card.values["Exp"] == 7.0
+
+
+def test_the_drawer_names_the_club_in_full_with_its_crest() -> None:
+    """A column has room for "BUF"; a drawer has room for the name."""
+    detail = _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).player("L1", "qb1")
+    assert detail.team == "BUF"
+    assert detail.team_name == "Buffalo Bills"
+    # Lowercase, or Sleeper's CDN 404s — the abbreviation everywhere else is upper.
+    assert detail.team_logo_url == "https://sleepercdn.com/images/team_logos/nfl/buf.png"
+
+
+def test_a_club_the_catalog_does_not_name_falls_back_to_its_abbreviation() -> None:
+    """Worse than the full name, no worse than before, and not a failed page."""
+    detail = _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).player("L1", "bye1")
+    assert detail.team_name == "LAR"
+
+
+def test_the_opponent_is_named_in_full_where_there_is_room() -> None:
+    detail = _provider(FakeSleeper(projections=DEFAULT_PROJECTIONS)).player("L1", "qb1")
+    opponent = next(s for s in detail.groups[0].stats if s.label == "Opponent")
+    assert opponent.value == "vs Miami Dolphins"

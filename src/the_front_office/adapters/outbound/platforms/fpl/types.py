@@ -52,6 +52,21 @@ def as_millions(tenths: int) -> str:
 
 
 @dataclass(frozen=True)
+class Club:
+    """One Premier League club, as the bootstrap names it."""
+
+    short_name: str
+    """Three letters, which is what a player carries and a table shows."""
+
+    name: str
+    """The club as a person says it: 'Tottenham Hotspur'."""
+
+    code: int
+    """The club's own id in the league's media library, which is what its crest
+    is filed under — not the same number as `id`."""
+
+
+@dataclass(frozen=True)
 class Gameweek:
     """One of the 38 scoring periods."""
 

@@ -29,6 +29,7 @@ from the_front_office.adapters.outbound.competitions.premier_league.squad import
 from the_front_office.adapters.outbound.platforms.fpl.client import FPLClient, free_transfers
 from the_front_office.adapters.outbound.platforms.fpl.types import (
     Chip,
+    Club,
     Gameweek,
     LiveStat,
     MiniLeague,
@@ -74,6 +75,8 @@ LEAGUE_URL = "https://fantasy.premierleague.com/leagues/{league_id}/standings/{k
 ENTRY_URL = "https://fantasy.premierleague.com/entry/{entry_id}/event/1"
 
 PORTRAIT_URL = "https://resources.premierleague.com/premierleague/photos/players/250x250/p{code}.png"
+# Filed under the club's media `code`, not its bootstrap `id`.
+BADGE_URL = "https://resources.premierleague.com/premierleague/badges/70/t{code}.png"
 
 # Three back is a different club and usually a different role; a fourth row
 # adds scrolling rather than judgement.
@@ -194,12 +197,15 @@ class FPLProvider:
             raise PlayerNotFoundError([player_id])
 
         upcoming = self.client.upcoming_gameweek()
+        club = self._club(player.team)
 
         return PlayerDetail(
             player_id=str(player.id),
             name=player.full_name or player.name,
             position=player.position,
             team=player.team,
+            team_name=club.name if club else player.team,
+            team_logo_url=BADGE_URL.format(code=club.code) if club and club.code else "",
             headline=f"{player.expected_points:.1f}",
             headline_label=f"xPts for {upcoming.name}",
             note=player.news,
@@ -247,6 +253,22 @@ class FPLProvider:
             ],
             tables=[table] if (table := self._season_table(player)) else [],
         )
+
+    def _clubs(self) -> dict[str, Club]:
+        """Every club in full, keyed by the abbreviation a player carries.
+
+        Read off the same bootstrap as everything else, so it costs no request.
+        Degrades to nothing rather than failing a page: a drawer that says
+        "TOT" is worse than one that says "Spurs" and no worse than before.
+        """
+        try:
+            return self.client.get_clubs()
+        except FPLAPIError as e:
+            logger.warning(f"Continuing without club names: {e}")
+            return {}
+
+    def _club(self, short_name: str) -> Club | None:
+        return self._clubs().get(short_name)
 
     def _season_table(self, player: Player) -> StatTable | None:
         """This season beside the two before it, read across rather than down.
@@ -339,7 +361,14 @@ class FPLProvider:
             return "This season"
 
     def _fixture_line(self, player: Player, gameweek: int) -> str:
-        return self._fixtures_by_club([player], gameweek).get(player.team, "no fixture")
+        """The drawer's fixture, with the opponent named the way it is said."""
+        clubs = self._clubs()
+
+        def in_full(short_name: str) -> str:
+            club = clubs.get(short_name)
+            return club.name if club else short_name
+
+        return self._fixtures_by_club([player], gameweek, in_full).get(player.team, "no fixture")
 
     @staticmethod
     def _set_pieces(player: Player) -> list[Stat]:
@@ -712,8 +741,15 @@ class FPLProvider:
                 notable.append(Stat(label=club, value=f"double gameweek — {fixture}", tone="good"))
         return notable
 
-    def _fixtures_by_club(self, players: list[Player], gameweek: int) -> dict[str, str]:
-        """Each owned club's opponent this gameweek; absent means a blank."""
+    def _fixtures_by_club(
+        self, players: list[Player], gameweek: int, name_of: Callable[[str], str] = str
+    ) -> dict[str, str]:
+        """Each owned club's opponent this gameweek; absent means a blank.
+
+        `name_of` spells the opponent. A lineup row has room for three letters
+        and a drawer has room for the club, so the caller decides rather than
+        every reader having to translate one into the other.
+        """
         try:
             fixtures = self.client.get_fixtures(gameweek)
         except FPLAPIError as e:
@@ -724,7 +760,8 @@ class FPLProvider:
             matches = [m for f in fixtures if (m := f.opponent_of(club))]
             if matches:
                 by_club[club] = ", ".join(
-                    f"{'vs' if home else 'at'} {opponent} ({difficulty})" for opponent, difficulty, home in matches
+                    f"{'vs' if home else 'at'} {name_of(opponent)} ({difficulty})"
+                    for opponent, difficulty, home in matches
                 )
         return by_club
 

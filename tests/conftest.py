@@ -195,6 +195,12 @@ class FakeSleeper:
             "rb2": PlayerMeta(player_id="rb2", name="Bad RB", position="RB", team="BUF"),
             "wr9": PlayerMeta(player_id="wr9", name="Waiver WR", position="WR", team="NYJ"),
             "bye1": PlayerMeta(player_id="bye1", name="Bye Guy", position="TE", team="LAR"),
+            # Sleeper files every team defense in the same catalog under the
+            # club's own abbreviation, named the way somebody says it — which
+            # is also how a caller turns "BUF" into "Buffalo Bills".
+            "BUF": PlayerMeta(player_id="BUF", name="Buffalo Bills", position="DEF", team="BUF"),
+            "MIA": PlayerMeta(player_id="MIA", name="Miami Dolphins", position="DEF", team="MIA"),
+            "NYJ": PlayerMeta(player_id="NYJ", name="New York Jets", position="DEF", team="NYJ"),
         }
 
     def get_projections(self, season: str, week: int, scoring: str) -> dict[str, WeeklyProjection]:

@@ -14,6 +14,7 @@ from the_front_office.adapters.outbound.competitions.premier_league.fpl import F
 from the_front_office.adapters.outbound.platforms.fpl.types import (
     Chip,
     ChipPlay,
+    Club,
     Entry,
     Fixture,
     Gameweek,
@@ -194,7 +195,18 @@ class FakeFPL:
         chips: list[Chip] | None = None,
         chips_played: list[ChipPlay] | None = None,
         chips_error: Exception | None = None,
+        clubs: list[Club] | None = None,
+        clubs_error: Exception | None = None,
     ) -> None:
+        self.clubs = (
+            clubs
+            if clubs is not None
+            else [
+                Club(short_name="ARS", name="Arsenal", code=3),
+                Club(short_name="TOT", name="Spurs", code=6),
+            ]
+        )
+        self.clubs_error = clubs_error
         self.past_seasons = past_seasons if past_seasons is not None else list(DEFAULT_PAST_SEASONS)
         self.past_seasons_error = past_seasons_error
         self.leagues = (
@@ -280,6 +292,11 @@ class FakeFPL:
         if self.fixtures_error:
             raise self.fixtures_error
         return self.fixtures
+
+    def get_clubs(self) -> dict[str, Club]:
+        if self.clubs_error:
+            raise self.clubs_error
+        return {c.short_name: c for c in self.clubs}
 
     def get_chips(self) -> list[Chip]:
         if self.chips_error:
@@ -1103,3 +1120,17 @@ def test_the_opponents_armbands_are_marked_too() -> None:
 
     assert opponent is not None
     assert any("(C)" in s.player for s in opponent.lineup)
+
+
+def test_the_drawer_names_the_club_in_full_with_its_crest() -> None:
+    detail = provider().player(LEAGUE_ID, "1")
+    assert detail.team_name == "Arsenal"
+    # Filed under the club's media code, not its bootstrap id.
+    assert detail.team_logo_url == "https://resources.premierleague.com/premierleague/badges/70/t3.png"
+
+
+def test_a_club_that_will_not_load_falls_back_to_the_abbreviation() -> None:
+    """Worse than the full name, no worse than before, and not a failed page."""
+    detail = provider(clubs_error=FPLAPIError("down")).player(LEAGUE_ID, "1")
+    assert detail.team_name == detail.team
+    assert detail.team_logo_url == ""
