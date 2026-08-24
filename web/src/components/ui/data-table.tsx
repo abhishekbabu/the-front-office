@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 import { m } from "motion/react";
 import { list, listItem } from "@/lib/motion";
 import { Table, Td, Th } from "@/components/ui/table";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 /**
@@ -111,11 +112,15 @@ export function DataTable<Row extends { player_id: string; columns: Record<strin
           {columns.map((column) => (
             <Th key={column} className={cn(isNumeric(column) && "text-right", onSort && "p-0")}>
               {onSort ? (
-                <button
+                // The label says which of the three states the next click is,
+                // which is not guessable from an arrow. Through the shared
+                // tooltip rather than `title`, so it is styled, prompt, and
+                // reachable by keyboard like every other one in the app.
+                <Tooltip label={sortLabel(column)} side={isNumeric(column) ? "left" : "right"}>
+                  <button
                   type="button"
                   onClick={() => onSort(nextSort(column))}
                   aria-label={sortLabel(column)}
-                  title={sortLabel(column)}
                   // px-4 to match a cell's, so a heading sits over its column
                   // rather than four pixels inside it. Reversed in a figures
                   // column so the label stays flush with the digits under it
@@ -135,7 +140,8 @@ export function DataTable<Row extends { player_id: string; columns: Record<strin
                     {isActive(column) &&
                       (sort?.descending ? <ArrowDown className="size-3" /> : <ArrowUp className="size-3" />)}
                   </span>
-                </button>
+                  </button>
+                </Tooltip>
               ) : (
                 column
               )}

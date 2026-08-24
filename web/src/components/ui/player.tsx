@@ -171,7 +171,7 @@ function TeamLine({ detail }: { detail: PlayerDetail }) {
   );
 }
 
-function Portrait({ src, name }: { src: string; name: string }) {
+function Portrait({ src }: { src: string }) {
   const [failed, setFailed] = useState(false);
   if (!src || failed) return null;
   return (
@@ -183,7 +183,6 @@ function Portrait({ src, name }: { src: string; name: string }) {
       initial="hidden"
       animate="shown"
       onError={() => setFailed(true)}
-      title={name}
       // Square and centre-cropped, which suits both: FPL ships a 500px square
       // cut-out, Sleeper a 350x254 studio card whose only loss to a square is
       // white margin. 96px is as large as the smaller of the two stays sharp
@@ -247,7 +246,7 @@ export function PlayerPanel({
               you stop being able to see, and they are what every row below is
               about. */}
           <div className="sticky top-0 z-10 flex items-start gap-4 border-b border-border bg-popover px-5 py-4">
-            {player.data && <Portrait src={player.data.image_url} name={player.data.name} />}
+            {player.data && <Portrait src={player.data.image_url} />}
 
             <div className="min-w-0 flex-1 pt-0.5">
               {player.data ? (
