@@ -131,6 +131,46 @@ function SeasonTable({ table }: { table: StatTable }) {
  * most players and 404 for the rest, and a broken-image glyph beside a name
  * looks like the app is broken rather than like the photo is missing.
  */
+/**
+ * Position and club, with the crest where there is one.
+ *
+ * The club in full rather than the three letters a table shows: there is room
+ * here, and "Detroit Lions" is what somebody would have said out loud. Kept on
+ * one line with the position so it reads as one fact about the player rather
+ * than a second heading.
+ *
+ * Not uppercased, unlike the rest of this mono line — a club name in caps
+ * reads as shouting, and the abbreviation it replaces was only in caps
+ * because that is how abbreviations come.
+ */
+function TeamLine({ detail }: { detail: PlayerDetail }) {
+  const [failed, setFailed] = useState(false);
+  const club = detail.team_name || detail.team;
+  if (!detail.position && !club) return null;
+  return (
+    <p className="mt-1 flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
+      {detail.position && <span className="uppercase tracking-[0.06em]">{detail.position}</span>}
+      {detail.position && club && <span aria-hidden>·</span>}
+      {club && (
+        <span className="flex min-w-0 items-center gap-1.5">
+          {/* Removed rather than replaced when it fails, like the portrait: a
+              broken-image glyph beside a club name reads as a broken app. */}
+          {detail.team_logo_url && !failed && (
+            <img
+              src={detail.team_logo_url}
+              alt=""
+              aria-hidden
+              onError={() => setFailed(true)}
+              className="size-4 shrink-0 object-contain"
+            />
+          )}
+          <span className="truncate text-[12px]">{club}</span>
+        </span>
+      )}
+    </p>
+  );
+}
+
 function Portrait({ src, name }: { src: string; name: string }) {
   const [failed, setFailed] = useState(false);
   if (!src || failed) return null;
@@ -215,9 +255,7 @@ export function PlayerPanel({
                   <h2 className="font-display text-[22px] font-semibold leading-tight tracking-tight">
                     {player.data.name}
                   </h2>
-                  <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
-                    {[player.data.position, player.data.team].filter(Boolean).join(" · ")}
-                  </p>
+                  <TeamLine detail={player.data} />
                   <Headline detail={player.data} />
                   {player.data.note && (
                     <Badge variant="warn" appearance="status" className="mt-2">
@@ -257,7 +295,12 @@ export function PlayerPanel({
                 </m.section>
               ))}
 
-              {player.data.groups.map((group) => (
+              {/* A group with nothing in it is a heading that says nothing —
+                  a kicker has no passing line, and "Projected line" over empty
+                  space reads as a figure that failed to arrive. */}
+              {player.data.groups
+                .filter((group) => group.stats.length > 0)
+                .map((group) => (
                 <m.section key={group.title} variants={listItem}>
                   <h3 className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     {group.title}

@@ -27,6 +27,7 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
     POSITIONS,
     Chip,
     ChipPlay,
+    Club,
     Entry,
     Fixture,
     Gameweek,
@@ -166,6 +167,22 @@ class FPLClient:
     def get_teams(self) -> dict[int, str]:
         """Club id -> three-letter abbreviation."""
         return {int(t["id"]): str(t["short_name"]) for t in self._get_bootstrap()["teams"]}
+
+    def get_clubs(self) -> dict[str, Club]:
+        """Abbreviation -> the club in full, keyed the way a player names it.
+
+        Keyed on `short_name` rather than id because that is what `Player.team`
+        carries: a caller holding a player has the abbreviation, not the id.
+        Read off the same bootstrap as everything else, so it costs nothing.
+        """
+        return {
+            str(t["short_name"]): Club(
+                short_name=str(t["short_name"]),
+                name=str(t["name"]),
+                code=int(t.get("code") or 0),
+            )
+            for t in self._get_bootstrap()["teams"]
+        }
 
     def get_gameweeks(self) -> list[Gameweek]:
         return [

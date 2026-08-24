@@ -101,7 +101,8 @@ def test_a_player_carries_their_week_and_their_depth() -> None:
     assert detail.name == "Star QB"
     assert detail.headline == "22.0"
     assert detail.headline_label == "projected for week 3"
-    assert labels["Opponent"] == "vs MIA"
+    # In full, because a drawer has the room a table column does not.
+    assert labels["Opponent"] == "vs Miami Dolphins"
 
 
 def test_an_unknown_player_is_refused() -> None:

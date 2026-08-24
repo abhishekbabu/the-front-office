@@ -227,7 +227,12 @@ export type PlayerDetail = {
   player_id: string;
   name: string;
   position: string;
+  /** The club as a table spells it: "DET". */
   team: string;
+  /** The same club in full — "Detroit Lions". Empty falls back to `team`. */
+  team_name: string;
+  /** The club's crest, or empty where the competition has none. */
+  team_logo_url: string;
   /** The bare figure, empty when there is none — which is not zero. */
   headline: string;
   /** What that figure is, or why there is not one. */

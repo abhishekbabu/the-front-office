@@ -201,7 +201,19 @@ class PlayerDetail(BaseModel):
     player_id: str
     name: str
     position: str
-    team: str
+    team: str = Field(description="The club as a table spells it: 'DET', 'TOT'.")
+    team_name: str = Field(
+        default="",
+        description=(
+            "The same club in full — 'Detroit Lions', 'Tottenham Hotspur'. A drawer has room "
+            "for the name a person would say, where a column has room for three letters. "
+            "Empty falls back to `team` rather than leaving the line blank."
+        ),
+    )
+    team_logo_url: str = Field(
+        default="",
+        description="The club's crest on the platform's own CDN, or empty where it has none.",
+    )
     headline: str = Field(
         default="",
         description=(

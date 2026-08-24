@@ -102,6 +102,9 @@ def _projection_lines(stats: dict[str, float]) -> list[Stat]:
 # Sleeper serves portraits off its own CDN, keyed by the same player_id the
 # rest of the API uses, with no key and no lookup.
 PORTRAIT_URL = "https://sleepercdn.com/content/nfl/players/{player_id}.jpg"
+# Lowercase or it 404s, and the abbreviation everywhere else in this file is
+# upper.
+TEAM_LOGO_URL = "https://sleepercdn.com/images/team_logos/nfl/{team}.png"
 
 # Where the moves are actually made. Sleeper routes on these — an invented
 # path 404s — so they are addresses rather than guesses.
@@ -312,9 +315,27 @@ class SleeperNFLProvider:
         return f"Not projected to feature in week {week}"
 
     @staticmethod
-    def _opponent_label(projection: WeeklyProjection | None, scheduled: bool) -> str:
+    def _team_name(team: str, players: dict[str, PlayerMeta]) -> str:
+        """A club in full, at no extra request.
+
+        Sleeper files every team defense in the player catalog under the club's
+        own abbreviation, named the way somebody would say it — so the catalog
+        this provider already holds is also the lookup from 'DET' to
+        'Detroit Lions'. Falls back to the abbreviation, which is what a caller
+        would have shown anyway.
+        """
+        meta = players.get(team)
+        return str(meta.get("name") or team) if meta else team
+
+    @classmethod
+    def _opponent_label(
+        cls, projection: WeeklyProjection | None, scheduled: bool, players: dict[str, PlayerMeta] | None = None
+    ) -> str:
+        """Who they play. In full where a caller has room for it — the drawer
+        does, a table column does not."""
         if projection and projection.opponent:
-            return f"vs {projection.opponent}"
+            opponent = cls._team_name(projection.opponent, players) if players else projection.opponent
+            return f"vs {opponent}"
         return "no game" if scheduled else "—"
 
     def player(self, league_id: str, player_id: str) -> PlayerDetail:
@@ -334,7 +355,7 @@ class SleeperNFLProvider:
             StatGroup(
                 title=f"Week {state.week}",
                 stats=[
-                    Stat(label="Opponent", value=self._opponent_label(projection, scheduled)),
+                    Stat(label="Opponent", value=self._opponent_label(projection, scheduled, state.players)),
                     Stat(label="Projected", value=f"{projection.points:.1f}" if projection else "—"),
                     Stat(
                         label="Status",
@@ -364,7 +385,9 @@ class SleeperNFLProvider:
             player_id=player_id,
             name=str(meta.get("name") or player_id),
             position=str(meta.get("position") or ""),
-            team=str(meta.get("team") or "FA"),
+            team=(team := str(meta.get("team") or "FA")),
+            team_name=self._team_name(team, state.players),
+            team_logo_url=TEAM_LOGO_URL.format(team=team.lower()) if team != "FA" else "",
             headline=f"{projection.points:.1f}" if projection else "",
             headline_label=self._headline_label(projection, scheduled, state.week),
             note=str(meta.get("injury_notes") or injury),
