@@ -1,6 +1,6 @@
 """The interactive loop.
 
-Sport-neutral: the registry decides which sports are available, and a platform
+Competition-neutral: the registry decides which competitions are available, and a platform
 is only contacted when a command actually needs it.
 """
 
@@ -18,7 +18,7 @@ from the_front_office.adapters.inbound.cli.commands import (
 )
 from the_front_office.adapters.inbound.cli.output import _print_header, print_error
 from the_front_office.adapters.inbound.cli.session import Session
-from the_front_office.bootstrap import CompetitionEntry, all_sports, configured_sports
+from the_front_office.bootstrap import CompetitionEntry, all_competitions, configured_competitions
 from the_front_office.config.logging import setup_logging
 from the_front_office.config.telemetry import setup_telemetry
 from the_front_office.domain.errors import FrontOfficeError
@@ -93,7 +93,7 @@ def _dispatch(session: Session, entries: list[CompetitionEntry], cmd: str, args:
 
 
 def main() -> None:
-    """Start a REPL over whichever sports are configured."""
+    """Start a REPL over whichever competitions are configured."""
     _configure_console()
     setup_logging()
     # After setup_logging, so the bridge attaches to a root logger that already
@@ -103,12 +103,12 @@ def main() -> None:
     _print_header("🏆 The Front Office — Fantasy Intelligence")
     print(f"  {datetime.now().strftime('%A, %B %d %Y  •  %I:%M %p')}")
 
-    entries = configured_sports()
+    entries = configured_competitions()
     if not entries:
-        print("\n  ⚠️  No sports configured. Set one of these in .env:")
-        from the_front_office.bootstrap import all_sports
+        print("\n  ⚠️  No competitions configured. Set one of these in .env:")
+        from the_front_office.bootstrap import all_competitions
 
-        for entry in all_sports():
+        for entry in all_competitions():
             print(f"       {entry.label}: {entry.requires}")
         sys.exit(1)
 
@@ -154,8 +154,8 @@ def main() -> None:
 
 def _unconfigured() -> list[CompetitionEntry]:
 
-    configured = {e.competition for e in configured_sports()}
-    return [e for e in all_sports() if e.competition not in configured]
+    configured = {e.competition for e in configured_competitions()}
+    return [e for e in all_competitions() if e.competition not in configured]
 
 
 if __name__ == "__main__":

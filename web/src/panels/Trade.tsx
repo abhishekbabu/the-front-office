@@ -9,11 +9,11 @@ import { Working } from "@/components/ui/state";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Chat, Chips, ErrorNote, PageHeader } from "@/panels/shared";
 
-export function TradePanel({ sport, league }: { sport: Competition; league: League }) {
+export function TradePanel({ competition, league }: { competition: Competition; league: League }) {
   const [text, setText] = useState("");
 
   const run = useMutation<Evaluation, Error, string>({
-    mutationFn: (description) => api.trade(sport.key, league.league_id, description),
+    mutationFn: (description) => api.trade(competition.key, league.league_id, description),
   });
 
   return (
@@ -55,7 +55,7 @@ export function TradePanel({ sport, league }: { sport: Competition; league: Leag
               <div className="flex flex-wrap items-center gap-3">
                 <span className="font-display text-3xl font-bold tracking-tight">{run.data.verdict.verdict}</span>
                 <Badge variant={verdictTone(run.data.verdict.verdict)} appearance="status">
-                  {sport.label.replace(/\s*\(.*\)$/, "")}
+                  {competition.label.replace(/\s*\(.*\)$/, "")}
                 </Badge>
               </div>
               <p className="max-w-[62ch] text-[14.5px] leading-relaxed">{run.data.verdict.verdict_detail}</p>

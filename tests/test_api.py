@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from reports import MOCK_FPL_REPORT, MOCK_NBA_VERDICT
 
 from the_front_office.adapters.inbound.web import api as web
-from the_front_office.domain.models import PlayerCard, SportContext
+from the_front_office.domain.models import CompetitionContext, PlayerCard
 from the_front_office.domain.ports import LeagueRef
 
 
@@ -45,11 +45,11 @@ class FakeProvider:
             raise self.error
         return [PlayerCard(player_id="10", columns={"Player": "Haaland", "Pos": "FWD", "xPts": "7.4"})]
 
-    def build_context(self, league_id: str) -> SportContext:
-        return SportContext(prompt="prompt")
+    def build_context(self, league_id: str) -> CompetitionContext:
+        return CompetitionContext(prompt="prompt")
 
-    def build_trade_context(self, league_id: str, proposal: Any) -> SportContext:
-        return SportContext(prompt="prompt")
+    def build_trade_context(self, league_id: str, proposal: Any) -> CompetitionContext:
+        return CompetitionContext(prompt="prompt")
 
 
 class FakeChat:
@@ -96,7 +96,7 @@ class _Engine:
 
 def test_sports_include_the_unconfigured_ones(client: TestClient) -> None:
     """Hiding them would silently offer less than the app can do."""
-    body = client.get("/api/sports").json()
+    body = client.get("/api/competitions").json()
 
     assert {s["competition"] for s in body} == {"nba", "nfl", "premier-league"}
     # And each carries the sport it belongs to, which is what groups them.
@@ -105,7 +105,7 @@ def test_sports_include_the_unconfigured_ones(client: TestClient) -> None:
 
 
 def test_a_sport_declares_whether_it_can_trade(client: TestClient) -> None:
-    by_sport = {s["competition"]: s for s in client.get("/api/sports").json()}
+    by_sport = {s["competition"]: s for s in client.get("/api/competitions").json()}
 
     assert by_sport["nfl"]["supports_trades"] is True
     assert by_sport["premier-league"]["supports_trades"] is False
@@ -239,7 +239,31 @@ def test_an_empty_follow_up_is_rejected(client: TestClient) -> None:
 
 def test_the_api_serves_without_a_built_front_end(client: TestClient) -> None:
     """`dist/` is absent during front-end development and in the test suite."""
-    assert client.get("/api/sports").status_code == 200
+    assert client.get("/api/competitions").status_code == 200
+
+
+@pytest.fixture
+def built_client(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    """A client with a front end built, so the catch-all route is mounted."""
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<!doctype html><title>app</title>")
+    monkeypatch.setattr(web, "DIST", dist)
+    return TestClient(web.create_app())
+
+
+def test_a_view_url_returns_the_page_so_a_deep_link_loads(built_client: TestClient) -> None:
+    response = built_client.get("/nfl-sleeper/900/team")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+
+def test_an_unknown_api_path_is_a_404_not_the_page(built_client: TestClient) -> None:
+    """Otherwise a renamed or misspelled route answers 200 with HTML, and the
+    caller fails on JSON that will not parse instead of on the missing route."""
+    response = built_client.get("/api/does-not-exist")
+    assert response.status_code == 404
+    assert "text/html" not in response.headers["content-type"]
 
 
 # ── settings ────────────────────────────────────────────────────────────
@@ -439,9 +463,9 @@ def _with_readiness(monkeypatch: pytest.MonkeyPatch, sport: str, check: Any) -> 
     import dataclasses
 
     entries = tuple(
-        dataclasses.replace(e, check_ready=check) if e.competition == sport else e for e in web.all_sports()
+        dataclasses.replace(e, check_ready=check) if e.competition == sport else e for e in web.all_competitions()
     )
-    monkeypatch.setattr(web, "all_sports", lambda: entries)
+    monkeypatch.setattr(web, "all_competitions", lambda: entries)
 
 
 def test_a_configured_sport_can_still_be_unusable(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -452,7 +476,7 @@ def test_a_configured_sport_can_still_be_unusable(client: TestClient, monkeypatc
     monkeypatch.setattr(web.settings, "yahoo_client_secret", "secret")
     _with_readiness(monkeypatch, "nba", _raising(YahooLoginRequiredError()))
 
-    nba = next(s for s in client.get("/api/sports").json() if s["competition"] == "nba")
+    nba = next(s for s in client.get("/api/competitions").json() if s["competition"] == "nba")
 
     assert nba["configured"] is True
     assert nba["ready"] is False
@@ -462,7 +486,7 @@ def test_a_configured_sport_can_still_be_unusable(client: TestClient, monkeypatc
 def test_a_sport_with_nothing_in_the_way_is_ready(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(web.settings, "sleeper_username", "abhibeast")
 
-    nfl = next(s for s in client.get("/api/sports").json() if s["competition"] == "nfl")
+    nfl = next(s for s in client.get("/api/competitions").json() if s["competition"] == "nfl")
 
     assert (nfl["ready"], nfl["blocked_reason"], nfl["blocked_code"]) == (True, "", "")
 
@@ -472,7 +496,7 @@ def test_an_unconfigured_sport_is_not_probed(client: TestClient, monkeypatch: py
     credentials, burying the thing the user actually has to set."""
     _with_readiness(monkeypatch, "nba", _raising(AssertionError("must not be probed")))
 
-    nba = next(s for s in client.get("/api/sports").json() if s["competition"] == "nba")
+    nba = next(s for s in client.get("/api/competitions").json() if s["competition"] == "nba")
 
     assert (nba["configured"], nba["ready"], nba["blocked_reason"]) == (False, False, "")
 

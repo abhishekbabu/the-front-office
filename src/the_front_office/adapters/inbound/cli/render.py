@@ -1,7 +1,7 @@
 """Terminal rendering for reports.
 
 The only place that turns the validated models into text. The web UI renders the
-same models its own way, and one renderer serves every sport.
+same models its own way, and one renderer serves every competition.
 """
 
 import textwrap

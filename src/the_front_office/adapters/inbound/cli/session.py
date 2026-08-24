@@ -8,7 +8,7 @@ class Session:
     """Holds providers, building each on first use.
 
     Construction is deferred because building a provider can open an OAuth
-    flow, which a user who does not play that sport must never be made to sit
+    flow, which a user who does not play that competition must never be made to sit
     through.
     """
 

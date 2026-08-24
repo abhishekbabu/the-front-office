@@ -1,6 +1,6 @@
 """The generic scouting pipeline.
 
-Identical for every sport: ask the provider for a context, get a validated
+Identical for every competition: ask the provider for a context, get a validated
 report back from the model, and open a chat seeded with a briefing rather than
 the whole prompt.
 """

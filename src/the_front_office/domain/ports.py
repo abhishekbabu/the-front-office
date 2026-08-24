@@ -12,12 +12,12 @@ from typing import Protocol, TypedDict, TypeVar, runtime_checkable
 from pydantic import BaseModel
 
 from the_front_office.domain.models import (
+    CompetitionContext,
     LeagueSchedule,
     PlayerCard,
     PlayerDetail,
     PlayerPage,
     PlayerQuery,
-    SportContext,
     Summary,
     TeamRef,
     TradeProposal,
@@ -28,7 +28,7 @@ TModel = TypeVar("TModel", bound=BaseModel)
 
 @dataclass(frozen=True)
 class LeagueRef:
-    """A league the user is in, in whatever platform the sport uses."""
+    """A league the user is in, in whatever platform the competition uses."""
 
     league_id: str
     name: str
@@ -114,7 +114,7 @@ class CompetitionProvider(Protocol):
         """
         ...
 
-    def build_context(self, league_id: str) -> SportContext:
+    def build_context(self, league_id: str) -> CompetitionContext:
         """Gather this league's state and render the scouting prompt.
 
         Raises:
@@ -158,7 +158,7 @@ class CompetitionProvider(Protocol):
 
         The other half of a roster: what you hold is only half the question,
         and the half that changes is what is still out there. Columns are the
-        sport's own, exactly as `roster` returns them, so one table renders
+        competition's own, exactly as `roster` returns them, so one table renders
         both.
 
         A page rather than a list because a football pool is four thousand
@@ -204,9 +204,10 @@ class CompetitionProvider(Protocol):
 
 @runtime_checkable
 class TradeProvider(Protocol):
-    """A sport that can also evaluate trades.
+    """A competition that can also evaluate trades.
 
-    Separate from CompetitionProvider because trade support arrives per sport: a
+    Separate from CompetitionProvider because trade support arrives per
+    competition: a
     provider can scout without yet being able to price a trade, and the registry
     advertises which can via `supports_trades`.
     """
@@ -214,7 +215,7 @@ class TradeProvider(Protocol):
     sport: str
     label: str
 
-    def build_trade_context(self, league_id: str, proposal: TradeProposal) -> SportContext:
+    def build_trade_context(self, league_id: str, proposal: TradeProposal) -> CompetitionContext:
         """Resolve both sides of the trade and render the evaluation prompt.
 
         Raises:

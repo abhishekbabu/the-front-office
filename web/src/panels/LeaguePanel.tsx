@@ -30,17 +30,17 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "activity", label: "Activity" },
 ];
 
-export function LeaguePanel({ sport, league }: { sport: Competition; league: League }) {
+export function LeaguePanel({ competition, league }: { competition: Competition; league: League }) {
   const schedule = useQuery<LeagueSchedule, Error>({
-    queryKey: ["schedule", sport.key, league.league_id],
-    queryFn: () => api.schedule(sport.key, league.league_id),
+    queryKey: ["schedule", competition.key, league.league_id],
+    queryFn: () => api.schedule(competition.key, league.league_id),
   });
 
   // Rosters come from their own call rather than the schedule: browsing them
   // is a different question, and the season view should not wait on it.
   const teams = useQuery<TeamRef[], Error>({
-    queryKey: ["teams", sport.key, league.league_id],
-    queryFn: () => api.teams(sport.key, league.league_id),
+    queryKey: ["teams", competition.key, league.league_id],
+    queryFn: () => api.teams(competition.key, league.league_id),
   });
 
   // Only the sections this platform actually answers. A tab that is always
@@ -97,7 +97,7 @@ export function LeaguePanel({ sport, league }: { sport: Competition; league: Lea
             <Standings rows={schedule.data.standings} onOpen={(id) => { setTeam(id); setTab("rosters"); }} />
           )}
           {current === "rosters" && (
-            <Rosters sport={sport} league={league} teams={teams.data ?? []} team={team} onPick={setTeam} />
+            <Rosters competition={competition} league={league} teams={teams.data ?? []} team={team} onPick={setTeam} />
           )}
           {current === "matches" && <Matches rows={schedule.data.matches} />}
           {current === "activity" && <Activity rows={schedule.data.activity} />}
@@ -153,13 +153,13 @@ function Row({
  * when nothing else has been picked, and every row opens the player.
  */
 function Rosters({
-  sport,
+  competition,
   league,
   teams,
   team,
   onPick,
 }: {
-  sport: Competition;
+  competition: Competition;
   league: League;
   teams: TeamRef[];
   team: string | null;
@@ -169,8 +169,8 @@ function Rosters({
   const selected = teams.find((t) => t.team_id === team) ?? teams[0];
 
   const roster = useQuery<PlayerCard[], Error>({
-    queryKey: ["team-roster", sport.key, league.league_id, selected?.team_id],
-    queryFn: () => api.teamRoster(sport.key, league.league_id, selected!.team_id),
+    queryKey: ["team-roster", competition.key, league.league_id, selected?.team_id],
+    queryFn: () => api.teamRoster(competition.key, league.league_id, selected!.team_id),
     enabled: Boolean(selected),
   });
 
@@ -219,7 +219,7 @@ function Rosters({
       )}
 
       <PlayerPanel
-        sport={sport.key}
+        competition={competition.key}
         league={league.league_id}
         playerId={open}
         onClose={() => setOpen(null)}

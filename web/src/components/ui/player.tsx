@@ -148,12 +148,12 @@ function Portrait({ src, name }: { src: string; name: string }) {
 }
 
 export function PlayerPanel({
-  sport,
+  competition,
   league,
   playerId,
   onClose,
 }: {
-  sport: string;
+  competition: string;
   league: string;
   playerId: string | null;
   onClose: () => void;
@@ -165,8 +165,8 @@ export function PlayerPanel({
   const shown = playerId ?? last.current;
 
   const player = useQuery<PlayerDetail, Error>({
-    queryKey: ["player", sport, league, shown],
-    queryFn: () => api.player(sport, league, shown),
+    queryKey: ["player", competition, league, shown],
+    queryFn: () => api.player(competition, league, shown),
     enabled: Boolean(shown),
   });
 

@@ -13,12 +13,12 @@ import { ErrorNote, PageHeader } from "@/panels/shared";
  * This is where you look at your players rather than at this week: the season
  * numbers, the ownership, the depth chart. Any row opens.
  */
-export function TeamPanel({ sport, league }: { sport: Competition; league: League }) {
+export function TeamPanel({ competition, league }: { competition: Competition; league: League }) {
   const [open, setOpen] = useState<string | null>(null);
 
   const roster = useQuery<PlayerCard[], Error>({
-    queryKey: ["roster", sport.key, league.league_id],
-    queryFn: () => api.roster(sport.key, league.league_id),
+    queryKey: ["roster", competition.key, league.league_id],
+    queryFn: () => api.roster(competition.key, league.league_id),
   });
 
   return (
@@ -50,7 +50,7 @@ export function TeamPanel({ sport, league }: { sport: Competition; league: Leagu
       )}
 
       <PlayerPanel
-        sport={sport.key}
+        competition={competition.key}
         league={league.league_id}
         playerId={open}
         onClose={() => setOpen(null)}

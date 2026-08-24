@@ -1,7 +1,7 @@
 """The generic trade pipeline.
 
-Identical for every sport: parse the proposal, ask the provider to price both
-sides, and return a validated verdict. Which sports can do this is declared by
+Identical for every competition: parse the proposal, ask the provider to price both
+sides, and return a validated verdict. Which competitions can do this is declared by
 the registry, not tested here.
 """
 

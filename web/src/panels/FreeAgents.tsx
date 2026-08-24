@@ -23,7 +23,7 @@ const PAGE = 50;
  * the fifty rows in hand would answer a different question than the one the
  * column header appears to ask.
  */
-export function FreeAgentsPanel({ sport, league }: { sport: Competition; league: League }) {
+export function FreeAgentsPanel({ competition, league }: { competition: Competition; league: League }) {
   const [open, setOpen] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [position, setPosition] = useState("");
@@ -31,9 +31,9 @@ export function FreeAgentsPanel({ sport, league }: { sport: Competition; league:
   const [offset, setOffset] = useState(0);
 
   const page = useQuery<PlayerPage, Error>({
-    queryKey: ["free-agents", sport.key, league.league_id, search, position, sort, offset],
+    queryKey: ["free-agents", competition.key, league.league_id, search, position, sort, offset],
     queryFn: () =>
-      api.freeAgents(sport.key, league.league_id, {
+      api.freeAgents(competition.key, league.league_id, {
         offset,
         limit: PAGE,
         search,
@@ -95,7 +95,7 @@ export function FreeAgentsPanel({ sport, league }: { sport: Competition; league:
                 />
               </div>
               {/* Read off the pool rather than written down: the positions
-                  differ per sport, and a list here would be a fourth place to
+                  differ per competition, and a list here would be a fourth place to
                   edit. Off the unfiltered pool, so choosing one does not
                   remove the others. */}
               {page.data.positions.map((p) => (
@@ -165,7 +165,7 @@ export function FreeAgentsPanel({ sport, league }: { sport: Competition; league:
       )}
 
       <PlayerPanel
-        sport={sport.key}
+        competition={competition.key}
         league={league.league_id}
         playerId={open}
         onClose={() => setOpen(null)}

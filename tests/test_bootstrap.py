@@ -12,14 +12,14 @@ from the_front_office.config.settings import settings
 
 
 def test_every_registered_sport_is_complete() -> None:
-    for entry in registry.all_sports():
+    for entry in registry.all_competitions():
         assert entry.competition and entry.label and entry.requires
         assert callable(entry.build)
         assert callable(entry.is_configured)
 
 
 def test_sport_keys_are_unique() -> None:
-    keys = [e.competition for e in registry.all_sports()]
+    keys = [e.competition for e in registry.all_competitions()]
     assert len(keys) == len(set(keys))
 
 
@@ -34,20 +34,20 @@ def test_unknown_sport_is_none() -> None:
 
 def test_nothing_is_configured_without_credentials() -> None:
     """The autouse fixture blanks every credential, so this is the bare state."""
-    assert registry.configured_sports() == []
+    assert registry.configured_competitions() == []
 
 
 def test_sleeper_needs_only_a_username(monkeypatch: pytest.MonkeyPatch) -> None:
     """Sleeper is public — no key, no OAuth."""
     monkeypatch.setattr(settings, "sleeper_username", "someone")
-    assert [e.competition for e in registry.configured_sports()] == ["nfl"]
+    assert [e.competition for e in registry.configured_competitions()] == ["nfl"]
 
 
 def test_yahoo_needs_both_halves_of_the_credential(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "yahoo_client_id", "id")
-    assert registry.configured_sports() == []
+    assert registry.configured_competitions() == []
     monkeypatch.setattr(settings, "yahoo_client_secret", "secret")
-    assert [e.competition for e in registry.configured_sports()] == ["nba"]
+    assert [e.competition for e in registry.configured_competitions()] == ["nba"]
 
 
 def test_building_a_provider_is_deferred(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -59,8 +59,8 @@ def test_building_a_provider_is_deferred(monkeypatch: pytest.MonkeyPatch) -> Non
         raise AssertionError("Yahoo was contacted while listing sports")
 
     monkeypatch.setattr(yahoo_mod.YahooClient, "login", classmethod(_must_not_run))
-    registry.all_sports()
-    registry.configured_sports()
+    registry.all_competitions()
+    registry.configured_competitions()
     registry.find("nba")
 
 
@@ -124,7 +124,7 @@ def test_no_nba_leagues_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_every_sport_declares_its_trade_support() -> None:
     """Declared on the entry so the CLI and UI need no per-sport branch."""
-    for entry in registry.all_sports():
+    for entry in registry.all_competitions():
         assert isinstance(entry.supports_trades, bool)
 
 
@@ -135,7 +135,7 @@ def test_a_trading_sport_implements_the_trade_port() -> None:
     from the_front_office.adapters.outbound.competitions.premier_league.fpl import FPLProvider
 
     implementations = {"nba": YahooNBAProvider, "nfl": SleeperNFLProvider, "premier-league": FPLProvider}
-    for entry in registry.all_sports():
+    for entry in registry.all_competitions():
         # A competition missing here is one the registry knows about and this
         # guard does not, which is the drift it exists to catch.
         provider = implementations[entry.competition]
@@ -145,7 +145,7 @@ def test_a_trading_sport_implements_the_trade_port() -> None:
 
 def test_requirements_summary_names_every_sport() -> None:
     summary = registry.requirements_summary()
-    for entry in registry.all_sports():
+    for entry in registry.all_competitions():
         assert entry.label in summary
         assert entry.requires in summary
 
@@ -157,12 +157,12 @@ def test_an_entry_is_identified_by_sport_and_platform() -> None:
     """The same sport runs on more than one platform — basketball on Yahoo and
     on Sleeper — and those are separate accounts and separate leagues, so a
     registry keyed by sport alone would hold one and lose the rest."""
-    for entry in registry.all_sports():
+    for entry in registry.all_competitions():
         assert entry.key == f"{entry.competition}-{entry.platform}"
 
 
 def test_every_key_is_unique() -> None:
-    keys = [entry.key for entry in registry.all_sports()]
+    keys = [entry.key for entry in registry.all_competitions()]
     assert len(set(keys)) == len(keys)
 
 
@@ -181,6 +181,6 @@ def test_a_pair_is_preferred_over_a_bare_sport_match() -> None:
     """Otherwise the first-registered platform would shadow the one asked for."""
     import dataclasses
 
-    first = registry.all_sports()[0]
+    first = registry.all_competitions()[0]
     second = dataclasses.replace(first, platform="other")
     assert second.key != first.key

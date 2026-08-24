@@ -7,10 +7,10 @@ import { cn } from "@/lib/utils";
 /**
  * A table whose columns come from the data.
  *
- * Every sport names its own — FPL sends Price and xGI, football sends Depth —
- * so a client that hard-codes columns has to learn each sport. This reads the
+ * Every competition names its own — FPL sends Price and xGI, football sends Depth —
+ * so a client that hard-codes columns has to learn each competition. This reads the
  * keys off the first row and renders whatever arrives, which is also what
- * makes adding a sport a backend change alone.
+ * makes adding a competition a backend change alone.
  */
 export type SortState = { column: string; descending: boolean };
 

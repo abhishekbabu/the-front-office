@@ -17,15 +17,16 @@ several platforms, and one platform hosts several competitions of a sport.
 
 ## The five pieces
 
-1. **Provider** — `adapters/outbound/competitions/<sport>/<platform>.py`, implementing
+1. **Provider** — `adapters/outbound/competitions/<competition>/<platform>.py`, implementing
    `CompetitionProvider` from `domain/ports.py`. The filename is the platform that
-   owns the **league**, not every platform the sport reads from: NBA leagues
+   owns the **league**, not every platform the competition reads from: NBA leagues
    live on Yahoo, so the provider is `nba/yahoo.py` even though it also reads
    Sleeper for both stats and projections. Naming it this way leaves room for
-   the same sport on a second platform — `nba/sleeper.py` beside `nba/yahoo.py`.
-   - `sport` / `label` class attributes
+   the same competition on a second platform — `nba/sleeper.py` beside
+   `nba/yahoo.py`.
+   - `sport` / `competition` / `label` class attributes
    - `list_leagues() -> list[LeagueRef]`
-   - `build_context(league_id) -> SportContext`
+   - `build_context(league_id) -> CompetitionContext`
    - `roster_rows(league_id) -> list[dict[str, str]]` — cheap; no projections or
      candidate pool
 2. **Prompt template** in `config/constants.py`, rendered by `build_context`.
@@ -36,7 +37,7 @@ several platforms, and one platform hosts several competitions of a sport.
 
 ## Where other platforms go
 
-A sport usually reads from more than one platform. Only the league platform
+A competition usually reads from more than one platform. Only the league platform
 names a file; everything else is a role-named helper beside the provider:
 
 ```text
@@ -49,13 +50,13 @@ competitions/nfl/lineup.py       optimal lineup, computed from projections
 ```
 
 Name helpers for what they produce, not where the data came from. A file called
-`sleeper.py` under two different sports would mean two different things.
+`sleeper.py` under two different competitions would mean two different things.
 
 ## Where the provider's own work goes
 
 A provider answers four separable questions, and past a few hundred lines they
 stop fitting in one file. Football and FPL are both split the same way, and a
-third sport should reach for the same names before inventing others:
+third competition should reach for the same names before inventing others:
 
 ```text
 competitions/<competition>/<platform>.py  the port, delegating — leagues, identity, lookups
@@ -80,15 +81,15 @@ Test modules mirror whatever the source ends up as — `test_nfl_week.py` beside
 
 **Never name a provider in an entry point.** The CLI, the web UI and the help
 text all read `bootstrap.py`. If you are editing `adapters/inbound/` to add a
-sport, the design has been bypassed.
+competition, the design has been bypassed.
 
 **`is_configured` must be honest.** It gates whether a platform is contacted at
 all. Building a provider may open an OAuth flow, and a user who does not play
-that sport must never be made to sit through one. Check for the credentials the
+that competition must never be made to sit through one. Check for the credentials the
 provider actually needs, and nothing else.
 
 **Widen the shared models; do not fork them.** `Move`, `ScoutReport` and
-`TradeVerdict` are deliberately sport-neutral. If a sport needs a field they
+`TradeVerdict` are deliberately competition-neutral. If a competition needs a field they
 lack, add it there and name it in the league's own vocabulary — `gains`, not
 `categories_gained`. A second report type means a second renderer and a second
 UI path.
@@ -114,7 +115,7 @@ authenticated endpoint and is deliberately unused; everything in it derives from
 the public history (`free_transfers`). Head-to-head leagues live in their own
 list, so read both. No trade path: managers transfer against the market.
 
-**Sleeper.** Public and keyless, and used by two sports. Out of season it
+**Sleeper.** Public and keyless, and used by two competitions. Out of season it
 publishes no fixtures at all, so a warning that fires on every player is about
 the calendar rather than the team — only flag a missing game when others have one.
 
@@ -137,7 +138,7 @@ name (`adapters/outbound/competitions/nba/projections.py` is the worked example)
 
 ## Reuse before you write
 
-Check these before implementing anything a sport "needs":
+Check these before implementing anything a competition "needs":
 
 | Need | Use |
 |------|-----|
@@ -147,7 +148,7 @@ Check these before implementing anything a sport "needs":
 | Cache a platform response | `platforms/cache.py` — `JsonDiskCache` |
 | Talk to a public JSON API | `platforms/http.py` — `JsonApiClient` |
 
-If a second sport needs something the first already does, extract it into one of
+If a second competition needs something the first already does, extract it into one of
 those modules rather than copying it. Extract on the second instance, not the
 third.
 

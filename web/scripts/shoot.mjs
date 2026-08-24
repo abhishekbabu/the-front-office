@@ -5,7 +5,7 @@
  * from a clean shell. Shots land in web/.shots, which is gitignored — they are
  * a way of looking at the app, not an artifact of it.
  *
- * Usage: pnpm shoot [--dark] [--only=landing,scout]
+ * Usage: pnpm shoot [--dark] [--only=landing,week,team,free-agents,league,player,settings]
  */
 import { chromium } from "@playwright/test";
 import { spawn } from "node:child_process";
@@ -26,7 +26,7 @@ async function waitForServer(timeoutMs = 60_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`${BASE}/api/sports`);
+      const response = await fetch(`${BASE}/api/competitions`);
       if (response.ok) return;
     } catch {
       /* not up yet */
@@ -46,7 +46,7 @@ async function waitForServer(timeoutMs = 60_000) {
  */
 async function refuseStaleServer() {
   try {
-    await fetch(`${BASE}/api/sports`);
+    await fetch(`${BASE}/api/competitions`);
   } catch {
     return; // nothing listening, which is what we want
   }
@@ -98,36 +98,46 @@ async function main() {
     await page.goto(BASE, { waitUntil: "networkidle" });
     if (wanted("landing")) await shoot("landing");
 
-    // Into the first league of each ready sport, via the rail rather than a URL:
-    // the app has no routing, so this is the only way in — and it exercises the
-    // same path a person takes.
-    for (const sport of ["FPL", "NFL"]) {
-      const rail = page.getByRole("button", { name: sport, exact: true });
-      if (!(await rail.count())) continue;
-      await rail.click();
-      await page.waitForTimeout(500);
+    // Straight to each view by its address. This used to click along the rail,
+    // because there was nothing else to go on; now every view has a URL, and a
+    // screenshot run that depends on finding a control by its label breaks
+    // whenever that control changes shape — as it did when the rail became
+    // links rather than buttons.
+    const competitions = await (await fetch(`${BASE}/api/competitions`)).json();
+    // Both analysis views need a model. Without one the app does not offer
+    // them, so the address falls back to this week — and a shot taken there
+    // would be filed under a name for a page nobody can reach.
+    const { ai } = await (await fetch(`${BASE}/api/capabilities`)).json();
+    for (const competition of competitions.filter((c) => c.ready)) {
+      const leagues = await (await fetch(`${BASE}/api/${competition.key}/leagues`)).json();
+      const league = leagues[0];
+      if (!league) continue;
 
-      if (wanted("scout")) {
-        // Explicit: switching sport keeps whichever view you were on.
-        await page.getByRole("button", { name: "This week", exact: true }).click();
-        await shoot(`${sport.toLowerCase()}-week`);
+      const name = competition.competition;
+      // The long spelling of every view, including the default one. The app
+      // rewrites it to the short address on arrival, which is itself worth
+      // seeing land correctly.
+      const go = async (view) => {
+        await page.goto(`${BASE}/${competition.key}/${league.league_id}/${view}`, { waitUntil: "networkidle" });
+      };
+
+      if (wanted("week")) {
+        await go("week");
+        await shoot(`${name}-week`);
       }
-      if (wanted("report")) {
-        const report = page.getByRole("button", { name: "Report", exact: true });
-        if (await report.count()) {
-          await report.click();
-          const run = page.getByRole("button", { name: /Run report|Run again/i });
-          if (await run.count()) {
-            await run.click();
-            await page.waitForTimeout(1200);
-          }
-          await shoot(`${sport.toLowerCase()}-report`);
+      if (wanted("report") && ai) {
+        await go("report");
+        const run = page.getByRole("button", { name: /Run report|Run again/i });
+        if (await run.count()) {
+          await run.click();
+          await page.waitForTimeout(1200);
+          await shoot(`${name}-report`);
         }
       }
       if (wanted("league")) {
-        await page.getByRole("button", { name: "League", exact: true }).click();
+        await go("league");
         await page.waitForTimeout(2500); // a whole season of matchups
-        await shoot(`${sport.toLowerCase()}-league`);
+        await shoot(`${name}-league`);
         // Each tab is a different question; one shot of the first proves
         // nothing about the others.
         for (const tab of ["Table", "Rosters", "Fixtures", "Activity"]) {
@@ -135,44 +145,40 @@ async function main() {
           if (await control.count()) {
             await control.click();
             await page.waitForTimeout(400);
-            await shoot(`${sport.toLowerCase()}-${tab.toLowerCase()}`);
+            await shoot(`${name}-${tab.toLowerCase()}`);
           }
         }
       }
-      if (wanted("agents")) {
-        await page.getByRole("button", { name: "Free agents" }).click();
+      if (wanted("free-agents")) {
+        await go("free-agents");
         await page.waitForTimeout(2500);
-        await shoot(`${sport.toLowerCase()}-agents`);
+        await shoot(`${name}-free-agents`);
       }
       if (wanted("team")) {
-        await page.getByRole("button", { name: "My team" }).click();
-        await shoot(`${sport.toLowerCase()}-team`);
+        await go("team");
+        await shoot(`${name}-team`);
       }
       if (wanted("player")) {
-        // Open the first row, which is the whole point of the table being one.
-        await page.getByRole("button", { name: "My team" }).click();
+        await go("team");
         await page.waitForTimeout(500);
+        // Open the first row, which is the whole point of the table being one.
         const row = page.locator("tbody tr").first();
         if (await row.count()) {
           await row.click();
           await page.waitForTimeout(700);
-          await shoot(`${sport.toLowerCase()}-player`);
-          await page.getByRole("button", { name: "Close" }).click();
+          await shoot(`${name}-player`);
         }
       }
-      if (wanted("trade")) {
-        const trade = page.getByRole("button", { name: "Trade", exact: true });
-        if (await trade.count()) {
-          await trade.click();
-          await shoot(`${sport.toLowerCase()}-trade`);
-        }
+      if (wanted("trade") && ai && competition.supports_trades) {
+        await go("trade");
+        await shoot(`${name}-trade`);
       }
     }
 
     if (wanted("scrolled")) {
       // Deliberately not fullPage: the question is what stays on screen when
       // the content moves, which a full-page capture flattens away.
-      await page.getByRole("button", { name: /Settings/ }).click();
+      await page.goto(`${BASE}/settings`, { waitUntil: "networkidle" });
       await page.waitForTimeout(500);
       await page.mouse.move(900, 500);
       await page.mouse.wheel(0, 1400);
@@ -182,7 +188,7 @@ async function main() {
     }
 
     if (wanted("settings")) {
-      await page.getByRole("button", { name: /Settings/ }).click();
+      await page.goto(`${BASE}/settings`, { waitUntil: "networkidle" });
       await shoot("settings");
     }
 

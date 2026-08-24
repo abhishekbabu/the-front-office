@@ -13,9 +13,9 @@ import { Chat, Chips, ErrorNote, MoveRow, PageHeader } from "@/panels/shared";
  * at different moments: the week is a glance before a deadline, this is a
  * considered opinion that costs a model call to produce.
  */
-export function ReportPanel({ sport, league }: { sport: Competition; league: League }) {
+export function ReportPanel({ competition, league }: { competition: Competition; league: League }) {
   const run = useMutation<Analysis, Error>({
-    mutationFn: () => api.scout(sport.key, league.league_id),
+    mutationFn: () => api.scout(competition.key, league.league_id),
   });
 
   return (

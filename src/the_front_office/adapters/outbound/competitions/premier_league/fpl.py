@@ -46,13 +46,13 @@ from the_front_office.domain.errors import (
 )
 from the_front_office.domain.models import (
     NOT_APPLICABLE,
+    CompetitionContext,
     LeagueSchedule,
     PlayerCard,
     PlayerDetail,
     PlayerPage,
     PlayerQuery,
     Side,
-    SportContext,
     Spot,
     Stat,
     StatGroup,
@@ -730,7 +730,7 @@ class FPLProvider:
 
     # ── context ─────────────────────────────────────────────────────
 
-    def build_context(self, league_id: str) -> SportContext:
+    def build_context(self, league_id: str) -> CompetitionContext:
         """Gather the gameweek, then render it as the text a model reads."""
         entry_id = self._resolve_entry_id()
         upcoming = self.client.upcoming_gameweek()

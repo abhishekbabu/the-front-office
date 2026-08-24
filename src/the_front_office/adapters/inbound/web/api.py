@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from the_front_office.adapters.inbound.web import data
-from the_front_office.bootstrap import CompetitionEntry, ai_available, all_sports, scout_engine, trade_engine
+from the_front_office.bootstrap import CompetitionEntry, ai_available, all_competitions, scout_engine, trade_engine
 from the_front_office.config import env_file
 from the_front_office.config.logging import setup_logging
 from the_front_office.config.settings import PROJECT_ROOT, settings
@@ -224,14 +224,14 @@ def create_app() -> FastAPI:
 
 
 def _register_routes(app: FastAPI) -> None:
-    @app.get("/api/sports", response_model=list[Competition])
+    @app.get("/api/competitions", response_model=list[Competition])
     def list_sports() -> list[Competition]:
-        """Every sport, including ones this machine has no credentials for.
+        """Every competition, including ones this machine has no credentials for.
 
         Unconfigured sports are returned rather than hidden so the UI can say
         what to set instead of silently offering less than it could.
         """
-        return [_sport(entry) for entry in all_sports()]
+        return [_sport(entry) for entry in all_competitions()]
 
     @app.get("/api/capabilities", response_model=Capabilities)
     def capabilities() -> Capabilities:
@@ -290,7 +290,7 @@ def _register_routes(app: FastAPI) -> None:
         return read_settings()
 
     def _sport(entry: CompetitionEntry) -> Competition:
-        """A sport as the picker sees it, including why it cannot be opened.
+        """A competition as the picker sees it, including why it cannot be opened.
 
         Offering something that will only fail on the next click is worse than
         greying it out and saying what is missing.
@@ -337,38 +337,38 @@ def _register_routes(app: FastAPI) -> None:
         threading.Thread(target=_run_yahoo_login, daemon=True).start()
         return _login
 
-    @app.get("/api/{sport}/leagues", response_model=list[League])
-    def list_leagues(sport: str) -> list[League]:
-        provider = data.build_provider(sport)
+    @app.get("/api/{competition}/leagues", response_model=list[League])
+    def list_leagues(competition: str) -> list[League]:
+        provider = data.build_provider(competition)
         return [League(league_id=r.league_id, name=r.name, detail=r.detail, url=r.url) for r in provider.list_leagues()]
 
-    @app.get("/api/{sport}/leagues/{league_id}/roster", response_model=list[PlayerCard])
-    def roster(sport: str, league_id: str) -> list[PlayerCard]:
-        """One card per player, with per-sport columns rendered generically.
+    @app.get("/api/{competition}/leagues/{league_id}/roster", response_model=list[PlayerCard])
+    def roster(competition: str, league_id: str) -> list[PlayerCard]:
+        """One card per player, with per-competition columns rendered generically.
 
-        The columns are the sport's own vocabulary — FPL sends Price and xGI,
+        The columns are the competition's own vocabulary — FPL sends Price and xGI,
         football sends Depth — so the client reads whatever keys arrive rather
-        than being taught each sport.
+        than being taught each competition.
         """
-        return data.build_provider(sport).roster(league_id)
+        return data.build_provider(competition).roster(league_id)
 
-    @app.get("/api/{sport}/leagues/{league_id}/players/{player_id}", response_model=PlayerDetail)
-    def player(sport: str, league_id: str, player_id: str) -> PlayerDetail:
+    @app.get("/api/{competition}/leagues/{league_id}/players/{player_id}", response_model=PlayerDetail)
+    def player(competition: str, league_id: str, player_id: str) -> PlayerDetail:
         """Everything worth knowing about one player, when someone asks."""
-        return data.build_provider(sport).player(league_id, player_id)
+        return data.build_provider(competition).player(league_id, player_id)
 
-    @app.get("/api/{sport}/leagues/{league_id}/summary", response_model=Summary)
-    def summary(sport: str, league_id: str) -> Summary:
+    @app.get("/api/{competition}/leagues/{league_id}/summary", response_model=Summary)
+    def summary(competition: str, league_id: str) -> Summary:
         """Where the team stands, before any report is asked for.
 
         The page would otherwise be blank for as long as a model call takes,
         showing nothing the app already knows.
         """
-        return data.build_provider(sport).summary(league_id)
+        return data.build_provider(competition).summary(league_id)
 
-    @app.get("/api/{sport}/leagues/{league_id}/free-agents", response_model=PlayerPage)
+    @app.get("/api/{competition}/leagues/{league_id}/free-agents", response_model=PlayerPage)
     def free_agents(
-        sport: str,
+        competition: str,
         league_id: str,
         offset: int = Query(default=0, ge=0),
         limit: int = Query(default=50, ge=1, le=200),
@@ -386,37 +386,37 @@ def _register_routes(app: FastAPI) -> None:
         query = PlayerQuery(
             offset=offset, limit=limit, sort=sort, descending=descending, position=position, search=search
         )
-        return data.build_provider(sport).free_agents(league_id, query)
+        return data.build_provider(competition).free_agents(league_id, query)
 
-    @app.get("/api/{sport}/leagues/{league_id}/teams", response_model=list[TeamRef])
-    def teams(sport: str, league_id: str) -> list[TeamRef]:
+    @app.get("/api/{competition}/leagues/{league_id}/teams", response_model=list[TeamRef])
+    def teams(competition: str, league_id: str) -> list[TeamRef]:
         """Everyone in the league, so their rosters can be opened."""
-        return data.build_provider(sport).teams(league_id)
+        return data.build_provider(competition).teams(league_id)
 
-    @app.get("/api/{sport}/leagues/{league_id}/teams/{team_id}/roster", response_model=list[PlayerCard])
-    def team_roster(sport: str, league_id: str, team_id: str) -> list[PlayerCard]:
+    @app.get("/api/{competition}/leagues/{league_id}/teams/{team_id}/roster", response_model=list[PlayerCard])
+    def team_roster(competition: str, league_id: str, team_id: str) -> list[PlayerCard]:
         """Somebody else's squad, in the same columns as your own."""
-        return data.build_provider(sport).roster_of(league_id, team_id)
+        return data.build_provider(competition).roster_of(league_id, team_id)
 
-    @app.get("/api/{sport}/leagues/{league_id}/schedule", response_model=LeagueSchedule)
-    def schedule(sport: str, league_id: str) -> LeagueSchedule:
+    @app.get("/api/{competition}/leagues/{league_id}/schedule", response_model=LeagueSchedule)
+    def schedule(competition: str, league_id: str) -> LeagueSchedule:
         """The league beyond this week: the season, the table, the real games.
 
         Separate from `summary` because it answers a different question and
         costs requests the week does not need — nobody checking their lineup
         should wait on the whole season's fixtures.
         """
-        return data.build_provider(sport).schedule(league_id)
+        return data.build_provider(competition).schedule(league_id)
 
-    @app.post("/api/{sport}/leagues/{league_id}/scout", response_model=Analysis)
-    def scout(sport: str, league_id: str) -> Analysis:
-        provider = data.build_provider(sport)
+    @app.post("/api/{competition}/leagues/{league_id}/scout", response_model=Analysis)
+    def scout(competition: str, league_id: str) -> Analysis:
+        provider = data.build_provider(competition)
         report, chat = scout_engine(provider).start_analysis(league_id)
         return Analysis(report=report, chat_id=_remember(chat))
 
-    @app.post("/api/{sport}/leagues/{league_id}/trade", response_model=Evaluation)
-    def trade(sport: str, league_id: str, request: TradeRequest) -> Evaluation:
-        entry = _tradeable(sport)
+    @app.post("/api/{competition}/leagues/{league_id}/trade", response_model=Evaluation)
+    def trade(competition: str, league_id: str, request: TradeRequest) -> Evaluation:
+        entry = _tradeable(competition)
         provider = data.build_provider(entry.competition)
         verdict, chat = trade_engine(provider).evaluate(league_id, request.text)
         return Evaluation(verdict=verdict, chat_id=_remember(chat))
@@ -439,16 +439,16 @@ def _register_routes(app: FastAPI) -> None:
         return Reply(answer=answer or "(no answer)")
 
 
-def _tradeable(sport: str) -> CompetitionEntry:
-    """The entry for `sport`, refusing one that cannot evaluate trades.
+def _tradeable(competition: str) -> CompetitionEntry:
+    """The entry for `competition`, refusing one that cannot evaluate trades.
 
-    Checked here rather than left to the provider: a sport without trade
+    Checked here rather than left to the provider: a competition without trade
     support has no `build_trade_context` at all, so the failure would otherwise
     be an AttributeError rather than something the user can read.
     """
-    entry = next((e for e in all_sports() if e.competition == sport.lower()), None)
+    entry = next((e for e in all_competitions() if e.competition == competition.lower()), None)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Unknown sport {sport!r}.")
+        raise HTTPException(status_code=404, detail=f"Unknown competition {competition!r}.")
     if not entry.supports_trades:
         raise HTTPException(status_code=400, detail=f"{entry.label} does not support trade evaluation.")
     return entry
@@ -469,7 +469,16 @@ def _serve_frontend(app: FastAPI) -> None:
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str) -> Any:
-        """Any non-API path returns index.html; the client owns routing."""
+        """Any non-API path returns index.html; the client owns routing.
+
+        An unmatched API path is a 404 rather than the page, because this
+        handler is the last one tried: without the check, a client asking for a
+        route that has been renamed or misspelled gets index.html with a 200,
+        and the failure surfaces as JSON that will not parse rather than as the
+        missing route it is.
+        """
+        if path.startswith("api/"):
+            raise HTTPException(status_code=404, detail=f"Unknown endpoint {'/' + path!r}.")
         candidate = DIST / path
         if path and candidate.is_file():
             return FileResponse(candidate)
