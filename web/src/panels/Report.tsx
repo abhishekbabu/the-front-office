@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { api, type Analysis, type League, type Sport } from "@/lib/api";
+import { api, type Analysis, type League, type Competition } from "@/lib/api";
 import { Play, RotateCw } from "lucide-react";
 import { IconButton } from "@/components/ui/icon-button";
 import { Empty, Working } from "@/components/ui/state";
@@ -13,7 +13,7 @@ import { Chat, Chips, ErrorNote, MoveRow, PageHeader } from "@/panels/shared";
  * at different moments: the week is a glance before a deadline, this is a
  * considered opinion that costs a model call to produce.
  */
-export function ReportPanel({ sport, league }: { sport: Sport; league: League }) {
+export function ReportPanel({ sport, league }: { sport: Competition; league: League }) {
   const run = useMutation<Analysis, Error>({
     mutationFn: () => api.scout(sport.key, league.league_id),
   });

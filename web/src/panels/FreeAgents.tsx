@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
-import { api, type League, type PlayerPage, type Sport } from "@/lib/api";
+import { api, type League, type PlayerPage, type Competition } from "@/lib/api";
 import { Card, CardHeader } from "@/components/ui/card";
 import { IconButton } from "@/components/ui/icon-button";
 import { RosterTable } from "@/components/ui/roster-table";
@@ -23,7 +23,7 @@ const PAGE = 50;
  * the fifty rows in hand would answer a different question than the one the
  * column header appears to ask.
  */
-export function FreeAgentsPanel({ sport, league }: { sport: Sport; league: League }) {
+export function FreeAgentsPanel({ sport, league }: { sport: Competition; league: League }) {
   const [open, setOpen] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [position, setPosition] = useState("");

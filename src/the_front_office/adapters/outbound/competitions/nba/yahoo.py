@@ -16,12 +16,12 @@ if TYPE_CHECKING:
 
 from yahoofantasy import League, Player  # type: ignore[import-untyped]
 
+from the_front_office.adapters.outbound.competitions import paging
+from the_front_office.adapters.outbound.competitions.nba.context import PlayerContextBuilder
+from the_front_office.adapters.outbound.competitions.nba.form import SleeperNBAForm
+from the_front_office.adapters.outbound.competitions.nba.projections import ProjectionIndex
+from the_front_office.adapters.outbound.competitions.trades import resolve_sides
 from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
-from the_front_office.adapters.outbound.sports import paging
-from the_front_office.adapters.outbound.sports.nba.context import PlayerContextBuilder
-from the_front_office.adapters.outbound.sports.nba.form import SleeperNBAForm
-from the_front_office.adapters.outbound.sports.nba.projections import ProjectionIndex
-from the_front_office.adapters.outbound.sports.trades import resolve_sides
 from the_front_office.config.constants import NBA_SCOUT_PROMPT, NBA_TRADE_PROMPT
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import (
@@ -80,9 +80,10 @@ def _recent(stats: object, key: str) -> str:
 
 
 class YahooNBAProvider:
-    """SportProvider for Yahoo category-league basketball."""
+    """CompetitionProvider for Yahoo category-league basketball."""
 
-    sport = "nba"
+    sport = "basketball"
+    competition = "nba"
     label = "NBA (Yahoo)"
 
     @staticmethod
@@ -119,7 +120,7 @@ class YahooNBAProvider:
             LeagueRef(
                 league_id=str(lg.id),
                 name=str(lg.name),
-                sport=self.sport,
+                competition=self.competition,
                 detail=str(getattr(lg, "league_type", "")),
                 url=LEAGUE_URL.format(league_id=lg.id),
             )

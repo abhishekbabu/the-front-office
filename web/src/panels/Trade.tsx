@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { api, type Evaluation, type League, type Sport } from "@/lib/api";
+import { api, type Evaluation, type League, type Competition } from "@/lib/api";
 import { verdictTone } from "@/lib/tone";
 import { Badge } from "@/components/ui/badge";
 import { ArrowRight } from "lucide-react";
@@ -9,7 +9,7 @@ import { Working } from "@/components/ui/state";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Chat, Chips, ErrorNote, PageHeader } from "@/panels/shared";
 
-export function TradePanel({ sport, league }: { sport: Sport; league: League }) {
+export function TradePanel({ sport, league }: { sport: Competition; league: League }) {
   const [text, setText] = useState("");
 
   const run = useMutation<Evaluation, Error, string>({

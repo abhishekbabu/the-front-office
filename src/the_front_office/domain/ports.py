@@ -32,7 +32,7 @@ class LeagueRef:
 
     league_id: str
     name: str
-    sport: str
+    competition: str
     detail: str = ""
     """Anything worth showing beside the name — record, scoring format, team count."""
 
@@ -87,11 +87,21 @@ class AnalysisModel(Protocol):
 
 
 @runtime_checkable
-class SportProvider(Protocol):
-    """One sport on one platform."""
+class CompetitionProvider(Protocol):
+    """One competition on one platform.
+
+    A competition rather than a sport, because that is what a fantasy game is
+    played over: the NBA, the NFL, the Premier League. One sport can have
+    several — college football beside the NFL — and each is its own provider
+    with its own rules, so the sport is an attribute rather than the identity.
+    """
 
     sport: str
-    """Short key: 'nba', 'nfl', 'fpl'."""
+    """The game itself: 'basketball', 'football', 'soccer'. Groups competitions
+    that are the same sport; never identifies one on its own."""
+
+    competition: str
+    """Which competition this provides: 'nba', 'nfl', 'premier-league'."""
 
     label: str
     """Human name for pickers: 'NBA (Yahoo)'."""
@@ -196,7 +206,7 @@ class SportProvider(Protocol):
 class TradeProvider(Protocol):
     """A sport that can also evaluate trades.
 
-    Separate from SportProvider because trade support arrives per sport: a
+    Separate from CompetitionProvider because trade support arrives per sport: a
     provider can scout without yet being able to price a trade, and the registry
     advertises which can via `supports_trades`.
     """

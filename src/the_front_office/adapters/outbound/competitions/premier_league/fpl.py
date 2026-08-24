@@ -17,6 +17,15 @@ import logging
 from collections.abc import Callable
 from datetime import datetime
 
+from the_front_office.adapters.outbound.competitions import paging
+from the_front_office.adapters.outbound.competitions.dates import at_time
+from the_front_office.adapters.outbound.competitions.premier_league import league, prompt
+from the_front_office.adapters.outbound.competitions.premier_league.squad import (
+    best_lineup,
+    effective_points,
+    lineup_changes,
+    points_with_captain,
+)
 from the_front_office.adapters.outbound.platforms.fpl.client import FPLClient, free_transfers
 from the_front_office.adapters.outbound.platforms.fpl.types import (
     Chip,
@@ -27,15 +36,6 @@ from the_front_office.adapters.outbound.platforms.fpl.types import (
     Player,
     Squad,
     as_millions,
-)
-from the_front_office.adapters.outbound.sports import paging
-from the_front_office.adapters.outbound.sports.dates import at_time
-from the_front_office.adapters.outbound.sports.fpl import league, prompt
-from the_front_office.adapters.outbound.sports.fpl.squad import (
-    best_lineup,
-    effective_points,
-    lineup_changes,
-    points_with_captain,
 )
 from the_front_office.config.settings import settings
 from the_front_office.domain.errors import (
@@ -96,13 +96,14 @@ TRANSFER_LIMIT = 10
 
 
 class FPLProvider:
-    """SportProvider for the official Fantasy Premier League game.
+    """CompetitionProvider for the official Fantasy Premier League game.
 
     Named for neither a separate platform nor a separate sport because there is
     only one of each: the game is both.
     """
 
-    sport = "fpl"
+    sport = "soccer"
+    competition = "premier-league"
     label = "FPL (Fantasy Premier League)"
 
     def __init__(self, entry_id: int | None = None, *, client: FPLClient | None = None):
@@ -133,7 +134,7 @@ class FPLProvider:
                 LeagueRef(
                     league_id=str(entry.entry_id),
                     name=entry.name,
-                    sport=self.sport,
+                    competition=self.competition,
                     detail=f"overall rank {entry.overall_rank:,} · {entry.overall_points} pts",
                     url=ENTRY_URL.format(entry_id=entry.entry_id),
                 )
@@ -142,7 +143,7 @@ class FPLProvider:
             LeagueRef(
                 league_id=str(lg.id),
                 name=lg.name,
-                sport=self.sport,
+                competition=self.competition,
                 detail=f"{lg.standing} · {entry.name}",
                 url=self._league_url(lg),
             )

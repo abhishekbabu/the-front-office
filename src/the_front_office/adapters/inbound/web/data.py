@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from the_front_office.bootstrap import SportEntry, configured_sports, find
+from the_front_office.bootstrap import CompetitionEntry, configured_sports, find
 from the_front_office.domain.errors import LeagueNotFoundError
 
 
-def available_sports() -> list[SportEntry]:
+def available_sports() -> list[CompetitionEntry]:
     """The sports this user has credentials for."""
     return configured_sports()
 

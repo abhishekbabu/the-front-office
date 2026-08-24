@@ -11,6 +11,7 @@ twice for one report.
 
 import logging
 
+from the_front_office.adapters.outbound.competitions.nfl.week import SCORING_LABELS, Week
 from the_front_office.adapters.outbound.platforms.sleeper.client import SleeperClient
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
     PlayerMeta,
@@ -18,7 +19,6 @@ from the_front_office.adapters.outbound.platforms.sleeper.types import (
     SleeperRoster,
     WeeklyProjection,
 )
-from the_front_office.adapters.outbound.sports.nfl.week import SCORING_LABELS, Week
 from the_front_office.config.constants import NFL_SCOUT_PROMPT
 from the_front_office.domain.errors import SleeperAPIError
 from the_front_office.domain.models import SportContext, Stat

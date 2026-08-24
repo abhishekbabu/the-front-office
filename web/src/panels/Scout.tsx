@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, type League, type Sport, type Summary } from "@/lib/api";
+import { api, type League, type Competition, type Summary } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Loading } from "@/components/ui/state";
@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
  * view, is then an argument about what is already on screen rather than the
  * only thing on it.
  */
-export function ScoutPanel({ sport, league }: { sport: Sport; league: League }) {
+export function ScoutPanel({ sport, league }: { sport: Competition; league: League }) {
   const [open, setOpen] = useState<string | null>(null);
 
   const week = useQuery<Summary, Error>({

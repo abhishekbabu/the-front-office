@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from the_front_office.adapters.inbound.web import data
-from the_front_office.bootstrap import SportEntry, ai_available, all_sports, scout_engine, trade_engine
+from the_front_office.bootstrap import CompetitionEntry, ai_available, all_sports, scout_engine, trade_engine
 from the_front_office.config import env_file
 from the_front_office.config.logging import setup_logging
 from the_front_office.config.settings import PROJECT_ROOT, settings
@@ -51,20 +51,24 @@ DIST = PROJECT_ROOT / "web" / "dist"
 # is returned as-is rather than copied into a parallel type that can drift.
 
 
-class Sport(BaseModel):
-    """One sport on one platform, as the picker sees it."""
+class Competition(BaseModel):
+    """One competition on one platform, as the picker sees it."""
 
     key: str
     """Identifies this entry in every route and picker: 'nba-yahoo'."""
 
     sport: str
-    """The game itself, so the client can group two platforms under one heading."""
+    """The game itself — basketball, football, soccer — so the client can group
+    the competitions that are the same sport under one heading."""
+
+    competition: str
+    """Which competition: 'nba', 'nfl', 'premier-league'."""
 
     platform: str
     label: str
     supports_trades: bool
     configured: bool
-    """Whether the credentials this sport needs are set."""
+    """Whether the credentials this competition needs are set."""
 
     requires: str
 
@@ -220,8 +224,8 @@ def create_app() -> FastAPI:
 
 
 def _register_routes(app: FastAPI) -> None:
-    @app.get("/api/sports", response_model=list[Sport])
-    def list_sports() -> list[Sport]:
+    @app.get("/api/sports", response_model=list[Competition])
+    def list_sports() -> list[Competition]:
         """Every sport, including ones this machine has no credentials for.
 
         Unconfigured sports are returned rather than hidden so the UI can say
@@ -285,7 +289,7 @@ def _register_routes(app: FastAPI) -> None:
             raise HTTPException(status_code=500, detail=f"Could not write .env: {e}") from e
         return read_settings()
 
-    def _sport(entry: SportEntry) -> Sport:
+    def _sport(entry: CompetitionEntry) -> Competition:
         """A sport as the picker sees it, including why it cannot be opened.
 
         Offering something that will only fail on the next click is worse than
@@ -298,9 +302,10 @@ def _register_routes(app: FastAPI) -> None:
                 entry.check_ready()
             except FrontOfficeError as e:
                 reason, code = str(e), e.code
-        return Sport(
+        return Competition(
             key=entry.key,
             sport=entry.sport,
+            competition=entry.competition,
             platform=entry.platform,
             label=entry.label,
             supports_trades=entry.supports_trades,
@@ -412,7 +417,7 @@ def _register_routes(app: FastAPI) -> None:
     @app.post("/api/{sport}/leagues/{league_id}/trade", response_model=Evaluation)
     def trade(sport: str, league_id: str, request: TradeRequest) -> Evaluation:
         entry = _tradeable(sport)
-        provider = data.build_provider(entry.sport)
+        provider = data.build_provider(entry.competition)
         verdict, chat = trade_engine(provider).evaluate(league_id, request.text)
         return Evaluation(verdict=verdict, chat_id=_remember(chat))
 
@@ -434,14 +439,14 @@ def _register_routes(app: FastAPI) -> None:
         return Reply(answer=answer or "(no answer)")
 
 
-def _tradeable(sport: str) -> SportEntry:
+def _tradeable(sport: str) -> CompetitionEntry:
     """The entry for `sport`, refusing one that cannot evaluate trades.
 
     Checked here rather than left to the provider: a sport without trade
     support has no `build_trade_context` at all, so the failure would otherwise
     be an AttributeError rather than something the user can read.
     """
-    entry = next((e for e in all_sports() if e.sport == sport.lower()), None)
+    entry = next((e for e in all_sports() if e.competition == sport.lower()), None)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"Unknown sport {sport!r}.")
     if not entry.supports_trades:

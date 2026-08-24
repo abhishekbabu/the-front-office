@@ -15,8 +15,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 
+from the_front_office.adapters.outbound.competitions.names import NameIndex, normalize_name
 from the_front_office.adapters.outbound.platforms.sleeper.types import GameProjection
-from the_front_office.adapters.outbound.sports.names import NameIndex, normalize_name
 
 logger = logging.getLogger(__name__)
 

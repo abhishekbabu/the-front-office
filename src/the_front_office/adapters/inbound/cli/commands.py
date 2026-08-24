@@ -3,11 +3,11 @@
 from the_front_office.adapters.inbound.cli.output import _interactive_followup, _print_header, _print_rows, print_error
 from the_front_office.adapters.inbound.cli.render import render_scout_report, render_trade_verdict
 from the_front_office.adapters.inbound.cli.session import Session
-from the_front_office.bootstrap import SportEntry, find, scout_engine, trade_engine
+from the_front_office.bootstrap import CompetitionEntry, find, scout_engine, trade_engine
 from the_front_office.domain.errors import FrontOfficeError
 
 
-def _print_help(entries: list[SportEntry]) -> None:
+def _print_help(entries: list[CompetitionEntry]) -> None:
     """Print the commands that will actually work here.
 
     Anything needing a model is omitted without one, the same way the web UI
@@ -16,8 +16,8 @@ def _print_help(entries: list[SportEntry]) -> None:
     """
     from the_front_office.bootstrap import ai_available
 
-    keys = " | ".join(e.sport for e in entries) or "none configured"
-    tradeable = " | ".join(e.sport for e in entries if e.supports_trades) or "none"
+    keys = " | ".join(e.competition for e in entries) or "none configured"
+    tradeable = " | ".join(e.competition for e in entries if e.supports_trades) or "none"
     rows = [
         ("/leagues", "Every league you are in, per sport"),
         ("/roster [sport]", "Your squad"),
@@ -40,7 +40,7 @@ def _print_help(entries: list[SportEntry]) -> None:
     print()
 
 
-def _match_sport(entries: list[SportEntry], token: str) -> SportEntry | None:
+def _match_sport(entries: list[CompetitionEntry], token: str) -> CompetitionEntry | None:
     """The entry in `entries` a user's sport token names, if any.
 
     Matched within the list passed in rather than through the registry: the
@@ -48,10 +48,10 @@ def _match_sport(entries: list[SportEntry], token: str) -> SportEntry | None:
     registry first lets the two disagree.
     """
     key = token.lower().lstrip("/")
-    return next((entry for entry in entries if entry.sport == key), None)
+    return next((entry for entry in entries if entry.competition == key), None)
 
 
-def _resolve_sports(args: list[str], entries: list[SportEntry]) -> list[SportEntry]:
+def _resolve_sports(args: list[str], entries: list[CompetitionEntry]) -> list[CompetitionEntry]:
     """Which sports a command should run for.
 
     No argument means every configured sport; a named one means just that,
@@ -71,7 +71,7 @@ def _resolve_sports(args: list[str], entries: list[SportEntry]) -> list[SportEnt
     return []
 
 
-def _cmd_scout(session: Session, entries: list[SportEntry], args: list[str]) -> None:
+def _cmd_scout(session: Session, entries: list[CompetitionEntry], args: list[str]) -> None:
     """Run a scouting report for each requested sport and league."""
     for entry in _resolve_sports(args, entries):
         try:
@@ -100,7 +100,7 @@ def _cmd_scout(session: Session, entries: list[SportEntry], args: list[str]) -> 
             _interactive_followup(chat, "report")
 
 
-def _cmd_roster(session: Session, entries: list[SportEntry], args: list[str]) -> None:
+def _cmd_roster(session: Session, entries: list[CompetitionEntry], args: list[str]) -> None:
     """Show the user's roster for each requested sport."""
     for entry in _resolve_sports(args, entries):
         try:
@@ -112,7 +112,7 @@ def _cmd_roster(session: Session, entries: list[SportEntry], args: list[str]) ->
             print_error(e, entry.label)
 
 
-def _cmd_leagues(session: Session, entries: list[SportEntry]) -> None:
+def _cmd_leagues(session: Session, entries: list[CompetitionEntry]) -> None:
     """List every league across configured sports."""
     for entry in entries:
         _print_header(entry.label)
@@ -127,7 +127,7 @@ def _cmd_leagues(session: Session, entries: list[SportEntry]) -> None:
             print(f"  • {ref.name}" + (f"  —  {ref.detail}" if ref.detail else ""))
 
 
-def _trade_sport(tradeable: list[SportEntry], args: list[str]) -> tuple[SportEntry | None, list[str]]:
+def _trade_sport(tradeable: list[CompetitionEntry], args: list[str]) -> tuple[CompetitionEntry | None, list[str]]:
     """Split an optional leading sport off the trade description.
 
     A trade names players on one platform, so running the same text against
@@ -151,12 +151,12 @@ def _trade_sport(tradeable: list[SportEntry], args: list[str]) -> tuple[SportEnt
     if len(tradeable) == 1:
         return tradeable[0], args
 
-    keys = " | ".join(e.sport for e in tradeable)
+    keys = " | ".join(e.competition for e in tradeable)
     print(f"  ⚠️  Several sports support trades. Name one: /trade [{keys}] <description>")
     return None, args
 
 
-def _cmd_trade(session: Session, entries: list[SportEntry], args: list[str]) -> None:
+def _cmd_trade(session: Session, entries: list[CompetitionEntry], args: list[str]) -> None:
     """Evaluate a trade: `/trade [sport] <description>`."""
     tradeable = [e for e in entries if e.supports_trades]
     if not tradeable:

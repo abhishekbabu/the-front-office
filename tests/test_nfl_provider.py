@@ -17,6 +17,7 @@ from conftest import (
     _provider,
 )
 
+from the_front_office.adapters.outbound.competitions.nfl.sleeper import SleeperNFLProvider
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
     PlayerMeta,
     SeasonStats,
@@ -24,7 +25,6 @@ from the_front_office.adapters.outbound.platforms.sleeper.types import (
     SleeperRoster,
     TrendingPlayer,
 )
-from the_front_office.adapters.outbound.sports.nfl.sleeper import SleeperNFLProvider
 from the_front_office.domain.errors import LeagueNotFoundError, SleeperAPIError, TeamNotFoundError
 from the_front_office.domain.models import PlayerQuery
 
@@ -38,7 +38,7 @@ def test_leagues_are_listed_with_format_and_size() -> None:
     refs = _provider(FakeSleeper()).list_leagues()
     assert len(refs) == 1
     assert refs[0].name == "Sunday Money"
-    assert refs[0].sport == "nfl"
+    assert refs[0].competition == "nfl"
     assert "12-team" in refs[0].detail
     assert "PPR" in refs[0].detail
 

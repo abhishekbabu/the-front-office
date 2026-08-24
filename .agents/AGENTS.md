@@ -14,8 +14,8 @@ of truth:
 
 - **Strict maintainability review** — abstraction quality, oversized files,
   condition growth: `skills/thermo-nuclear-code-quality-review/SKILL.md`
-- **Adding a sport** — the extension point this codebase is built around:
-  `skills/adding-a-sport/SKILL.md`
+- **Adding a competition** — the extension point this codebase is built around:
+  `skills/adding-a-competition/SKILL.md`
 
 ## Conventions
 

@@ -20,7 +20,7 @@ application/  use cases over ports: ScoutEngine, TradeEngine.
 adapters/
   inbound/    drivers — the CLI and the Streamlit UI.
   outbound/   driven — platform clients, the language model, and the
-              per-sport providers implementing SportProvider.
+              per-sport providers implementing CompetitionProvider.
 bootstrap.py  the composition root: the only module naming a concrete
               implementation. Registers sports and wires engines.
 ```
@@ -257,7 +257,7 @@ the-front-office/
 │   ├── application/       # scouting and trading use cases, over ports
 │   ├── adapters/
 │   │   ├── inbound/       # drivers: cli/, web/
-│   │   └── outbound/      # driven: llm/, platforms/, sports/
+│   │   └── outbound/      # driven: llm/, platforms/, competitions/
 │   ├── bootstrap.py       # composition root: sport registry + engine wiring
 │   └── config/            # validated settings + prompt templates
 ├── web/                   # React UI: src/{components,panels,themes,lib}

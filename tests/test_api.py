@@ -17,9 +17,11 @@ from the_front_office.domain.ports import LeagueRef
 
 
 class FakeProvider:
-    """Stands in for any SportProvider."""
+    """Stands in for any CompetitionProvider."""
 
-    sport = "fpl"
+    sport = "soccer"
+
+    competition = "premier-league"
     label = "FPL (Fantasy Premier League)"
 
     def __init__(self, error: Exception | None = None) -> None:
@@ -32,7 +34,7 @@ class FakeProvider:
             LeagueRef(
                 league_id="900",
                 name="Work League",
-                sport="fpl",
+                competition="premier-league",
                 detail="3 of 12",
                 url="https://fantasy.example/leagues/900",
             )
@@ -96,22 +98,24 @@ def test_sports_include_the_unconfigured_ones(client: TestClient) -> None:
     """Hiding them would silently offer less than the app can do."""
     body = client.get("/api/sports").json()
 
-    assert {s["sport"] for s in body} == {"nba", "nfl", "fpl"}
+    assert {s["competition"] for s in body} == {"nba", "nfl", "premier-league"}
+    # And each carries the sport it belongs to, which is what groups them.
+    assert {s["sport"] for s in body} == {"basketball", "football", "soccer"}
     assert all("requires" in s for s in body)
 
 
 def test_a_sport_declares_whether_it_can_trade(client: TestClient) -> None:
-    by_sport = {s["sport"]: s for s in client.get("/api/sports").json()}
+    by_sport = {s["competition"]: s for s in client.get("/api/sports").json()}
 
     assert by_sport["nfl"]["supports_trades"] is True
-    assert by_sport["fpl"]["supports_trades"] is False
+    assert by_sport["premier-league"]["supports_trades"] is False
 
 
 # ── leagues and rosters ─────────────────────────────────────────────────
 
 
 def test_leagues_are_listed(client: TestClient) -> None:
-    body = client.get("/api/fpl/leagues").json()
+    body = client.get("/api/premier-league/leagues").json()
     assert body == [
         {
             "league_id": "900",
@@ -126,14 +130,14 @@ def test_a_league_carries_the_way_across_to_its_platform(client: TestClient) -> 
     """Reading a league is this app; the moves are made on the platform, so
     the link has to survive the trip through the wire type — which is its own
     class here and silently drops anything it does not declare."""
-    body = client.get("/api/fpl/leagues").json()
+    body = client.get("/api/premier-league/leagues").json()
 
     assert body[0]["url"] == "https://fantasy.example/leagues/900"
 
 
 def test_a_roster_keeps_the_sports_own_columns(client: TestClient) -> None:
     """The client reads the keys off the data rather than being taught them."""
-    body = client.get("/api/fpl/leagues/900/roster").json()
+    body = client.get("/api/premier-league/leagues/900/roster").json()
     assert list(body[0]["columns"]) == ["Player", "Pos", "xPts"]
     assert body[0]["player_id"] == "10"
 
@@ -165,7 +169,7 @@ def test_a_platform_failure_reaches_the_client_in_words(monkeypatch: pytest.Monk
 
 def test_a_report_crosses_the_wire_as_the_domain_model(client: TestClient) -> None:
     """No second representation to keep in step with ScoutReport."""
-    body = client.post("/api/fpl/leagues/900/scout").json()
+    body = client.post("/api/premier-league/leagues/900/scout").json()
 
     assert body["report"]["situation"] == MOCK_FPL_REPORT.situation
     assert body["report"]["moves"][0]["action"] == "CAPTAIN"
@@ -185,7 +189,7 @@ def test_an_empty_trade_description_is_rejected_before_the_model(client: TestCli
 
 def test_a_sport_without_trade_support_is_refused_by_name(client: TestClient) -> None:
     """FPL has no build_trade_context; without this the failure is an AttributeError."""
-    response = client.post("/api/fpl/leagues/900/trade", json={"text": "Give A, Get B"})
+    response = client.post("/api/premier-league/leagues/900/trade", json={"text": "Give A, Get B"})
 
     assert response.status_code == 400
     assert "does not support trade evaluation" in response.json()["detail"]
@@ -200,7 +204,7 @@ def test_an_unknown_sport_is_a_404(client: TestClient) -> None:
 
 
 def test_a_follow_up_reaches_the_chat_the_report_opened(client: TestClient) -> None:
-    chat_id = client.post("/api/fpl/leagues/900/scout").json()["chat_id"]
+    chat_id = client.post("/api/premier-league/leagues/900/scout").json()["chat_id"]
 
     body = client.post(f"/api/chat/{chat_id}", json={"message": "Why bench him?"}).json()
 
@@ -216,7 +220,7 @@ def test_an_expired_conversation_says_so(client: TestClient) -> None:
 
 
 def test_a_model_failure_is_a_bad_gateway_not_a_crash(client: TestClient) -> None:
-    chat_id = client.post("/api/fpl/leagues/900/scout").json()["chat_id"]
+    chat_id = client.post("/api/premier-league/leagues/900/scout").json()["chat_id"]
     web._chats[chat_id] = FakeChat(RuntimeError("quota exhausted"))  # type: ignore[assignment]
 
     response = client.post(f"/api/chat/{chat_id}", json={"message": "Why?"})
@@ -226,7 +230,7 @@ def test_a_model_failure_is_a_bad_gateway_not_a_crash(client: TestClient) -> Non
 
 
 def test_an_empty_follow_up_is_rejected(client: TestClient) -> None:
-    chat_id = client.post("/api/fpl/leagues/900/scout").json()["chat_id"]
+    chat_id = client.post("/api/premier-league/leagues/900/scout").json()["chat_id"]
     assert client.post(f"/api/chat/{chat_id}", json={"message": ""}).status_code == 422
 
 
@@ -429,12 +433,14 @@ class _NoopThread:
 def _with_readiness(monkeypatch: pytest.MonkeyPatch, sport: str, check: Any) -> None:
     """Swap one registered sport's readiness check.
 
-    `SportEntry` is frozen, so the entry is rebuilt and the registry lookup
+    `CompetitionEntry` is frozen, so the entry is rebuilt and the registry lookup
     pointed at the copy rather than mutated in place.
     """
     import dataclasses
 
-    entries = tuple(dataclasses.replace(e, check_ready=check) if e.sport == sport else e for e in web.all_sports())
+    entries = tuple(
+        dataclasses.replace(e, check_ready=check) if e.competition == sport else e for e in web.all_sports()
+    )
     monkeypatch.setattr(web, "all_sports", lambda: entries)
 
 
@@ -446,7 +452,7 @@ def test_a_configured_sport_can_still_be_unusable(client: TestClient, monkeypatc
     monkeypatch.setattr(web.settings, "yahoo_client_secret", "secret")
     _with_readiness(monkeypatch, "nba", _raising(YahooLoginRequiredError()))
 
-    nba = next(s for s in client.get("/api/sports").json() if s["sport"] == "nba")
+    nba = next(s for s in client.get("/api/sports").json() if s["competition"] == "nba")
 
     assert nba["configured"] is True
     assert nba["ready"] is False
@@ -456,7 +462,7 @@ def test_a_configured_sport_can_still_be_unusable(client: TestClient, monkeypatc
 def test_a_sport_with_nothing_in_the_way_is_ready(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(web.settings, "sleeper_username", "abhibeast")
 
-    nfl = next(s for s in client.get("/api/sports").json() if s["sport"] == "nfl")
+    nfl = next(s for s in client.get("/api/sports").json() if s["competition"] == "nfl")
 
     assert (nfl["ready"], nfl["blocked_reason"], nfl["blocked_code"]) == (True, "", "")
 
@@ -466,7 +472,7 @@ def test_an_unconfigured_sport_is_not_probed(client: TestClient, monkeypatch: py
     credentials, burying the thing the user actually has to set."""
     _with_readiness(monkeypatch, "nba", _raising(AssertionError("must not be probed")))
 
-    nba = next(s for s in client.get("/api/sports").json() if s["sport"] == "nba")
+    nba = next(s for s in client.get("/api/sports").json() if s["competition"] == "nba")
 
     assert (nba["configured"], nba["ready"], nba["blocked_reason"]) == (False, False, "")
 

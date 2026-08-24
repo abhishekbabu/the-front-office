@@ -8,15 +8,15 @@ the whole prompt.
 import logging
 
 from the_front_office.domain.models import ScoutReport
-from the_front_office.domain.ports import AnalysisModel, ChatSession, SportProvider
+from the_front_office.domain.ports import AnalysisModel, ChatSession, CompetitionProvider
 
 logger = logging.getLogger(__name__)
 
 
 class ScoutEngine:
-    """Turns any SportProvider into a scouting report."""
+    """Turns any CompetitionProvider into a scouting report."""
 
-    def __init__(self, provider: SportProvider, *, ai: AnalysisModel):
+    def __init__(self, provider: CompetitionProvider, *, ai: AnalysisModel):
         """Both collaborators are ports, and both are supplied.
 
         Deliberately no default: constructing one here would mean naming a
@@ -43,7 +43,7 @@ class ScoutEngine:
 
         briefing = context.briefing(report)
         logger.debug(
-            f"{self.provider.sport}: briefing is {len(briefing):,} chars vs {len(context.prompt):,} for the prompt"
+            f"{self.provider.competition}: briefing is {len(briefing):,} chars vs {len(context.prompt):,} for the prompt"
         )
         chat = self.ai.start_chat(
             initial_history=[

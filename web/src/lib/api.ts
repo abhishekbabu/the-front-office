@@ -6,15 +6,17 @@
  * as a typecheck failure here rather than as an undefined at runtime.
  */
 
-export type Sport = {
+export type Competition = {
   /** Identifies this entry in every route and picker: "nba-yahoo". */
   key: string;
-  /** The game itself, so two platforms can group under one heading. */
+  /** basketball | football | soccer — groups the competitions that share one. */
   sport: string;
+  /** Which competition this is: "nba", "nfl", "premier-league". */
+  competition: string;
   platform: string;
   label: string;
   supports_trades: boolean;
-  /** Whether the credentials this sport needs are set. */
+  /** Whether the credentials this competition needs are set. */
   configured: boolean;
   requires: string;
   /** Whether it can actually be used. Configured is necessary, not sufficient. */
@@ -277,27 +279,27 @@ const put = <T,>(path: string, body: unknown) =>
   request<T>(path, { method: "PUT", body: JSON.stringify(body) });
 
 export const api = {
-  sports: () => request<Sport[]>("/api/sports"),
-  leagues: (sport: string) => request<League[]>(`/api/${sport}/leagues`),
-  roster: (sport: string, league: string) => request<PlayerCard[]>(`/api/${sport}/leagues/${league}/roster`),
-  player: (sport: string, league: string, id: string) =>
-    request<PlayerDetail>(`/api/${sport}/leagues/${league}/players/${id}`),
-  summary: (sport: string, league: string) => request<Summary>(`/api/${sport}/leagues/${league}/summary`),
-  schedule: (sport: string, league: string) =>
-    request<LeagueSchedule>(`/api/${sport}/leagues/${league}/schedule`),
-  freeAgents: (sport: string, league: string, query: FreeAgentQuery = {}) => {
+  sports: () => request<Competition[]>("/api/sports"),
+  leagues: (competition: string) => request<League[]>(`/api/${competition}/leagues`),
+  roster: (competition: string, league: string) => request<PlayerCard[]>(`/api/${competition}/leagues/${league}/roster`),
+  player: (competition: string, league: string, id: string) =>
+    request<PlayerDetail>(`/api/${competition}/leagues/${league}/players/${id}`),
+  summary: (competition: string, league: string) => request<Summary>(`/api/${competition}/leagues/${league}/summary`),
+  schedule: (competition: string, league: string) =>
+    request<LeagueSchedule>(`/api/${competition}/leagues/${league}/schedule`),
+  freeAgents: (competition: string, league: string, query: FreeAgentQuery = {}) => {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(query)) {
       if (value !== "" && value !== undefined) params.set(key, String(value));
     }
-    return request<PlayerPage>(`/api/${sport}/leagues/${league}/free-agents?${params}`);
+    return request<PlayerPage>(`/api/${competition}/leagues/${league}/free-agents?${params}`);
   },
-  teams: (sport: string, league: string) => request<TeamRef[]>(`/api/${sport}/leagues/${league}/teams`),
-  teamRoster: (sport: string, league: string, team: string) =>
-    request<PlayerCard[]>(`/api/${sport}/leagues/${league}/teams/${encodeURIComponent(team)}/roster`),
-  scout: (sport: string, league: string) => post<Analysis>(`/api/${sport}/leagues/${league}/scout`, {}),
-  trade: (sport: string, league: string, text: string) =>
-    post<Evaluation>(`/api/${sport}/leagues/${league}/trade`, { text }),
+  teams: (competition: string, league: string) => request<TeamRef[]>(`/api/${competition}/leagues/${league}/teams`),
+  teamRoster: (competition: string, league: string, team: string) =>
+    request<PlayerCard[]>(`/api/${competition}/leagues/${league}/teams/${encodeURIComponent(team)}/roster`),
+  scout: (competition: string, league: string) => post<Analysis>(`/api/${competition}/leagues/${league}/scout`, {}),
+  trade: (competition: string, league: string, text: string) =>
+    post<Evaluation>(`/api/${competition}/leagues/${league}/trade`, { text }),
   ask: (chatId: string, message: string) => post<{ answer: string }>(`/api/chat/${chatId}`, { message }),
   capabilities: () => request<Capabilities>("/api/capabilities"),
   settings: () => request<Setting[]>("/api/settings"),

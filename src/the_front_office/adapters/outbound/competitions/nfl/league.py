@@ -9,9 +9,9 @@ wait on eighteen weeks of matchups.
 import logging
 from typing import Any
 
+from the_front_office.adapters.outbound.competitions.nfl.week import Week, day, games_by_week, moment, week_dates
 from the_front_office.adapters.outbound.platforms.sleeper.client import SleeperClient
 from the_front_office.adapters.outbound.platforms.sleeper.types import SleeperRoster, Transaction
-from the_front_office.adapters.outbound.sports.nfl.week import Week, day, games_by_week, moment, week_dates
 from the_front_office.domain.errors import SleeperAPIError
 from the_front_office.domain.models import ActivityRow, LeagueSchedule, Match, ScheduleRow, StandingRow, Tone
 

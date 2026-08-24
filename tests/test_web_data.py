@@ -5,7 +5,7 @@ from datetime import datetime
 import pytest
 
 from the_front_office.adapters.inbound.web import data
-from the_front_office.adapters.outbound.sports.nba.yahoo import YahooNBAProvider
+from the_front_office.adapters.outbound.competitions.nba.yahoo import YahooNBAProvider
 from the_front_office.domain.errors import LeagueNotFoundError
 
 # ── season rollover ─────────────────────────────────────────────────────
@@ -48,7 +48,7 @@ def test_configured_sports_reflect_the_environment(monkeypatch: pytest.MonkeyPat
 
     assert data.available_sports() == []
     monkeypatch.setattr(settings, "sleeper_username", "someone")
-    assert [e.sport for e in data.available_sports()] == ["nfl"]
+    assert [e.competition for e in data.available_sports()] == ["nfl"]
 
 
 def test_a_configured_sport_is_built(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -56,7 +56,7 @@ def test_a_configured_sport_is_built(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(settings, "sleeper_username", "someone")
     provider = data.build_provider("nfl")
-    assert provider.sport == "nfl"
+    assert provider.competition == "nfl"
 
 
 # ── situation parsing ───────────────────────────────────────────────────

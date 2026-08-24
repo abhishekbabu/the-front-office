@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 from reports import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
 
+from the_front_office.adapters.outbound.competitions.nfl.sleeper import SleeperNFLProvider
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
     PlayerMeta,
     ScheduledGame,
@@ -24,7 +25,6 @@ from the_front_office.adapters.outbound.platforms.sleeper.types import (
     TrendingPlayer,
     WeeklyProjection,
 )
-from the_front_office.adapters.outbound.sports.nfl.sleeper import SleeperNFLProvider
 
 
 def make_player(
@@ -254,7 +254,7 @@ def _league_client(**extra: Any) -> FakeSleeper:
 
 def _at_week(week: int, **extra: Any) -> FakeSleeper:
     client = _league_client(**extra)
-    client.get_state = lambda sport="nfl": SeasonState(  # type: ignore[method-assign]
+    client.get_state = lambda competition="nfl": SeasonState(  # type: ignore[method-assign]
         week=week, season="2026", season_type="regular"
     )
     return client

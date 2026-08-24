@@ -10,9 +10,9 @@ tab that is always empty is worse than one that is not there.
 
 import logging
 
+from the_front_office.adapters.outbound.competitions.dates import at_time
 from the_front_office.adapters.outbound.platforms.fpl.client import FPLClient
 from the_front_office.adapters.outbound.platforms.fpl.types import H2HMatch, MiniLeague
-from the_front_office.adapters.outbound.sports.dates import at_time
 from the_front_office.domain.errors import FPLAPIError
 from the_front_office.domain.models import LeagueSchedule, Match, ScheduleRow, StandingRow, Tone
 

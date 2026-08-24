@@ -13,13 +13,13 @@ from the_front_office.config.settings import settings
 
 def test_every_registered_sport_is_complete() -> None:
     for entry in registry.all_sports():
-        assert entry.sport and entry.label and entry.requires
+        assert entry.competition and entry.label and entry.requires
         assert callable(entry.build)
         assert callable(entry.is_configured)
 
 
 def test_sport_keys_are_unique() -> None:
-    keys = [e.sport for e in registry.all_sports()]
+    keys = [e.competition for e in registry.all_sports()]
     assert len(keys) == len(set(keys))
 
 
@@ -40,14 +40,14 @@ def test_nothing_is_configured_without_credentials() -> None:
 def test_sleeper_needs_only_a_username(monkeypatch: pytest.MonkeyPatch) -> None:
     """Sleeper is public — no key, no OAuth."""
     monkeypatch.setattr(settings, "sleeper_username", "someone")
-    assert [e.sport for e in registry.configured_sports()] == ["nfl"]
+    assert [e.competition for e in registry.configured_sports()] == ["nfl"]
 
 
 def test_yahoo_needs_both_halves_of_the_credential(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "yahoo_client_id", "id")
     assert registry.configured_sports() == []
     monkeypatch.setattr(settings, "yahoo_client_secret", "secret")
-    assert [e.sport for e in registry.configured_sports()] == ["nba"]
+    assert [e.competition for e in registry.configured_sports()] == ["nba"]
 
 
 def test_building_a_provider_is_deferred(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -68,17 +68,17 @@ def test_the_nfl_entry_builds_a_provider(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(settings, "sleeper_username", "someone")
     entry = registry.find("nfl")
     assert entry is not None
-    assert entry.build().sport == "nfl"
+    assert entry.build().competition == "nfl"
 
 
 def test_every_provider_satisfies_the_protocol() -> None:
     """A sport that forgets list_leagues, build_context or roster_rows would fail
     only at the point of use."""
-    from the_front_office.adapters.outbound.sports.nba.yahoo import YahooNBAProvider
-    from the_front_office.adapters.outbound.sports.nfl.sleeper import SleeperNFLProvider
+    from the_front_office.adapters.outbound.competitions.nba.yahoo import YahooNBAProvider
+    from the_front_office.adapters.outbound.competitions.nfl.sleeper import SleeperNFLProvider
 
     for provider in (YahooNBAProvider, SleeperNFLProvider):
-        assert provider.sport and provider.label
+        assert provider.competition and provider.label
         for method in ("list_leagues", "build_context", "roster"):
             assert callable(getattr(provider, method, None)), f"{provider.__name__}.{method}"
 
@@ -130,17 +130,17 @@ def test_every_sport_declares_its_trade_support() -> None:
 
 def test_a_trading_sport_implements_the_trade_port() -> None:
     """`supports_trades` and `build_trade_context` must not drift apart."""
-    from the_front_office.adapters.outbound.sports.fpl.fpl import FPLProvider
-    from the_front_office.adapters.outbound.sports.nba.yahoo import YahooNBAProvider
-    from the_front_office.adapters.outbound.sports.nfl.sleeper import SleeperNFLProvider
+    from the_front_office.adapters.outbound.competitions.nba.yahoo import YahooNBAProvider
+    from the_front_office.adapters.outbound.competitions.nfl.sleeper import SleeperNFLProvider
+    from the_front_office.adapters.outbound.competitions.premier_league.fpl import FPLProvider
 
-    implementations = {"nba": YahooNBAProvider, "nfl": SleeperNFLProvider, "fpl": FPLProvider}
+    implementations = {"nba": YahooNBAProvider, "nfl": SleeperNFLProvider, "premier-league": FPLProvider}
     for entry in registry.all_sports():
-        # A sport missing here is a sport the registry knows about and this
+        # A competition missing here is one the registry knows about and this
         # guard does not, which is the drift it exists to catch.
-        provider = implementations[entry.sport]
+        provider = implementations[entry.competition]
         has_method = callable(getattr(provider, "build_trade_context", None))
-        assert has_method == entry.supports_trades, entry.sport
+        assert has_method == entry.supports_trades, entry.competition
 
 
 def test_requirements_summary_names_every_sport() -> None:
@@ -158,7 +158,7 @@ def test_an_entry_is_identified_by_sport_and_platform() -> None:
     on Sleeper — and those are separate accounts and separate leagues, so a
     registry keyed by sport alone would hold one and lose the rest."""
     for entry in registry.all_sports():
-        assert entry.key == f"{entry.sport}-{entry.platform}"
+        assert entry.key == f"{entry.competition}-{entry.platform}"
 
 
 def test_every_key_is_unique() -> None:
@@ -174,7 +174,7 @@ def test_a_pair_resolves_exactly() -> None:
 def test_a_bare_sport_still_resolves_while_one_platform_carries_it() -> None:
     """Typing "nba" stays meaningful until a second platform makes it ambiguous."""
     entry = registry.find("nba")
-    assert entry is not None and entry.sport == "nba"
+    assert entry is not None and entry.competition == "nba"
 
 
 def test_a_pair_is_preferred_over_a_bare_sport_match() -> None:

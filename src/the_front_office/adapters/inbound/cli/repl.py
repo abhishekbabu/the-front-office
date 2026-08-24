@@ -18,7 +18,7 @@ from the_front_office.adapters.inbound.cli.commands import (
 )
 from the_front_office.adapters.inbound.cli.output import _print_header, print_error
 from the_front_office.adapters.inbound.cli.session import Session
-from the_front_office.bootstrap import SportEntry, all_sports, configured_sports
+from the_front_office.bootstrap import CompetitionEntry, all_sports, configured_sports
 from the_front_office.config.logging import setup_logging
 from the_front_office.config.telemetry import setup_telemetry
 from the_front_office.domain.errors import FrontOfficeError
@@ -70,7 +70,7 @@ class QuitRequested(Exception):
     """Raised by _dispatch when the user asks to exit."""
 
 
-def _dispatch(session: Session, entries: list[SportEntry], cmd: str, args: list[str]) -> None:
+def _dispatch(session: Session, entries: list[CompetitionEntry], cmd: str, args: list[str]) -> None:
     """Route one parsed command to its handler.
 
     Raises:
@@ -152,10 +152,10 @@ def main() -> None:
     _print_header("Done ✅")
 
 
-def _unconfigured() -> list[SportEntry]:
+def _unconfigured() -> list[CompetitionEntry]:
 
-    configured = {e.sport for e in configured_sports()}
-    return [e for e in all_sports() if e.sport not in configured]
+    configured = {e.competition for e in configured_sports()}
+    return [e for e in all_sports() if e.competition not in configured]
 
 
 if __name__ == "__main__":

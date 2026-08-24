@@ -15,9 +15,9 @@ from datetime import date, datetime
 from typing import TypedDict
 from zoneinfo import ZoneInfo
 
+from the_front_office.adapters.outbound.competitions.names import NameIndex
 from the_front_office.adapters.outbound.platforms.sleeper.client import NBA, SleeperClient
 from the_front_office.adapters.outbound.platforms.sleeper.types import NBAGameLog, ScheduledGame
-from the_front_office.adapters.outbound.sports.names import NameIndex
 from the_front_office.domain.errors import SleeperAPIError
 
 logger = logging.getLogger(__name__)

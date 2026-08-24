@@ -1,7 +1,7 @@
 """Provider lifetime for one CLI session."""
 
-from the_front_office.bootstrap import SportEntry
-from the_front_office.domain.ports import SportProvider
+from the_front_office.bootstrap import CompetitionEntry
+from the_front_office.domain.ports import CompetitionProvider
 
 
 class Session:
@@ -13,9 +13,9 @@ class Session:
     """
 
     def __init__(self) -> None:
-        self._providers: dict[str, SportProvider] = {}
+        self._providers: dict[str, CompetitionProvider] = {}
 
-    def provider(self, entry: SportEntry) -> SportProvider:
-        if entry.sport not in self._providers:
-            self._providers[entry.sport] = entry.build()
-        return self._providers[entry.sport]
+    def provider(self, entry: CompetitionEntry) -> CompetitionProvider:
+        if entry.competition not in self._providers:
+            self._providers[entry.competition] = entry.build()
+        return self._providers[entry.competition]

@@ -14,6 +14,8 @@ import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
+from the_front_office.adapters.outbound.competitions.dates import day_month, weekday_day_month
+from the_front_office.adapters.outbound.competitions.nfl.lineup import LineupChange, LineupSlot
 from the_front_office.adapters.outbound.platforms.sleeper.client import SleeperClient
 from the_front_office.adapters.outbound.platforms.sleeper.types import (
     PlayerMeta,
@@ -22,8 +24,6 @@ from the_front_office.adapters.outbound.platforms.sleeper.types import (
     SleeperRoster,
     WeeklyProjection,
 )
-from the_front_office.adapters.outbound.sports.dates import day_month, weekday_day_month
-from the_front_office.adapters.outbound.sports.nfl.lineup import LineupChange, LineupSlot
 from the_front_office.domain.errors import SleeperAPIError
 
 logger = logging.getLogger(__name__)

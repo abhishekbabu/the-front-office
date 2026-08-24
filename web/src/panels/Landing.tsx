@@ -1,6 +1,6 @@
 import { useQueries } from "@tanstack/react-query";
 import { ChevronRight, Trophy } from "lucide-react";
-import { api, type League, type Sport } from "@/lib/api";
+import { api, type League, type Competition } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink } from "@/components/ui/external-link";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -20,8 +20,8 @@ export function Landing({
   sports,
   onPick,
 }: {
-  sports: Sport[];
-  onPick: (sport: Sport, league: League) => void;
+  sports: Competition[];
+  onPick: (sport: Competition, league: League) => void;
 }) {
   const configured = sports.filter((s) => s.configured);
 
