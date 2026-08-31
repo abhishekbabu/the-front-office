@@ -16,6 +16,10 @@ of truth:
   condition growth: `skills/thermo-nuclear-code-quality-review/SKILL.md`
 - **Adding a competition** — the extension point this codebase is built around:
   `skills/adding-a-competition/SKILL.md`
+- **Test quality review** — what the 95% floor does not measure:
+  `skills/review-tests/SKILL.md`
+- **Improve** — audit the repo and write handoff plans for another agent:
+  `skills/improve/SKILL.md`
 
 ## Conventions
 
