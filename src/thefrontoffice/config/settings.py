@@ -36,19 +36,19 @@ class AppSettings(BaseSettings):
     yahoo_client_secret: str | None = None
     yahoo_redirect_uri: str = "https://localhost:8080"
     yahoo_token_file: str = ".yahoofantasy"
-    yahoo_cache_file: str = ".yahoo_cache.json"
+    yahoo_cache_dir: str = ".yahoo_cache"
     yahoo_max_weekly_adds: int = Field(default=3, ge=0)
 
     # ── Sleeper (fantasy football) ──────────────────────────────────────
     # Sleeper needs no credentials; the username is only used to find leagues.
     sleeper_username: str | None = None
-    sleeper_cache_file: str = ".sleeper_cache.json"
+    sleeper_cache_dir: str = ".sleeper_cache"
 
     # ── Fantasy Premier League ──────────────────────────────────────────
     # FPL needs no credentials, and has no public username lookup — the entry
     # id is the number in the URL of your own points page.
     fpl_entry_id: int | None = Field(default=None, gt=0)
-    fpl_cache_file: str = ".fpl_cache.json"
+    fpl_cache_dir: str = ".fpl_cache"
 
     # ── Telemetry ───────────────────────────────────────────────────────
     # Optional. Without a token nothing is exported and no network call is

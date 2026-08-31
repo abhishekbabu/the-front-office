@@ -11,10 +11,27 @@ season never changes again. Some are not expressible as a duration at all —
 basketball's game log is good until the next game tips off, which is a moment
 rather than an interval — so a rule is a predicate over when the entry was
 stored, and `within` is the common case of one.
+
+A cache is a **directory** and each key is its own file inside it. The
+alternative, one document holding every entry, makes storing the smallest value
+cost a rewrite of the largest: a trimmed player catalog is megabytes sitting
+beside a scoreboard of a few kilobytes, and every write re-encoded the lot.
+Per-key files also mean reading one entry never parses the others, and two
+writers only collide when they are storing the same key.
+
+Every write goes to a temporary file that is then renamed over the target, so a
+process killed mid-write leaves the previous entry intact rather than a
+half-written one. Nothing here is precious — the truth lives at the platform,
+and a lost or unreadable entry costs one refetch — but a cache that corrupts
+itself on Ctrl-C makes the next run slow for no reason.
 """
 
+import hashlib
 import json
 import logging
+import os
+import re
+import tempfile
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -27,6 +44,11 @@ T = TypeVar("T")
 Freshness = Callable[[datetime, datetime], bool]
 """Given when an entry was stored and what time it is now, is it still good?"""
 
+_UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
+_SLUG_LIMIT = 60
+"""Long enough to recognise an entry by eye, short enough to stay inside the
+path limits Windows still enforces once a deep repo path is prefixed."""
+
 
 def within(ttl: timedelta) -> Freshness:
     """The common rule: good for a fixed interval after it was stored."""
@@ -38,32 +60,75 @@ def _rule(freshness: timedelta | Freshness) -> Freshness:
     return within(freshness) if isinstance(freshness, timedelta) else freshness
 
 
+def _filename(key: str) -> str:
+    """A portable filename for `key`, unique to the exact key.
+
+    The digest does the work; the slug is only a label, so that a human looking
+    in the directory can tell `players_nfl` from a mini-league table. Keys carry
+    what filenames cannot — the dots in a Yahoo league key, the spaces and
+    punctuation of a player search, and case that macOS and Windows fold
+    together — so correctness rests on the digest alone.
+    """
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+    slug = _UNSAFE.sub("-", key)[:_SLUG_LIMIT].strip("-.")
+    return f"{slug}-{digest}.json" if slug else f"{digest}.json"
+
+
 class JsonDiskCache:
-    """Namespaced JSON values on disk, each with its own TTL."""
+    """Namespaced JSON values on disk, one file per key, each with its own rule."""
 
     def __init__(self, path: Path) -> None:
-        self._path = path
-        self._data: dict[str, dict[str, Any]] = {}
-        self._load()
+        """`path` is the directory the entries live in; it is created on write."""
+        self._dir = path
+        self._entries: dict[str, dict[str, Any]] = {}
 
-    def _load(self) -> None:
-        if not self._path.exists():
-            return
+    def _read(self, key: str) -> dict[str, Any] | None:
+        """The stored envelope for `key`, from memory or else from its own file.
+
+        Entries are held once read so that a second look at the same key costs
+        nothing — the whole-file cache this replaced got that for free by
+        loading everything up front, which is exactly what made it expensive.
+        """
+        if key in self._entries:
+            return self._entries[key]
+        path = self._dir / _filename(key)
         try:
-            raw = json.loads(self._path.read_text(encoding="utf-8"))
-            if isinstance(raw, dict):
-                self._data = raw
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return None
         except (OSError, ValueError) as e:
-            logger.warning(f"Discarding unreadable cache {self._path}: {e}")
-            self._data = {}
+            logger.warning(f"Discarding unreadable cache entry {path}: {e}")
+            return None
+        if not isinstance(raw, dict) or "stored_at" not in raw:
+            return None
+        self._entries[key] = raw
+        return raw
 
-    def _save(self) -> None:
+    def _write(self, key: str, entry: dict[str, Any]) -> None:
+        """Replace `key`'s file atomically.
+
+        The temporary file is made in the destination directory rather than the
+        system's: `os.replace` is only atomic within a single filesystem, and
+        the temp directory is routinely a different one.
+        """
+        path = self._dir / _filename(key)
+        temp: Path | None = None
         try:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._path.write_text(json.dumps(self._data), encoding="utf-8")
+            self._dir.mkdir(parents=True, exist_ok=True)
+            handle, name = tempfile.mkstemp(dir=self._dir, prefix=".tmp-")
+            temp = Path(name)
+            with os.fdopen(handle, "w", encoding="utf-8") as f:
+                json.dump(entry, f)
+            os.replace(temp, path)
+            temp = None
         except OSError as e:
             # Best effort: a cache we cannot persist still works for this run.
-            logger.warning(f"Could not write cache {self._path}: {e}")
+            logger.warning(f"Could not write cache entry {path}: {e}")
+        finally:
+            # Also covers a value that turned out not to be serialisable, which
+            # is a bug worth raising but not worth leaving a stray file over.
+            if temp is not None:
+                temp.unlink(missing_ok=True)
 
     def get(self, key: str, freshness: timedelta | Freshness, now: datetime | None = None) -> Any | None:
         """Return the cached value for `key`, or None if absent or stale.
@@ -71,12 +136,12 @@ class JsonDiskCache:
         `freshness` is a TTL for the usual case, or a predicate for a rule a
         duration cannot express.
         """
-        entry = self._data.get(key)
-        if not entry or "stored_at" not in entry:
+        entry = self._read(key)
+        if entry is None:
             return None
         try:
             stored_at = datetime.fromisoformat(entry["stored_at"])
-        except ValueError:
+        except (TypeError, ValueError):
             return None
         if stored_at.tzinfo is None:
             return None  # no zone, so it cannot be placed on a timeline
@@ -86,10 +151,11 @@ class JsonDiskCache:
         return entry.get("value")
 
     def set(self, key: str, value: Any, now: datetime | None = None) -> None:
-        """Store `value` under `key` and persist."""
+        """Store `value` under `key` and persist it."""
         stored_at = (now or datetime.now(timezone.utc)).isoformat()
-        self._data[key] = {"stored_at": stored_at, "value": value}
-        self._save()
+        entry = {"stored_at": stored_at, "value": value}
+        self._entries[key] = entry
+        self._write(key, entry)
 
     def cached(
         self,
@@ -113,5 +179,20 @@ class JsonDiskCache:
         return value
 
     def clear(self) -> None:
-        self._data = {}
-        self._save()
+        """Forget every entry, in memory and on disk.
+
+        Only files this cache could have written are removed, never the
+        directory itself — a misconfigured path should cost nothing, and
+        deleting a tree because a setting pointed somewhere unexpected is not a
+        risk a cache needs to take.
+        """
+        self._entries = {}
+        try:
+            stale = list(self._dir.glob("*.json"))
+        except OSError:
+            return
+        for entry in stale:
+            try:
+                entry.unlink()
+            except OSError as e:
+                logger.warning(f"Could not remove cache entry {entry}: {e}")

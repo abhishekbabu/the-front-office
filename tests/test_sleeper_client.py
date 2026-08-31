@@ -67,7 +67,7 @@ def _client(
     routes: dict[str, Any], tmp_path: Path, error: Exception | None = None
 ) -> tuple[SleeperClient, FakeSession]:
     session = FakeSession(routes, error)
-    return SleeperClient(cache=JsonDiskCache(tmp_path / "c.json"), session=session), session
+    return SleeperClient(cache=JsonDiskCache(tmp_path / "cache"), session=session), session
 
 
 # ── retry policy ────────────────────────────────────────────────────────
@@ -106,7 +106,7 @@ def test_a_transient_failure_then_success_is_retried(tmp_path: Path, no_retry_wa
                 raise requests.exceptions.Timeout()
             return FakeResponse(STATE)
 
-    client = SleeperClient(cache=JsonDiskCache(tmp_path / "c.json"), session=Flaky({}))
+    client = SleeperClient(cache=JsonDiskCache(tmp_path / "cache"), session=Flaky({}))
     assert client.get_nfl_state().week == 5
 
 

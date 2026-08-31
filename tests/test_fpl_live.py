@@ -20,7 +20,7 @@ pytestmark = pytest.mark.integration
 @pytest.fixture
 def client(tmp_path: Path) -> FPLClient:
     """A client whose cache is thrown away, so each run really hits the API."""
-    return FPLClient(cache=JsonDiskCache(tmp_path / "fpl.json"))
+    return FPLClient(cache=JsonDiskCache(tmp_path / "cache"))
 
 
 def test_the_bootstrap_still_carries_a_full_league(client: FPLClient) -> None:

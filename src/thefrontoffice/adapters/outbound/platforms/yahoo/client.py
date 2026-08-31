@@ -141,7 +141,7 @@ class YahooClient:
         # concurrent writes clobber each other, and its `_load` takes no expiry
         # at all — waiver leaders cached once stayed cached until the file was
         # deleted, which is exactly the data that goes stale fastest.
-        self._cache = cache or JsonDiskCache(Path(settings.yahoo_cache_file))
+        self._cache = cache or JsonDiskCache(Path(settings.yahoo_cache_dir))
 
     def _player_query(
         self,

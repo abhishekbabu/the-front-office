@@ -34,9 +34,9 @@ second representation of a report to keep in step. It also serves the built UI f
 `web/dist`, so one process on one port covers both.
 
 **Outbound adapters** (`src/thefrontoffice/adapters/outbound/`)
-- **Yahoo Fantasy** via `yahoofantasy` — OAuth2, rosters, matchups, and hand-built player queries that sort free agents by an individual stat category. Responses are cached in `.yahoo_cache.json` rather than the SDK's own store
-- **Sleeper** — public and auth-free, and the stats provider for both football and basketball: football leagues, every roster in them, matchups and weekly projections; the real-world season schedule, season totals and the league's transaction feed; NBA per-game projections summed into category totals for the matchup period, per-game box scores for recent form (L5/L10/L15), and the basketball schedule. Cached in `.sleeper_cache.json`
-- **Fantasy Premier League** — public and auth-free, and the only platform here that is also its own stats provider: one `bootstrap-static` call carries the squad, the prices, the game's own `ep_next` projection and Opta expected goals, with per-player season history, mini-league tables and fixtures alongside. Cached in `.fpl_cache.json`
+- **Yahoo Fantasy** via `yahoofantasy` — OAuth2, rosters, matchups, and hand-built player queries that sort free agents by an individual stat category. Responses are cached in `.yahoo_cache/` rather than the SDK's own store
+- **Sleeper** — public and auth-free, and the stats provider for both football and basketball: football leagues, every roster in them, matchups and weekly projections; the real-world season schedule, season totals and the league's transaction feed; NBA per-game projections summed into category totals for the matchup period, per-game box scores for recent form (L5/L10/L15), and the basketball schedule. Cached in `.sleeper_cache/`
+- **Fantasy Premier League** — public and auth-free, and the only platform here that is also its own stats provider: one `bootstrap-static` call carries the squad, the prices, the game's own `ep_next` projection and Opta expected goals, with per-player season history, mini-league tables and fixtures alongside. Cached in `.fpl_cache/`
 - **Gemini** via `google-genai` — `gemini-2.5-pro` for analysis, `gemini-2.5-flash` for parsing
 
 **Tracing** — OpenTelemetry via `logfire`, configured in
@@ -102,9 +102,9 @@ or absent without echoing a secret, and flags keys nothing will pick up —
 
 Do **not** copy `.yahoofantasy`: refresh-token rotation means two machines
 sharing one token can invalidate each other, and re-authenticating is a single
-browser flow. Do not copy `.sleeper_cache.json`, `.fpl_cache.json` or
-`.yahoo_cache.json` either — they are derived, expiring,
-and one holds a ~14MB player catalog.
+browser flow. Do not copy `.sleeper_cache/`, `.fpl_cache/` or `.yahoo_cache/`
+either — they are derived, expiring, and one holds a trimmed player catalog
+built from a ~14MB response.
 
 ### Environment
 
@@ -241,6 +241,7 @@ just test               # hermetic suite (args pass through: just test "-k scout
 just coverage           # coverage report
 just lock               # re-resolve uv.lock after editing pyproject.toml
 just clean              # caches and build artefacts
+just clean-data         # only the platform caches, forcing a refetch
 ```
 
 `just --list` for the full catalog.
@@ -259,7 +260,7 @@ guarantee on that side — and then runs `just check-web` itself, so adding a ga
 to the justfile extends CI here too rather than only on the Python side.
 If `just check` and `just check-web` pass locally they pass in CI.
 
-Tests are hermetic — no network, no credentials, no cache file on disk. Engines
+Tests are hermetic — no network, no credentials, no cache on disk. Engines
 take their collaborators by keyword, so `tests/conftest.py` fakes stand in for
 Yahoo, NBA and Gemini. Anything hitting a live API is marked
 `@pytest.mark.integration` and deselected by default.
@@ -288,6 +289,6 @@ thefrontoffice/
 
 ## Security
 
-Never commit `.env`, `.yahoofantasy`, or any `.*_cache.json` — all of them are
+Never commit `.env`, `.yahoofantasy`, or any `.*_cache/` — all of them are
 gitignored, and `detect-private-key` runs as a pre-commit hook. Credentials are
 read only through `AppSettings`.

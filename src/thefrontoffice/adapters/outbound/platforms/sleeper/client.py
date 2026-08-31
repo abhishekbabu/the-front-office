@@ -101,7 +101,7 @@ class SleeperClient:
     def __init__(self, cache: JsonDiskCache | None = None, session: Any = None) -> None:
         self._api = JsonApiClient(
             name="Sleeper",
-            cache=cache or JsonDiskCache(Path(settings.sleeper_cache_file)),
+            cache=cache or JsonDiskCache(Path(settings.sleeper_cache_dir)),
             # Read through the module global rather than binding it here, so the
             # policy stays one thing a test can replace.
             retry=lambda: _retry(),
@@ -222,8 +222,8 @@ class SleeperClient:
         """The player catalog, trimmed to the fields we use.
 
         The raw response is ~14MB across 12k players. Only a handful of fields
-        matter here, so the cache stores the trimmed form — the full payload
-        would dominate the cache file for no benefit.
+        matter here, so the cache stores the trimmed form — keeping the rest
+        would cost a re-parse on every read for fields nothing asks for.
         """
         cached = self._api.cache_get(f"players_{sport}", PLAYERS_TTL)
         if cached is not None:
@@ -258,8 +258,8 @@ class SleeperClient:
         """A whole season's production, keyed by player_id.
 
         Trimmed before caching for the same reason the catalog is: the raw
-        response is ~1.9MB of mostly kicking and defensive splits, and the
-        cache is one file shared with everything else the client reads.
+        response is ~1.9MB of mostly kicking and defensive splits, and none of
+        it is read back.
         """
         key = f"season_stats_{sport}_{season}"
         cached = self._api.cache_get(key, SEASON_STATS_TTL)

@@ -33,11 +33,16 @@ oauth2.json
 .yahoofantasy
 token.json
 
-# Data caches
+# Data caches, one directory per platform
+.yahoo_cache/
+.sleeper_cache/
+.fpl_cache/
+# The single-file caches these replaced, still on any machine that ran the
+# older code. `just clean` removes them; ignored so they cannot be committed.
 .nba_cache.json
+.yahoo_cache.json
 .sleeper_cache.json
 .fpl_cache.json
-.yahoo_cache.json
 web/node_modules/
 web/dist/
 *.tsbuildinfo

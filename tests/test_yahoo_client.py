@@ -88,15 +88,14 @@ class RecordingCache(JsonDiskCache):
     """
 
     def __init__(self) -> None:
-        self._path = Path("unused")
-        self._data = {}
+        super().__init__(Path("unused"))
         self.write_threads: set[str] = set()
         self.written: list[str] = []
 
-    def _load(self) -> None:  # never touch disk
-        return None
+    def _read(self, key: str) -> Any:  # memory only, never touch disk
+        return self._entries.get(key)
 
-    def _save(self) -> None:  # never touch disk
+    def _write(self, key: str, entry: dict[str, Any]) -> None:  # never touch disk
         return None
 
     def set(self, key: str, value: Any, now: Any = None) -> None:
@@ -137,8 +136,9 @@ def test_category_requests_run_concurrently() -> None:
 
 
 def test_cache_writes_stay_on_one_thread() -> None:
-    """The cache file is read-modify-written whole, so concurrent writes would
-    clobber each other. Only the requests are allowed to fan out."""
+    """Distinct keys are distinct files, so the writes could safely fan out —
+    but the cache holds what it has read in memory, and that dict is not
+    thread-safe. Only the requests are allowed to fan out."""
     cache = RecordingCache()
     client, _ = _client(_response({"player": [_player_payload("A B")]}), cache=cache)
     client.fetch_top_by_stat(per_stat=4)
