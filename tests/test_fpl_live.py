@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
-from the_front_office.adapters.outbound.platforms.fpl.client import FPLClient
-from the_front_office.adapters.outbound.platforms.fpl.types import POSITIONS, SQUAD_SIZE
+from thefrontoffice.adapters.outbound.platforms.cache import JsonDiskCache
+from thefrontoffice.adapters.outbound.platforms.fpl.client import FPLClient
+from thefrontoffice.adapters.outbound.platforms.fpl.types import POSITIONS, SQUAD_SIZE
 
 pytestmark = pytest.mark.integration
 

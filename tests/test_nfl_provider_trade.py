@@ -5,9 +5,9 @@ from typing import Any
 import pytest
 from test_nfl_provider import DEFAULT_PROJECTIONS, MY_ID, FakeSleeper, _proj, _provider
 
-from the_front_office.adapters.outbound.platforms.sleeper.types import SleeperRoster
-from the_front_office.domain.errors import PlayerNotFoundError
-from the_front_office.domain.models import TradeProposal
+from thefrontoffice.adapters.outbound.platforms.sleeper.types import SleeperRoster
+from thefrontoffice.domain.errors import PlayerNotFoundError
+from thefrontoffice.domain.models import TradeProposal
 
 
 def _client(**kwargs: Any) -> FakeSleeper:

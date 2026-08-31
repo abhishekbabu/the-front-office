@@ -11,14 +11,14 @@ from typing import Any
 import pytest
 import requests
 
-from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
-from the_front_office.adapters.outbound.platforms.fpl.client import (
+from thefrontoffice.adapters.outbound.platforms.cache import JsonDiskCache
+from thefrontoffice.adapters.outbound.platforms.fpl.client import (
     FPLClient,
     _parse_deadline,
     free_transfers,
 )
-from the_front_office.adapters.outbound.platforms.fpl.types import MAX_FREE_TRANSFERS, GameweekResult
-from the_front_office.domain.errors import FPLAPIError
+from thefrontoffice.adapters.outbound.platforms.fpl.types import MAX_FREE_TRANSFERS, GameweekResult
+from thefrontoffice.domain.errors import FPLAPIError
 
 BOOTSTRAP = {
     "events": [
@@ -165,7 +165,7 @@ class FakeSession:
 @pytest.fixture
 def no_retry_wait(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep the hermetic suite fast — the backoff is real seconds otherwise."""
-    import the_front_office.adapters.outbound.platforms.fpl.client as mod
+    import thefrontoffice.adapters.outbound.platforms.fpl.client as mod
 
     original = mod._retry
     monkeypatch.setattr(mod, "_retry", lambda: original().copy(wait=lambda _: 0))
@@ -373,7 +373,7 @@ def test_a_missing_gameweek_is_skipped_rather_than_assumed() -> None:
 
 def test_rate_limiting_is_retried_but_a_missing_entry_is_not() -> None:
     """A 404 is an entry id that does not exist, and will not start existing."""
-    from the_front_office.adapters.outbound.platforms.fpl.client import _is_retryable
+    from thefrontoffice.adapters.outbound.platforms.fpl.client import _is_retryable
 
     def http(status: int) -> requests.exceptions.HTTPError:
         response = requests.Response()
@@ -389,7 +389,7 @@ def test_rate_limiting_is_retried_but_a_missing_entry_is_not() -> None:
 
 
 def test_a_classic_standing_is_a_position_in_a_field() -> None:
-    from the_front_office.adapters.outbound.platforms.fpl.types import MiniLeague
+    from thefrontoffice.adapters.outbound.platforms.fpl.types import MiniLeague
 
     league = MiniLeague(id=1, name="Work", rank=3, is_private=True, rank_count=12)
     assert league.standing == "3 of 12"
@@ -397,7 +397,7 @@ def test_a_classic_standing_is_a_position_in_a_field() -> None:
 
 def test_a_head_to_head_standing_is_a_placing() -> None:
     """There is no field to be a position in — it is a table of match records."""
-    from the_front_office.adapters.outbound.platforms.fpl.types import MiniLeague
+    from thefrontoffice.adapters.outbound.platforms.fpl.types import MiniLeague
 
     league = MiniLeague(id=1, name="Hood h2h", rank=1, is_private=True, is_h2h=True)
     assert league.standing == "1st · head-to-head"
@@ -408,7 +408,7 @@ def test_a_head_to_head_standing_is_a_placing() -> None:
     [(1, "1st"), (2, "2nd"), (3, "3rd"), (4, "4th"), (11, "11th"), (12, "12th"), (13, "13th"), (21, "21st")],
 )
 def test_placings_read_as_english(rank: int, expected: str) -> None:
-    from the_front_office.adapters.outbound.platforms.fpl.types import MiniLeague
+    from thefrontoffice.adapters.outbound.platforms.fpl.types import MiniLeague
 
     league = MiniLeague(id=1, name="x", rank=rank, is_private=True, is_h2h=True)
     assert league.standing.startswith(expected)
@@ -416,7 +416,7 @@ def test_placings_read_as_english(rank: int, expected: str) -> None:
 
 def test_a_missing_field_size_does_not_render_as_zero() -> None:
     """`1 of 0` is worse than saying nothing about the field."""
-    from the_front_office.adapters.outbound.platforms.fpl.types import MiniLeague
+    from thefrontoffice.adapters.outbound.platforms.fpl.types import MiniLeague
 
     league = MiniLeague(id=1, name="x", rank=4200, is_private=True, rank_count=None)
     assert league.standing == "4,200"
@@ -543,14 +543,14 @@ def test_the_chip_schedule_comes_off_the_bootstrap_everything_else_reads(tmp_pat
 
 
 def test_a_chip_carries_the_word_a_manager_uses_for_it() -> None:
-    from the_front_office.adapters.outbound.platforms.fpl.types import Chip
+    from thefrontoffice.adapters.outbound.platforms.fpl.types import Chip
 
     assert Chip(name="3xc", start_event=1, stop_event=19).label == "Triple Captain"
     assert Chip(name="bboost", start_event=1, stop_event=19).label == "Bench Boost"
 
 
 def test_a_chip_knows_which_weeks_it_covers() -> None:
-    from the_front_office.adapters.outbound.platforms.fpl.types import Chip
+    from thefrontoffice.adapters.outbound.platforms.fpl.types import Chip
 
     wildcard = Chip(name="wildcard", start_event=2, stop_event=19)
 

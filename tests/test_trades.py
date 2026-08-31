@@ -2,9 +2,9 @@
 
 import pytest
 
-from the_front_office.adapters.outbound.competitions.trades import resolve_sides
-from the_front_office.domain.errors import PlayerNotFoundError
-from the_front_office.domain.models import TradeProposal
+from thefrontoffice.adapters.outbound.competitions.trades import resolve_sides
+from thefrontoffice.domain.errors import PlayerNotFoundError
+from thefrontoffice.domain.models import TradeProposal
 
 KNOWN = {"Star QB": "qb1", "Good RB": "rb1", "Waiver WR": "wr9"}
 
@@ -55,8 +55,8 @@ def test_an_empty_side_resolves_to_an_empty_list() -> None:
 def test_both_providers_use_the_shared_policy() -> None:
     import inspect
 
-    from the_front_office.adapters.outbound.competitions.nba import yahoo
-    from the_front_office.adapters.outbound.competitions.nfl import sleeper
+    from thefrontoffice.adapters.outbound.competitions.nba import yahoo
+    from thefrontoffice.adapters.outbound.competitions.nfl import sleeper
 
     for module in (yahoo, sleeper):
         assert "resolve_sides(" in inspect.getsource(module)

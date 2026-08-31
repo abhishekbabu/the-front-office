@@ -4,7 +4,7 @@ These are the parts with exact answers, so they are asserted exactly rather
 than left to the model.
 """
 
-from the_front_office.adapters.outbound.competitions.premier_league.squad import (
+from thefrontoffice.adapters.outbound.competitions.premier_league.squad import (
     Transfer,
     affordable_transfers,
     best_lineup,
@@ -13,7 +13,7 @@ from the_front_office.adapters.outbound.competitions.premier_league.squad import
     lineup_changes,
     points_with_captain,
 )
-from the_front_office.adapters.outbound.platforms.fpl.types import FORMATION_LIMITS, STARTING_SIZE, Player
+from thefrontoffice.adapters.outbound.platforms.fpl.types import FORMATION_LIMITS, STARTING_SIZE, Player
 
 
 def player(

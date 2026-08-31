@@ -7,12 +7,12 @@ player's numbers.
 
 from datetime import date
 
-from the_front_office.adapters.outbound.competitions.nba.projections import (
+from thefrontoffice.adapters.outbound.competitions.nba.projections import (
     ProjectionIndex,
     aggregate,
     normalize_name,
 )
-from the_front_office.adapters.outbound.platforms.sleeper.types import GameProjection
+from thefrontoffice.adapters.outbound.platforms.sleeper.types import GameProjection
 
 WEEK_START, WEEK_END = date(2026, 1, 5), date(2026, 1, 11)
 

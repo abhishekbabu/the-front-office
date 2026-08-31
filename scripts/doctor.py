@@ -17,9 +17,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from the_front_office.bootstrap import all_competitions  # noqa: E402
-from the_front_office.config.settings import PROJECT_ROOT as SETTINGS_ROOT  # noqa: E402
-from the_front_office.config.settings import AppSettings, settings  # noqa: E402
+from thefrontoffice.bootstrap import all_competitions  # noqa: E402
+from thefrontoffice.config.settings import PROJECT_ROOT as SETTINGS_ROOT  # noqa: E402
+from thefrontoffice.config.settings import AppSettings, settings  # noqa: E402
 
 ENV_FILE = SETTINGS_ROOT / ".env"
 

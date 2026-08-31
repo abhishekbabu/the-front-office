@@ -7,8 +7,8 @@ the UI and the help text and remembering all three.
 
 import pytest
 
-from the_front_office import bootstrap as registry
-from the_front_office.config.settings import settings
+from thefrontoffice import bootstrap as registry
+from thefrontoffice.config.settings import settings
 
 
 def test_every_registered_sport_is_complete() -> None:
@@ -53,7 +53,7 @@ def test_yahoo_needs_both_halves_of_the_credential(monkeypatch: pytest.MonkeyPat
 def test_building_a_provider_is_deferred(monkeypatch: pytest.MonkeyPatch) -> None:
     """Constructing the registry must never contact a platform — the NBA build
     opens an OAuth flow, and a football-only user must not sit through it."""
-    import the_front_office.adapters.outbound.platforms.yahoo.client as yahoo_mod
+    import thefrontoffice.adapters.outbound.platforms.yahoo.client as yahoo_mod
 
     def _must_not_run(*a: object, **k: object) -> None:
         raise AssertionError("Yahoo was contacted while listing sports")
@@ -74,8 +74,8 @@ def test_the_nfl_entry_builds_a_provider(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_every_provider_satisfies_the_protocol() -> None:
     """A sport that forgets list_leagues, build_context or roster_rows would fail
     only at the point of use."""
-    from the_front_office.adapters.outbound.competitions.nba.yahoo import YahooNBAProvider
-    from the_front_office.adapters.outbound.competitions.nfl.sleeper import SleeperNFLProvider
+    from thefrontoffice.adapters.outbound.competitions.nba.yahoo import YahooNBAProvider
+    from thefrontoffice.adapters.outbound.competitions.nfl.sleeper import SleeperNFLProvider
 
     for provider in (YahooNBAProvider, SleeperNFLProvider):
         assert provider.competition and provider.label
@@ -88,7 +88,7 @@ def test_the_nba_entry_discovers_leagues_and_wraps_them(monkeypatch: pytest.Monk
     league it found."""
     from types import SimpleNamespace
 
-    import the_front_office.adapters.outbound.platforms.yahoo.client as yahoo_mod
+    import thefrontoffice.adapters.outbound.platforms.yahoo.client as yahoo_mod
 
     leagues = [SimpleNamespace(id="1", name="One", league_type="head"), SimpleNamespace(id="2", name="Two")]
     monkeypatch.setattr(yahoo_mod.YahooClient, "ensure_authorized", classmethod(lambda cls: None))
@@ -107,8 +107,8 @@ def test_the_nba_entry_discovers_leagues_and_wraps_them(monkeypatch: pytest.Monk
 def test_no_nba_leagues_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from types import SimpleNamespace
 
-    import the_front_office.adapters.outbound.platforms.yahoo.client as yahoo_mod
-    from the_front_office.domain.errors import LeagueNotFoundError
+    import thefrontoffice.adapters.outbound.platforms.yahoo.client as yahoo_mod
+    from thefrontoffice.domain.errors import LeagueNotFoundError
 
     monkeypatch.setattr(yahoo_mod.YahooClient, "ensure_authorized", classmethod(lambda cls: None))
     monkeypatch.setattr(
@@ -130,9 +130,9 @@ def test_every_sport_declares_its_trade_support() -> None:
 
 def test_a_trading_sport_implements_the_trade_port() -> None:
     """`supports_trades` and `build_trade_context` must not drift apart."""
-    from the_front_office.adapters.outbound.competitions.nba.yahoo import YahooNBAProvider
-    from the_front_office.adapters.outbound.competitions.nfl.sleeper import SleeperNFLProvider
-    from the_front_office.adapters.outbound.competitions.premier_league.fpl import FPLProvider
+    from thefrontoffice.adapters.outbound.competitions.nba.yahoo import YahooNBAProvider
+    from thefrontoffice.adapters.outbound.competitions.nfl.sleeper import SleeperNFLProvider
+    from thefrontoffice.adapters.outbound.competitions.premier_league.fpl import FPLProvider
 
     implementations = {"nba": YahooNBAProvider, "nfl": SleeperNFLProvider, "premier-league": FPLProvider}
     for entry in registry.all_competitions():

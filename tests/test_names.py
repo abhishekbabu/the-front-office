@@ -4,7 +4,7 @@ A wrong match silently attributes one player's numbers to another, so the
 policy refuses ambiguity rather than guessing.
 """
 
-from the_front_office.adapters.outbound.competitions.names import NameIndex, normalize_name
+from thefrontoffice.adapters.outbound.competitions.names import NameIndex, normalize_name
 
 # ── normalization ───────────────────────────────────────────────────────
 

@@ -4,9 +4,9 @@ from datetime import datetime
 
 import pytest
 
-from the_front_office.adapters.inbound.web import data
-from the_front_office.adapters.outbound.competitions.nba.yahoo import YahooNBAProvider
-from the_front_office.domain.errors import LeagueNotFoundError
+from thefrontoffice.adapters.inbound.web import data
+from thefrontoffice.adapters.outbound.competitions.nba.yahoo import YahooNBAProvider
+from thefrontoffice.domain.errors import LeagueNotFoundError
 
 # ── season rollover ─────────────────────────────────────────────────────
 
@@ -44,7 +44,7 @@ def test_an_unconfigured_sport_names_what_to_set(monkeypatch: pytest.MonkeyPatch
 
 
 def test_configured_competitions_reflect_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    from the_front_office.config.settings import settings
+    from thefrontoffice.config.settings import settings
 
     assert data.available_sports() == []
     monkeypatch.setattr(settings, "sleeper_username", "someone")
@@ -52,7 +52,7 @@ def test_configured_competitions_reflect_the_environment(monkeypatch: pytest.Mon
 
 
 def test_a_configured_sport_is_built(monkeypatch: pytest.MonkeyPatch) -> None:
-    from the_front_office.config.settings import settings
+    from thefrontoffice.config.settings import settings
 
     monkeypatch.setattr(settings, "sleeper_username", "someone")
     provider = data.build_provider("nfl")

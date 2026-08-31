@@ -2,7 +2,7 @@
 
 import logging
 
-from the_front_office.config.logging import setup_logging
+from thefrontoffice.config.logging import setup_logging
 
 
 def test_root_level_follows_the_configured_setting() -> None:

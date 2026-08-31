@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from the_front_office.config import telemetry
-from the_front_office.config.settings import settings
+from thefrontoffice.config import telemetry
+from thefrontoffice.config.settings import settings
 
 
 @pytest.fixture(autouse=True)

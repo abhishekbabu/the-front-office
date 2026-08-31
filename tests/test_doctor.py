@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 import doctor  # noqa: E402
 
-from the_front_office.config.settings import AppSettings  # noqa: E402
+from thefrontoffice.config.settings import AppSettings  # noqa: E402
 
 
 def _env(tmp_path: Path, body: str, monkeypatch: pytest.MonkeyPatch) -> Path:

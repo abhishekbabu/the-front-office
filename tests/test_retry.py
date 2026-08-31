@@ -6,7 +6,7 @@ import pytest
 import requests
 from tenacity import Retrying
 
-from the_front_office.adapters.outbound.platforms.retry import build_retry, is_transient
+from thefrontoffice.adapters.outbound.platforms.retry import build_retry, is_transient
 
 
 def _http(status: int) -> requests.exceptions.HTTPError:
@@ -116,8 +116,8 @@ def test_the_platform_clients_use_the_shared_policy() -> None:
     """The point of extracting it: one place to change the common behavior."""
     import inspect
 
-    from the_front_office.adapters.outbound.platforms.fpl import client as fpl
-    from the_front_office.adapters.outbound.platforms.sleeper import client as sleeper
+    from thefrontoffice.adapters.outbound.platforms.fpl import client as fpl
+    from thefrontoffice.adapters.outbound.platforms.sleeper import client as sleeper
 
     for module in (fpl, sleeper):
         source = inspect.getsource(module)

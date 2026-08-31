@@ -12,10 +12,10 @@ from typing import Any
 import pytest
 import requests
 
-from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
-from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
-from the_front_office.adapters.outbound.platforms.yahoo.constants import SCOUT_CATEGORIES
-from the_front_office.domain.errors import (
+from thefrontoffice.adapters.outbound.platforms.cache import JsonDiskCache
+from thefrontoffice.adapters.outbound.platforms.yahoo.client import YahooClient
+from thefrontoffice.adapters.outbound.platforms.yahoo.constants import SCOUT_CATEGORIES
+from thefrontoffice.domain.errors import (
     TeamNotFoundError,
     YahooAPIError,
     YahooLoginRequiredError,
@@ -29,7 +29,7 @@ def _identity_parse(monkeypatch: pytest.MonkeyPatch) -> None:
     FakeContext hands back already-parsed dicts, which is the shape the rest of
     the client works in. Parsing XML is yahoofantasy's job, not ours to retest.
     """
-    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
+    import thefrontoffice.adapters.outbound.platforms.yahoo.client as mod
 
     monkeypatch.setattr(mod, "parse_response", lambda raw: raw)
 
@@ -158,7 +158,7 @@ def test_unparseable_category_response_raises() -> None:
     """A response we cannot read must not silently become an empty category."""
     client, _ = _client(_response({"player": [_player_payload("A B")]}))
 
-    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
+    import thefrontoffice.adapters.outbound.platforms.yahoo.client as mod
 
     def _explode(raw: object) -> object:
         raise ValueError("malformed xml")
@@ -186,7 +186,7 @@ def test_a_token_is_refreshed_once_before_the_pool() -> None:
 
 def test_scoreboard_is_refreshed_on_a_short_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
     """An hour-old scoreboard would misstate every category margin."""
-    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
+    import thefrontoffice.adapters.outbound.platforms.yahoo.client as mod
 
     FakeWeek.matchups_to_return = [_matchup()]
     monkeypatch.setattr(mod, "Week", FakeWeek)
@@ -210,7 +210,7 @@ def test_scoreboard_is_refreshed_on_a_short_ttl(monkeypatch: pytest.MonkeyPatch)
 def test_a_failed_scoreboard_refresh_falls_back_to_the_persisted_copy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
+    import thefrontoffice.adapters.outbound.platforms.yahoo.client as mod
 
     FakeWeek.matchups_to_return = [_matchup()]
     monkeypatch.setattr(mod, "Week", FakeWeek)
@@ -298,7 +298,7 @@ def test_search_on_an_unexpected_shape_raises() -> None:
 
 
 def test_existing_token_skips_the_login_flow(monkeypatch: pytest.MonkeyPatch) -> None:
-    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
+    import thefrontoffice.adapters.outbound.platforms.yahoo.client as mod
 
     monkeypatch.setattr(YahooClient, "_token_exists", classmethod(lambda cls: True))
     monkeypatch.setattr(
@@ -309,7 +309,7 @@ def test_existing_token_skips_the_login_flow(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_force_relogins_even_with_a_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
+    import thefrontoffice.adapters.outbound.platforms.yahoo.client as mod
 
     monkeypatch.setattr(YahooClient, "_token_exists", classmethod(lambda cls: True))
     monkeypatch.setattr(mod.settings, "yahoo_client_id", "id")
@@ -325,7 +325,7 @@ def test_force_relogins_even_with_a_token(monkeypatch: pytest.MonkeyPatch) -> No
 def test_login_passes_credentials_and_the_registered_redirect_uri(monkeypatch: pytest.MonkeyPatch) -> None:
     """The redirect URI has to be the one registered on the Yahoo app, and the
     same one the token exchange later quotes back."""
-    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
+    import thefrontoffice.adapters.outbound.platforms.yahoo.client as mod
 
     monkeypatch.setattr(YahooClient, "_token_exists", classmethod(lambda cls: False))
     monkeypatch.setattr(mod.settings, "yahoo_client_id", "the-id")
@@ -341,7 +341,7 @@ def test_login_passes_credentials_and_the_registered_redirect_uri(monkeypatch: p
 def test_missing_credentials_raise_rather_than_exit(monkeypatch: pytest.MonkeyPatch) -> None:
     """Exiting the process is a terminal's idea of failure. Inside a server it
     takes down the request, and no inbound adapter gets to render anything."""
-    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
+    import thefrontoffice.adapters.outbound.platforms.yahoo.client as mod
 
     monkeypatch.setattr(YahooClient, "_token_exists", classmethod(lambda cls: False))
     monkeypatch.setattr(mod.settings, "yahoo_client_id", None)
@@ -352,7 +352,7 @@ def test_missing_credentials_raise_rather_than_exit(monkeypatch: pytest.MonkeyPa
 
 
 def test_a_failed_handshake_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
+    import thefrontoffice.adapters.outbound.platforms.yahoo.client as mod
 
     monkeypatch.setattr(YahooClient, "_token_exists", classmethod(lambda cls: False))
     monkeypatch.setattr(mod.settings, "yahoo_client_id", "id")
@@ -418,7 +418,7 @@ def _matchup(my_key: str = "t1") -> Any:
 
 
 def _matchup_client(monkeypatch: pytest.MonkeyPatch, matchups: list[Any], current_week: Any = 5) -> Any:
-    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
+    import thefrontoffice.adapters.outbound.platforms.yahoo.client as mod
 
     FakeWeek.matchups_to_return = matchups
     FakeWeek.instances = []
@@ -441,8 +441,8 @@ def test_a_403_names_the_permission_that_is_actually_missing() -> None:
     """Yahoo says only "not authorized to perform this action", which reads like
     a bad token — and re-authorizing a token that was never the problem is an
     afternoon. The scope on the developer app is the fix."""
-    from the_front_office.adapters.outbound.platforms.yahoo.client import translate
-    from the_front_office.domain.errors import YahooAuthError
+    from thefrontoffice.adapters.outbound.platforms.yahoo.client import translate
+    from thefrontoffice.domain.errors import YahooAuthError
 
     error = translate(_http(403))
 
@@ -452,8 +452,8 @@ def test_a_403_names_the_permission_that_is_actually_missing() -> None:
 
 
 def test_any_other_failure_stays_a_generic_api_error() -> None:
-    from the_front_office.adapters.outbound.platforms.yahoo.client import translate
-    from the_front_office.domain.errors import YahooAPIError, YahooAuthError
+    from thefrontoffice.adapters.outbound.platforms.yahoo.client import translate
+    from thefrontoffice.domain.errors import YahooAPIError, YahooAuthError
 
     for error in (_http(500), _http(404), requests.exceptions.Timeout()):
         translated = translate(error)
@@ -463,8 +463,8 @@ def test_any_other_failure_stays_a_generic_api_error() -> None:
 
 def test_an_error_without_a_response_is_translated_rather_than_crashing() -> None:
     """yahoofantasy raises requests' exceptions, and not all carry a response."""
-    from the_front_office.adapters.outbound.platforms.yahoo.client import translate
-    from the_front_office.domain.errors import YahooAPIError
+    from thefrontoffice.adapters.outbound.platforms.yahoo.client import translate
+    from thefrontoffice.domain.errors import YahooAPIError
 
     assert isinstance(translate(ValueError("unparseable")), YahooAPIError)
 
@@ -475,9 +475,9 @@ def test_an_error_without_a_response_is_translated_rather_than_crashing() -> Non
 def test_a_missing_token_is_reported_not_obtained(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """The handshake opens a browser and blocks. A server attempting it would
     wait on a window nobody can see."""
-    from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
-    from the_front_office.config.settings import settings
-    from the_front_office.domain.errors import YahooLoginRequiredError
+    from thefrontoffice.adapters.outbound.platforms.yahoo.client import YahooClient
+    from thefrontoffice.config.settings import settings
+    from thefrontoffice.domain.errors import YahooLoginRequiredError
 
     monkeypatch.setattr(settings, "yahoo_token_file", str(tmp_path / "absent"))
 
@@ -486,8 +486,8 @@ def test_a_missing_token_is_reported_not_obtained(monkeypatch: pytest.MonkeyPatc
 
 
 def test_an_existing_token_satisfies_the_check(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
-    from the_front_office.config.settings import settings
+    from thefrontoffice.adapters.outbound.platforms.yahoo.client import YahooClient
+    from thefrontoffice.config.settings import settings
 
     token = tmp_path / ".yahoofantasy"
     token.write_text("cached", encoding="utf-8")
@@ -498,9 +498,9 @@ def test_an_existing_token_satisfies_the_check(monkeypatch: pytest.MonkeyPatch, 
 
 def test_login_without_credentials_raises_rather_than_exiting(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """It used to call sys.exit, which inside a server kills the request."""
-    from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
-    from the_front_office.config.settings import settings
-    from the_front_office.domain.errors import YahooAPIError
+    from thefrontoffice.adapters.outbound.platforms.yahoo.client import YahooClient
+    from thefrontoffice.config.settings import settings
+    from thefrontoffice.domain.errors import YahooAPIError
 
     monkeypatch.setattr(settings, "yahoo_token_file", str(tmp_path / "absent"))
     monkeypatch.setattr(settings, "yahoo_client_id", None)
@@ -513,8 +513,8 @@ def test_login_without_credentials_raises_rather_than_exiting(monkeypatch: pytes
 
 
 def test_verify_passes_when_yahoo_answers(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    import the_front_office.adapters.outbound.platforms.yahoo.client as mod
-    from the_front_office.config.settings import settings
+    import thefrontoffice.adapters.outbound.platforms.yahoo.client as mod
+    from thefrontoffice.config.settings import settings
 
     token = tmp_path / ".yahoofantasy"
     token.write_text("cached", encoding="utf-8")
@@ -537,8 +537,8 @@ def test_a_token_that_authenticates_but_grants_nothing_is_caught(
     when it was issued. Nothing downstream can tell that apart from a
     permissions problem, so it has to be caught at the login.
     """
-    from the_front_office.config.settings import settings
-    from the_front_office.domain.errors import YahooAuthError
+    from thefrontoffice.config.settings import settings
+    from thefrontoffice.domain.errors import YahooAuthError
 
     token = tmp_path / ".yahoofantasy"
     token.write_text("cached", encoding="utf-8")
@@ -556,8 +556,8 @@ def test_a_token_that_authenticates_but_grants_nothing_is_caught(
 def test_an_unreachable_yahoo_is_not_reported_as_a_permission_problem(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from the_front_office.config.settings import settings
-    from the_front_office.domain.errors import YahooAPIError, YahooAuthError
+    from thefrontoffice.config.settings import settings
+    from thefrontoffice.domain.errors import YahooAPIError, YahooAuthError
 
     token = tmp_path / ".yahoofantasy"
     token.write_text("cached", encoding="utf-8")
@@ -575,8 +575,8 @@ def test_an_unreachable_yahoo_is_not_reported_as_a_permission_problem(
 
 def test_get_context_never_starts_the_browser_handshake(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """It runs inside a request handler as often as from a terminal."""
-    from the_front_office.config.settings import settings
-    from the_front_office.domain.errors import YahooLoginRequiredError
+    from thefrontoffice.config.settings import settings
+    from thefrontoffice.domain.errors import YahooLoginRequiredError
 
     monkeypatch.setattr(settings, "yahoo_token_file", str(tmp_path / "absent"))
     monkeypatch.setattr(
@@ -593,7 +593,7 @@ def test_conditions_an_adapter_can_offer_to_fix_carry_a_code() -> None:
     The remedy differs by adapter — a terminal names a command, the web offers a
     button — so neither belongs in the error and both need to recognize it.
     """
-    from the_front_office.domain.errors import YahooAuthError, YahooLoginRequiredError
+    from thefrontoffice.domain.errors import YahooAuthError, YahooLoginRequiredError
 
     assert YahooLoginRequiredError().code == "yahoo_login_required"
     assert YahooAuthError().code == "yahoo_not_approved"
@@ -601,7 +601,7 @@ def test_conditions_an_adapter_can_offer_to_fix_carry_a_code() -> None:
 
 def test_no_error_message_names_a_command_or_a_button() -> None:
     """The same text is read in a terminal and in a browser."""
-    from the_front_office.domain.errors import YahooAuthError, YahooLoginRequiredError
+    from thefrontoffice.domain.errors import YahooAuthError, YahooLoginRequiredError
 
     for error in (YahooLoginRequiredError(), YahooAuthError()):
         assert "just " not in str(error)

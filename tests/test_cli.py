@@ -1,6 +1,6 @@
 """Tests for REPL command parsing and sport selection."""
 
-from the_front_office.adapters.inbound.cli.repl import parse_command
+from thefrontoffice.adapters.inbound.cli.repl import parse_command
 
 
 def test_command_token_is_case_insensitive() -> None:
@@ -34,11 +34,11 @@ from typing import Any  # noqa: E402
 
 import pytest  # noqa: E402
 
-from the_front_office.adapters.inbound.cli import commands as cmd  # noqa: E402
-from the_front_office.adapters.inbound.cli import output  # noqa: E402
-from the_front_office.adapters.inbound.cli import repl as cli  # noqa: E402
-from the_front_office.adapters.inbound.cli.session import Session  # noqa: E402
-from the_front_office.domain.models import PlayerCard  # noqa: E402
+from thefrontoffice.adapters.inbound.cli import commands as cmd  # noqa: E402
+from thefrontoffice.adapters.inbound.cli import output  # noqa: E402
+from thefrontoffice.adapters.inbound.cli import repl as cli  # noqa: E402
+from thefrontoffice.adapters.inbound.cli.session import Session  # noqa: E402
+from thefrontoffice.domain.models import PlayerCard  # noqa: E402
 
 
 class FakeProvider:
@@ -47,7 +47,7 @@ class FakeProvider:
     label = "NFL (Sleeper)"
 
     def list_leagues(self) -> Any:
-        from the_front_office.domain.ports import LeagueRef
+        from thefrontoffice.domain.ports import LeagueRef
 
         return [LeagueRef("L1", "My League", "nfl", "12-team")]
 
@@ -65,7 +65,7 @@ def fake_entry(
     counter: list[int] | None = None,
 ) -> Any:
     """A real CompetitionEntry with a stubbed build, so the CLI sees what it expects."""
-    from the_front_office.bootstrap import CompetitionEntry
+    from thefrontoffice.bootstrap import CompetitionEntry
 
     def _build() -> Any:
         if counter is not None:
@@ -132,7 +132,7 @@ def test_leagues_lists_every_configured_sport(capsys: pytest.CaptureFixture[str]
 
 
 def test_a_platform_failure_is_reported_not_raised(capsys: pytest.CaptureFixture[str]) -> None:
-    from the_front_office.domain.errors import LeagueNotFoundError
+    from thefrontoffice.domain.errors import LeagueNotFoundError
 
     def _boom() -> Any:
         raise LeagueNotFoundError("SLEEPER_USERNAME is not set in .env")
@@ -154,7 +154,7 @@ def test_unknown_command_is_reported(capsys: pytest.CaptureFixture[str]) -> None
 def test_help_names_the_configured_competitions(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("the_front_office.bootstrap.ai_available", lambda: True)
+    monkeypatch.setattr("thefrontoffice.bootstrap.ai_available", lambda: True)
     cmd._print_help([fake_entry("nfl"), fake_entry("nba", "NBA (Yahoo)")])
     assert "nfl | nba" in capsys.readouterr().out
 
@@ -186,7 +186,7 @@ def test_help_omits_a_command_with_nothing_to_run_it_on(
 ) -> None:
     """`fake_entry` declares no trade support, so listing /trade could only
     refuse — and a shorter list beats a command that explains itself away."""
-    monkeypatch.setattr("the_front_office.bootstrap.ai_available", lambda: True)
+    monkeypatch.setattr("thefrontoffice.bootstrap.ai_available", lambda: True)
 
     cmd._print_help([fake_entry("nfl")])
 
@@ -198,7 +198,7 @@ def test_help_omits_everything_needing_a_model_without_one(
 ) -> None:
     """The same rule the web UI follows: nothing is offered that cannot work,
     and the absence needs no explaining because nothing is missing."""
-    monkeypatch.setattr("the_front_office.bootstrap.ai_available", lambda: False)
+    monkeypatch.setattr("thefrontoffice.bootstrap.ai_available", lambda: False)
 
     cmd._print_help([_tradeable("nfl")])
     out = capsys.readouterr().out
@@ -218,14 +218,14 @@ class RecordingProvider(FakeProvider):
         self.error = error
 
     def build_context(self, league_id: str) -> Any:
-        from the_front_office.domain.models import CompetitionContext
+        from thefrontoffice.domain.models import CompetitionContext
 
         if self.error:
             raise self.error
         return CompetitionContext(prompt="PROMPT")
 
     def build_trade_context(self, league_id: str, proposal: Any) -> Any:
-        from the_front_office.domain.models import CompetitionContext
+        from thefrontoffice.domain.models import CompetitionContext
 
         if self.error:
             raise self.error
@@ -233,7 +233,7 @@ class RecordingProvider(FakeProvider):
 
 
 def _entry_with(provider: Any, competition: str = "nfl", trades: bool = False) -> Any:
-    from the_front_office.bootstrap import CompetitionEntry
+    from thefrontoffice.bootstrap import CompetitionEntry
 
     return CompetitionEntry(
         sport=SPORT_OF.get(competition, "football"),
@@ -258,13 +258,13 @@ def test_scout_renders_a_report(monkeypatch: pytest.MonkeyPatch, capsys: pytest.
 
 
 def _scout_with(provider: Any, ai: Any) -> Any:
-    from the_front_office.application.scouting import ScoutEngine
+    from thefrontoffice.application.scouting import ScoutEngine
 
     return ScoutEngine(provider, ai=ai)
 
 
 def test_scout_reports_a_platform_failure(capsys: pytest.CaptureFixture[str]) -> None:
-    from the_front_office.domain.errors import TeamNotFoundError
+    from thefrontoffice.domain.errors import TeamNotFoundError
 
     entry = _entry_with(RecordingProvider(error=TeamNotFoundError("Some League")))
     cmd._cmd_scout(Session(), [entry], [])
@@ -283,7 +283,7 @@ def test_scout_warns_when_a_sport_has_no_leagues(capsys: pytest.CaptureFixture[s
 def test_trade_renders_a_verdict(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     from conftest import FakeAI
 
-    from the_front_office.application.trading import TradeEngine
+    from thefrontoffice.application.trading import TradeEngine
 
     provider = RecordingProvider()
     monkeypatch.setattr(cmd, "trade_engine", lambda p: TradeEngine(p, ai=FakeAI()))
@@ -295,8 +295,8 @@ def test_trade_renders_a_verdict(monkeypatch: pytest.MonkeyPatch, capsys: pytest
 def test_trade_reports_a_domain_error(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     from conftest import FakeAI
 
-    from the_front_office.application.trading import TradeEngine
-    from the_front_office.domain.errors import PlayerNotFoundError
+    from thefrontoffice.application.trading import TradeEngine
+    from thefrontoffice.domain.errors import PlayerNotFoundError
 
     provider = RecordingProvider(error=PlayerNotFoundError(["Ghost"]))
     monkeypatch.setattr(cmd, "trade_engine", lambda p: TradeEngine(p, ai=FakeAI()))
@@ -308,7 +308,7 @@ def test_trade_reports_a_domain_error(monkeypatch: pytest.MonkeyPatch, capsys: p
 
 
 def _tradeable(competition: str) -> Any:
-    from the_front_office.bootstrap import CompetitionEntry
+    from thefrontoffice.bootstrap import CompetitionEntry
 
     def _build() -> Any:
         return FakeProvider()

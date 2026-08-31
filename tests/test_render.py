@@ -2,8 +2,8 @@
 
 from reports import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
 
-from the_front_office.adapters.inbound.cli.render import render_scout_report, render_trade_verdict
-from the_front_office.domain.models import Move, ScoutReport
+from thefrontoffice.adapters.inbound.cli.render import render_scout_report, render_trade_verdict
+from thefrontoffice.domain.models import Move, ScoutReport
 
 
 def _rec(**overrides: object) -> Move:
@@ -79,7 +79,7 @@ def test_trade_verdict_surfaces_every_field() -> None:
 
 
 def test_empty_category_lists_render_as_a_dash() -> None:
-    from the_front_office.domain.models import TradeVerdict
+    from thefrontoffice.domain.models import TradeVerdict
 
     v = TradeVerdict(
         verdict="REJECT",

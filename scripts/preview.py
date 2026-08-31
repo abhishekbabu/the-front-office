@@ -26,7 +26,7 @@ PORT = 8100
 def main() -> int:
     import uvicorn
 
-    from the_front_office.adapters.inbound.web.api import create_app
+    from thefrontoffice.adapters.inbound.web.api import create_app
 
     print(f"\n  Preview on http://127.0.0.1:{PORT}\n")
     uvicorn.run(create_app(), host="127.0.0.1", port=PORT, log_level="warning")
