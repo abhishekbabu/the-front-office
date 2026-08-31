@@ -1,14 +1,19 @@
 """Tests for the Yahoo provider's trade context."""
 
+import logging
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from conftest import FakeNBA, FakeYahoo, make_player
+from conftest import FakeNBA, FakeYahoo, capture_logs, make_player
 
 from thefrontoffice.adapters.outbound.competitions.nba.yahoo import YahooNBAProvider
 from thefrontoffice.domain.errors import PlayerNotFoundError
 from thefrontoffice.domain.models import TradeProposal
+
+# The module logs through `getLogger(__name__)`, so the class's module is the
+# logger's name — and follows the module if it ever moves.
+YAHOO_LOGGER = YahooNBAProvider.__module__
 
 
 def _provider(yahoo: FakeYahoo) -> YahooNBAProvider:
@@ -70,12 +75,12 @@ def test_surrounding_whitespace_is_stripped() -> None:
     assert len(_resolve(yahoo, ["  LeBron James  "])) == 1
 
 
-def test_an_ambiguous_match_takes_the_first_and_warns(caplog: pytest.LogCaptureFixture) -> None:
+def test_an_ambiguous_match_takes_the_first_and_warns() -> None:
     yahoo = FakeYahoo(search_results={"Williams": [make_player("Jalen Williams"), make_player("Jaylen Williams")]})
-    with caplog.at_level("WARNING"):
+    with capture_logs(YAHOO_LOGGER, logging.WARNING) as logs:
         resolved = _resolve(yahoo, ["Williams"])
     assert len(resolved) == 1
-    assert "2 matches" in caplog.text
+    assert "2 matches" in logs.at(logging.WARNING)[0]
 
 
 # ── trade context ───────────────────────────────────────────────────────

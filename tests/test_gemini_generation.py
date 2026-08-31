@@ -4,12 +4,17 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from conftest import capture_logs
 from reports import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
 
 from thefrontoffice.adapters.outbound.llm.gemini.client import GeminiClient
 from thefrontoffice.adapters.outbound.llm.gemini.constants import MODEL_FLASH, MODEL_PRO
 from thefrontoffice.domain.errors import AIResponseError, AIUnavailableError
 from thefrontoffice.domain.models import ScoutReport, TradeVerdict
+
+# The module logs through `getLogger(__name__)`, so the class's module is the
+# logger's name — and follows the module if it ever moves.
+GEMINI_LOGGER = GeminiClient.__module__
 
 
 class FakeModels:
@@ -151,40 +156,40 @@ class Usage:
     cached_content_token_count = 0
 
 
-def test_token_usage_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+def test_token_usage_is_logged() -> None:
     """Gemini Pro on a large prompt is the only real expense; nothing else
     measures it."""
     c, _ = _client(SimpleNamespace(parsed=MOCK_NBA_REPORT, text="{}", usage_metadata=Usage()))
-    with caplog.at_level("INFO"):
+    with capture_logs(GEMINI_LOGGER) as logs:
         c.generate_structured("p", ScoutReport)
-    assert "3400 in" in caplog.text
-    assert "310 out" in caplog.text
-    assert MODEL_PRO in caplog.text
+    assert "3400 in" in logs.text
+    assert "310 out" in logs.text
+    assert MODEL_PRO in logs.text
 
 
-def test_structuring_logs_against_flash(caplog: pytest.LogCaptureFixture) -> None:
+def test_structuring_logs_against_flash() -> None:
     c, _ = _client(SimpleNamespace(parsed=MOCK_NBA_VERDICT, text="{}", usage_metadata=Usage()))
-    with caplog.at_level("INFO"):
+    with capture_logs(GEMINI_LOGGER) as logs:
         c.structure_text("prose", TradeVerdict, instruction="x")
-    assert MODEL_FLASH in caplog.text
+    assert MODEL_FLASH in logs.text
 
 
-def test_missing_usage_metadata_still_logs_latency(caplog: pytest.LogCaptureFixture) -> None:
+def test_missing_usage_metadata_still_logs_latency() -> None:
     """An SDK change that drops usage_metadata must not break the call."""
     c, _ = _client(SimpleNamespace(parsed=MOCK_NBA_REPORT, text="{}"))
-    with caplog.at_level("INFO"):
+    with capture_logs(GEMINI_LOGGER) as logs:
         c.generate_structured("p", ScoutReport)
-    assert "no usage metadata" in caplog.text
+    assert "no usage metadata" in logs.text
 
 
-def test_cached_tokens_are_reported_when_present(caplog: pytest.LogCaptureFixture) -> None:
+def test_cached_tokens_are_reported_when_present() -> None:
     class Cached(Usage):
         cached_content_token_count = 1200
 
     c, _ = _client(SimpleNamespace(parsed=MOCK_NBA_REPORT, text="{}", usage_metadata=Cached()))
-    with caplog.at_level("INFO"):
+    with capture_logs(GEMINI_LOGGER) as logs:
         c.generate_structured("p", ScoutReport)
-    assert "1200 cached" in caplog.text
+    assert "1200 cached" in logs.text
 
 
 # ── what a person is told when the model refuses ────────────────────────

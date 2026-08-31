@@ -33,6 +33,10 @@ oauth2.json
 .yahoofantasy
 token.json
 
+# Advisor plans — working artifacts from the `improve` skill, never committed.
+# Prose documentation lives in README.md and AGENTS.md and nowhere else.
+plans/
+
 # Data caches, one directory per platform
 .yahoo_cache/
 .sleeper_cache/
