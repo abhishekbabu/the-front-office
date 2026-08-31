@@ -85,7 +85,7 @@ resolves it everywhere. No POSIX-only commands in tooling and no `strftime`
 dash-modifiers (`%-d`) — both are glibc-only and the project supports Windows.
 Format dates through `competitions/dates.py`; put scripts in `scripts/`.
 
-**Secrets.** Never commit `.env`, `.yahoofantasy`, or any `.*_cache.json`. Read
+**Secrets.** Never commit `.env`, `.yahoofantasy`, or any `.*_cache/`. Read
 config through the `settings` singleton, never `os.getenv` at a call site.
 `config/env_file.py` is the only writer: it accepts only keys `AppSettings`
 declares, and edits line by line so comments survive. A secret's value must never
@@ -122,8 +122,8 @@ shared. When you find yourself writing something a second time, extract it then
 
 - `adapters/outbound/platforms/` — infrastructure every platform needs:
   `http.py` (cached, retried JSON GETs), `retry.py` (transient-failure policy),
-  `cache.py` (the one disk cache every platform reads through; expiry is a
-  `Freshness` predicate — `within(ttl)`, or a rule a duration cannot express).
+  `cache.py` (the disk cache — a directory, one atomically-replaced file per
+  key; expiry is a `Freshness` — `within(ttl)`, or what a duration cannot say).
 - `adapters/outbound/competitions/` — policy every competition needs: `names.py`
   (cross-platform player matching), `trades.py` (resolving a proposal).
 - `domain/` — rules that hold regardless of competition or platform.
@@ -169,7 +169,7 @@ rather than `categories_gained`.
 ## Testing
 
 Mirror the source layout. The default suite must stay hermetic: no network, no
-credentials, no cache file on disk. Engines and providers take their collaborators
+credentials, no cache on disk. Engines and providers take their collaborators
 by keyword — use the fakes in `tests/conftest.py` rather than monkeypatching. Anything hitting a live API gets
 `@pytest.mark.integration`, which is deselected by default.
 

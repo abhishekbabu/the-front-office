@@ -133,6 +133,6 @@ check-web: web-install
 clean:
     uv run python scripts/clean.py
 
-# Delete the cached NBA stats/schedule so the next run refetches
-clean-nba-cache:
-    uv run python scripts/clean.py --nba-cache-only
+# Delete the cached platform responses so the next run refetches
+clean-data:
+    uv run python scripts/clean.py --data-only

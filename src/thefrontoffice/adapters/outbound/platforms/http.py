@@ -82,9 +82,10 @@ class JsonApiClient:
 
         A season of weekly matchups is eighteen independent requests, and run
         one after another they are most of the wait on a page that is otherwise
-        instant. Only the HTTP is concurrent: the cache file is read-modify-
-        written whole, so the writes stay on this thread or they clobber each
-        other — the same split the Yahoo client needs for the same reason.
+        instant. Only the HTTP is concurrent: distinct keys are now distinct
+        files and could safely be written in parallel, but the cache keeps what
+        it has read in memory, and one writer is cheaper than making that
+        thread-safe for writes that are a rename each.
 
         A request that fails leaves its key out rather than failing the batch.
         Seventeen weeks of a season is a season with a hole in it, which is

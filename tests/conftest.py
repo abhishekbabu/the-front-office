@@ -439,9 +439,9 @@ def _isolate_from_local_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     # this machine happens to have warmed, nor leave one behind that the next
     # run reads as a hit.
     for field, name in (
-        ("yahoo_cache_file", "yahoo.json"),
-        ("sleeper_cache_file", "sleeper.json"),
-        ("fpl_cache_file", "fpl.json"),
+        ("yahoo_cache_dir", "yahoo-cache"),
+        ("sleeper_cache_dir", "sleeper-cache"),
+        ("fpl_cache_dir", "fpl-cache"),
     ):
         monkeypatch.setattr(settings, field, str(tmp_path / name))
 

@@ -12,8 +12,15 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-CACHE_DIRS = (".ruff_cache", ".pytest_cache", ".mypy_cache", ".pyrefly_cache")
-NBA_CACHE = ".nba_cache.json"
+TOOL_CACHES = (".ruff_cache", ".pytest_cache", ".mypy_cache", ".pyrefly_cache")
+
+# The platform caches, one directory each. Named here rather than read from
+# settings so that cleaning never needs a valid .env to run.
+DATA_CACHES = (".yahoo_cache", ".sleeper_cache", ".fpl_cache")
+
+# The single-file caches those replaced. Nothing reads or writes them any more,
+# so they are dead weight on any machine that ran the older code.
+LEGACY_CACHES = (".nba_cache.json", ".yahoo_cache.json", ".sleeper_cache.json", ".fpl_cache.json")
 
 
 def _remove(path: Path) -> bool:
@@ -30,21 +37,22 @@ def _remove(path: Path) -> bool:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--nba-cache-only",
+        "--data-only",
         action="store_true",
-        help=f"Only remove {NBA_CACHE}, forcing a refetch on the next run.",
+        help="Only remove the platform caches, forcing a refetch on the next run.",
     )
     args = parser.parse_args()
 
     removed = 0
 
-    if args.nba_cache_only:
-        if _remove(PROJECT_ROOT / NBA_CACHE):
-            removed += 1
-        print(f"NBA cache cleared ({removed} file removed).")
+    if args.data_only:
+        for name in DATA_CACHES + LEGACY_CACHES:
+            if _remove(PROJECT_ROOT / name):
+                removed += 1
+        print(f"Platform caches cleared ({removed} removed).")
         return 0
 
-    for name in CACHE_DIRS:
+    for name in TOOL_CACHES + DATA_CACHES + LEGACY_CACHES:
         if _remove(PROJECT_ROOT / name):
             removed += 1
 

@@ -141,7 +141,7 @@ class FPLClient:
     def __init__(self, cache: JsonDiskCache | None = None, session: Any = None) -> None:
         self._api = JsonApiClient(
             name="FPL",
-            cache=cache or JsonDiskCache(Path(settings.fpl_cache_file)),
+            cache=cache or JsonDiskCache(Path(settings.fpl_cache_dir)),
             retry=lambda: _retry(),
             error=FPLAPIError,
             session=session,

@@ -173,7 +173,7 @@ def no_retry_wait(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def client(tmp_path: Path) -> FPLClient:
-    return FPLClient(cache=JsonDiskCache(tmp_path / "fpl.json"), session=FakeSession())
+    return FPLClient(cache=JsonDiskCache(tmp_path / "cache"), session=FakeSession())
 
 
 # ── timestamps ──────────────────────────────────────────────────────────
@@ -199,7 +199,7 @@ def test_teams_map_to_abbreviations(client: FPLClient) -> None:
 def test_the_bootstrap_is_fetched_once_per_instance(tmp_path: Path) -> None:
     """A report reads it five times; re-parsing a megabyte each time is waste."""
     session = FakeSession()
-    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=session)
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "cache"), session=session)
     client.get_teams()
     client.get_players()
     client.get_gameweeks()
@@ -208,7 +208,7 @@ def test_the_bootstrap_is_fetched_once_per_instance(tmp_path: Path) -> None:
 
 def test_an_empty_bootstrap_raises(tmp_path: Path) -> None:
     """A 200 carrying nothing usable is not a transport failure, so it is not retried."""
-    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=FakeSession(routes={"bootstrap-static": {}}))
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "cache"), session=FakeSession(routes={"bootstrap-static": {}}))
     with pytest.raises(FPLAPIError, match="no player data"):
         client.get_teams()
 
@@ -288,7 +288,7 @@ def test_a_classic_league_is_not_marked_head_to_head(client: FPLClient) -> None:
 
 def test_an_unknown_entry_raises(tmp_path: Path) -> None:
     """A 200 carrying nothing usable is not a transport failure, so it is not retried."""
-    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=FakeSession(routes={"/entry/77/": {}}))
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "cache"), session=FakeSession(routes={"/entry/77/": {}}))
     with pytest.raises(FPLAPIError, match="No FPL entry"):
         client.get_entry(77)
 
@@ -306,7 +306,7 @@ def test_a_squad_reads_its_picks_and_its_money(client: FPLClient) -> None:
 
 def test_a_missing_squad_raises(tmp_path: Path) -> None:
     """A 200 carrying nothing usable is not a transport failure, so it is not retried."""
-    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=FakeSession(routes={"/entry/77/event/": {}}))
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "cache"), session=FakeSession(routes={"/entry/77/event/": {}}))
     with pytest.raises(FPLAPIError, match="No FPL squad"):
         client.get_squad(77, 2)
 
@@ -454,7 +454,7 @@ H2H_SEASON = {
 def test_the_whole_h2h_season_comes_back_keyed_by_gameweek(tmp_path: Path) -> None:
     """One request rather than one per gameweek."""
     session = FakeSession({"/leagues-h2h-matches/league/950/": H2H_SEASON})
-    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=session)
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "cache"), session=session)
 
     season = client.get_h2h_season(950, 7)
 
@@ -466,7 +466,7 @@ def test_the_whole_h2h_season_comes_back_keyed_by_gameweek(tmp_path: Path) -> No
 def test_the_side_of_a_tie_is_read_from_whichever_slot_you_are_in(tmp_path: Path) -> None:
     """FPL puts an entry in slot 1 or slot 2 with no regard for who is asking."""
     session = FakeSession({"/leagues-h2h-matches/league/950/": H2H_SEASON})
-    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=session)
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "cache"), session=session)
 
     season = client.get_h2h_season(950, 7)
 
@@ -494,7 +494,7 @@ STANDINGS = {
 
 def test_the_two_league_formats_are_different_endpoints(tmp_path: Path) -> None:
     session = FakeSession({"/standings/": STANDINGS})
-    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=session)
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "cache"), session=session)
 
     client.get_standings(950, is_h2h=True)
     client.get_standings(900, is_h2h=False)
@@ -506,7 +506,7 @@ def test_the_two_league_formats_are_different_endpoints(tmp_path: Path) -> None:
 def test_a_table_row_has_a_record_only_once_something_is_played(tmp_path: Path) -> None:
     """A classic league has no results to have a record of."""
     session = FakeSession({"/standings/": STANDINGS})
-    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=session)
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "cache"), session=session)
 
     rows = client.get_standings(950, is_h2h=True)
 
@@ -534,7 +534,7 @@ CHIPS_BOOTSTRAP = {
 def test_the_chip_schedule_comes_off_the_bootstrap_everything_else_reads(tmp_path: Path) -> None:
     """So it costs no extra request."""
     session = FakeSession({"/bootstrap-static/": CHIPS_BOOTSTRAP})
-    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=session)
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "cache"), session=session)
 
     chips = client.get_chips()
 
@@ -561,14 +561,14 @@ def test_a_chip_knows_which_weeks_it_covers() -> None:
 
 def test_an_unnamed_chip_is_skipped_rather_than_shown_blank(tmp_path: Path) -> None:
     session = FakeSession({"/bootstrap-static/": CHIPS_BOOTSTRAP})
-    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=session)
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "cache"), session=session)
 
     assert all(c.name for c in client.get_chips())
 
 
 def test_chips_played_come_back_with_the_week_they_went(tmp_path: Path) -> None:
     history = {"current": [], "chips": [{"name": "bboost", "time": "2026-01-01T00:00:00Z", "event": 3}]}
-    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=FakeSession({"/history/": history}))
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "cache"), session=FakeSession({"/history/": history}))
 
     played = client.get_chips_played(7)
 
@@ -576,6 +576,6 @@ def test_chips_played_come_back_with_the_week_they_went(tmp_path: Path) -> None:
 
 
 def test_a_manager_who_has_played_none_has_none(tmp_path: Path) -> None:
-    client = FPLClient(cache=JsonDiskCache(tmp_path / "c.json"), session=FakeSession({"/history/": {"current": []}}))
+    client = FPLClient(cache=JsonDiskCache(tmp_path / "cache"), session=FakeSession({"/history/": {"current": []}}))
 
     assert client.get_chips_played(7) == []

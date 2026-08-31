@@ -48,7 +48,7 @@ def _client(
 ) -> JsonApiClient:
     return JsonApiClient(
         name="Test",
-        cache=cache or JsonDiskCache(tmp_path / "c.json"),
+        cache=cache or JsonDiskCache(tmp_path / "cache"),
         # No real backoff; the hermetic suite must not spend seconds sleeping.
         retry=lambda: build_retry(attempts=2, multiplier=1, min_wait=0, max_wait=0, predicate=is_transient).copy(
             wait=lambda _: 0
@@ -107,7 +107,7 @@ def test_an_expired_entry_is_refetched(tmp_path: Path) -> None:
     about 15ms — so a write and the read after it land on the same instant and
     the entry is served rather than refetched.
     """
-    cache = JsonDiskCache(tmp_path / "c.json")
+    cache = JsonDiskCache(tmp_path / "cache")
     cache.set("k", {"n": 1}, now=datetime.now(timezone.utc) - timedelta(hours=2))
 
     session = FakeSession({"n": 2})
@@ -141,7 +141,7 @@ def test_a_cache_entry_stores_when_it_was_written(tmp_path: Path) -> None:
     client = _client(tmp_path, FakeSession())
     client.cache_set("k", 1)
     assert client.cache_get("k", timedelta(seconds=1)) == 1
-    stale = JsonDiskCache(tmp_path / "c.json").get("k", timedelta(seconds=1), now=datetime.now(timezone.utc) + TTL)
+    stale = JsonDiskCache(tmp_path / "cache").get("k", timedelta(seconds=1), now=datetime.now(timezone.utc) + TTL)
     assert stale is None
 
 
@@ -191,7 +191,7 @@ def test_a_batch_fetches_concurrently(tmp_path: Path) -> None:
 
 
 def test_a_batch_only_fetches_what_it_does_not_have(tmp_path: Path) -> None:
-    cache = JsonDiskCache(tmp_path / "c.json")
+    cache = JsonDiskCache(tmp_path / "cache")
     cache.set("k1", {"week": 1})
     cache.set("k2", {"week": 2})
     session = RoutedSession(ROUTES)
@@ -203,7 +203,7 @@ def test_a_batch_only_fetches_what_it_does_not_have(tmp_path: Path) -> None:
 
 
 def test_a_fully_cached_batch_touches_the_network_at_all(tmp_path: Path) -> None:
-    cache = JsonDiskCache(tmp_path / "c.json")
+    cache = JsonDiskCache(tmp_path / "cache")
     for i in range(1, 6):
         cache.set(f"k{i}", {"week": i})
     session = RoutedSession(ROUTES)
@@ -242,7 +242,7 @@ def test_one_failed_request_leaves_a_hole_rather_than_failing_the_batch(tmp_path
 
 
 def test_a_failed_request_is_not_stored_as_though_it_were_an_answer(tmp_path: Path) -> None:
-    cache = JsonDiskCache(tmp_path / "c.json")
+    cache = JsonDiskCache(tmp_path / "cache")
     session = RoutedSession(ROUTES, failing={"https://example.test/3"})
 
     _client(tmp_path, session, cache=cache).cached_many(URLS, TTL)  # type: ignore[arg-type]
