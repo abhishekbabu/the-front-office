@@ -4,10 +4,10 @@ import inspect
 
 import pytest
 
-from the_front_office.adapters.outbound.llm.gemini.client import GeminiClient
-from the_front_office.adapters.outbound.llm.gemini.constants import MODEL_FLASH, MODEL_PRO
-from the_front_office.domain.errors import AIUnavailableError
-from the_front_office.domain.models import ScoutReport
+from thefrontoffice.adapters.outbound.llm.gemini.client import GeminiClient
+from thefrontoffice.adapters.outbound.llm.gemini.constants import MODEL_FLASH, MODEL_PRO
+from thefrontoffice.domain.errors import AIUnavailableError
+from thefrontoffice.domain.models import ScoutReport
 
 # ── with no key, the app has nothing to offer ───────────────────────────
 
@@ -26,7 +26,7 @@ def test_availability_is_readable_before_anything_is_offered() -> None:
 def test_the_key_is_read_at_construction_not_bound_as_a_default(monkeypatch: pytest.MonkeyPatch) -> None:
     """A key saved in Settings must take effect on the next call, not the next
     restart — a default argument is evaluated once, at import."""
-    from the_front_office.config.settings import settings
+    from thefrontoffice.config.settings import settings
 
     monkeypatch.setattr(settings, "gemini_api_key", "set-after-import")
 
@@ -50,7 +50,7 @@ def test_every_entry_point_refuses_the_same_way() -> None:
 
 
 def test_parsing_uses_flash_and_analysis_uses_pro() -> None:
-    from the_front_office.adapters.outbound.llm.gemini import client as mod
+    from thefrontoffice.adapters.outbound.llm.gemini import client as mod
 
     assert MODEL_FLASH == "gemini-2.5-flash"
     assert MODEL_PRO == "gemini-2.5-pro"

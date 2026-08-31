@@ -21,16 +21,16 @@ missing-attribute = false
 # Modules with no yahoofantasy import: hold them to the full bar so a genuine
 # typo or bad attribute access still fails the check.
 [[sub-config]]
-matches = "src/the_front_office/config/**"
+matches = "src/thefrontoffice/config/**"
 [sub-config.errors]
 missing-attribute = true
 
 [[sub-config]]
-matches = "src/the_front_office/clients/nba/**"
+matches = "src/thefrontoffice/clients/nba/**"
 [sub-config.errors]
 missing-attribute = true
 
 [[sub-config]]
-matches = "src/the_front_office/clients/gemini/**"
+matches = "src/thefrontoffice/clients/gemini/**"
 [sub-config.errors]
 missing-attribute = true

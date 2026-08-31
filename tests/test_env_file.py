@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from the_front_office.config import env_file
-from the_front_office.config.settings import settings
+from thefrontoffice.config import env_file
+from thefrontoffice.config.settings import settings
 
 TEMPLATE = """# Yahoo credentials
 YAHOO_CLIENT_ID=abc

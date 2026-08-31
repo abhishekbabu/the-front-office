@@ -6,9 +6,9 @@ from typing import Any
 import pytest
 from conftest import FakeNBA, FakeYahoo, make_player
 
-from the_front_office.adapters.outbound.competitions.nba.yahoo import YahooNBAProvider
-from the_front_office.domain.errors import PlayerNotFoundError
-from the_front_office.domain.models import TradeProposal
+from thefrontoffice.adapters.outbound.competitions.nba.yahoo import YahooNBAProvider
+from thefrontoffice.domain.errors import PlayerNotFoundError
+from thefrontoffice.domain.models import TradeProposal
 
 
 def _provider(yahoo: FakeYahoo) -> YahooNBAProvider:
@@ -21,7 +21,7 @@ def _provider(yahoo: FakeYahoo) -> YahooNBAProvider:
 
 def _resolve(yahoo: FakeYahoo, names: list[str]) -> Any:
     """Resolve one side through the shared trade-resolution policy."""
-    from the_front_office.adapters.outbound.competitions.trades import resolve_sides
+    from thefrontoffice.adapters.outbound.competitions.trades import resolve_sides
 
     giving, _ = resolve_sides(TradeProposal(giving=names, receiving=[]), _provider(yahoo)._find_player)
     return giving
@@ -57,7 +57,7 @@ def test_an_unresolved_name_raises_rather_than_being_dropped() -> None:
 
 def test_every_unresolved_name_is_reported_at_once() -> None:
     """Across both sides, so one message covers the whole trade."""
-    from the_front_office.adapters.outbound.competitions.trades import resolve_sides
+    from thefrontoffice.adapters.outbound.competitions.trades import resolve_sides
 
     proposal = TradeProposal(giving=["Ghost One"], receiving=["Ghost Two"])
     with pytest.raises(PlayerNotFoundError) as excinfo:

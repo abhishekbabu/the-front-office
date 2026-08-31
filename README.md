@@ -1,6 +1,6 @@
 # The Front Office
 
-[![CI](https://github.com/abhishekbabu/the-front-office/actions/workflows/ci.yml/badge.svg)](https://github.com/abhishekbabu/the-front-office/actions/workflows/ci.yml)
+[![CI](https://github.com/abhishekbabu/thefrontoffice/actions/workflows/ci.yml/badge.svg)](https://github.com/abhishekbabu/thefrontoffice/actions/workflows/ci.yml)
 
 AI-powered fantasy sports general manager. NBA on Yahoo, NFL on Sleeper, Fantasy
 Premier League on the official game.
@@ -11,7 +11,7 @@ stats and the fixtures ahead.
 
 ## Tech Stack
 
-**Layout** (`src/the_front_office/`, Python managed with `uv`) — ports and adapters,
+**Layout** (`src/thefrontoffice/`, Python managed with `uv`) — ports and adapters,
 with dependencies pointing strictly inward:
 
 ```text
@@ -33,14 +33,14 @@ domain models directly: `ScoutReport` *is* a route's response schema, so there i
 second representation of a report to keep in step. It also serves the built UI from
 `web/dist`, so one process on one port covers both.
 
-**Outbound adapters** (`src/the_front_office/adapters/outbound/`)
+**Outbound adapters** (`src/thefrontoffice/adapters/outbound/`)
 - **Yahoo Fantasy** via `yahoofantasy` — OAuth2, rosters, matchups, and hand-built player queries that sort free agents by an individual stat category. Responses are cached in `.yahoo_cache.json` rather than the SDK's own store
 - **Sleeper** — public and auth-free, and the stats provider for both football and basketball: football leagues, every roster in them, matchups and weekly projections; the real-world season schedule, season totals and the league's transaction feed; NBA per-game projections summed into category totals for the matchup period, per-game box scores for recent form (L5/L10/L15), and the basketball schedule. Cached in `.sleeper_cache.json`
 - **Fantasy Premier League** — public and auth-free, and the only platform here that is also its own stats provider: one `bootstrap-static` call carries the squad, the prices, the game's own `ep_next` projection and Opta expected goals, with per-player season history, mini-league tables and fixtures alongside. Cached in `.fpl_cache.json`
 - **Gemini** via `google-genai` — `gemini-2.5-pro` for analysis, `gemini-2.5-flash` for parsing
 
 **Tracing** — OpenTelemetry via `logfire`, configured in
-[`config/telemetry.py`](src/the_front_office/config/telemetry.py) and nowhere else.
+[`config/telemetry.py`](src/thefrontoffice/config/telemetry.py) and nowhere else.
 Everything worth measuring happens inside a library, so `requests`, `google-genai`
 and `pydantic` are auto-instrumented and no span is opened by hand — `domain/` and
 `application/` never learn that telemetry exists. The standard-library logging the
@@ -122,7 +122,7 @@ and one holds a ~14MB player catalog.
 | `LOG_LEVEL` | no | `INFO` | `DEBUG` \| `INFO` \| `WARNING` \| `ERROR` \| `CRITICAL` |
 
 Each is a validated field on `AppSettings` in
-[`config/settings.py`](src/the_front_office/config/settings.py) — a malformed
+[`config/settings.py`](src/thefrontoffice/config/settings.py) — a malformed
 value fails at startup naming the field, not mid-report.
 
 ## Usage
@@ -178,7 +178,7 @@ request handler cannot do — so every non-interactive path reports a missing
 token instead of trying to obtain one.
 
 The handshake is implemented in
-[`platforms/yahoo/oauth.py`](src/the_front_office/adapters/outbound/platforms/yahoo/oauth.py)
+[`platforms/yahoo/oauth.py`](src/thefrontoffice/adapters/outbound/platforms/yahoo/oauth.py)
 rather than delegated to the `yahoofantasy` CLI, which exchanges the code
 against `redirect_uri="oob"` after authorizing against a different one. RFC 6749
 requires the two to match; Yahoo answers the mismatch with a token that
@@ -267,8 +267,8 @@ Yahoo, NBA and Gemini. Anything hitting a live API is marked
 ## Project Layout
 
 ```text
-the-front-office/
-├── src/the_front_office/
+thefrontoffice/
+├── src/thefrontoffice/
 │   ├── domain/            # models + ports (pure — imports nothing else here)
 │   ├── application/       # scouting and trading use cases, over ports
 │   ├── adapters/

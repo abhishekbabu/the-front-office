@@ -10,10 +10,10 @@ from conftest import (
     _provider,
 )
 
-from the_front_office.adapters.outbound.platforms.sleeper.types import (
+from thefrontoffice.adapters.outbound.platforms.sleeper.types import (
     Transaction,
 )
-from the_front_office.domain.errors import SleeperAPIError
+from thefrontoffice.domain.errors import SleeperAPIError
 
 MY_ID = SLEEPER_USER_ID
 

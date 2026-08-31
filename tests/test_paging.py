@@ -6,8 +6,8 @@ a formatted column sorts on the number behind it, and a row with nothing to
 sort on never displaces one that has something.
 """
 
-from the_front_office.adapters.outbound.competitions.paging import page
-from the_front_office.domain.models import PlayerCard, PlayerQuery
+from thefrontoffice.adapters.outbound.competitions.paging import page
+from thefrontoffice.domain.models import PlayerCard, PlayerQuery
 
 
 def _card(name: str, pos: str, price: float | None = None, club: str = "ARS") -> PlayerCard:

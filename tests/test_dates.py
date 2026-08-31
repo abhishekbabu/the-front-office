@@ -8,7 +8,7 @@ rendered on a laptop and raised `ValueError` in CI. Nothing here may reach for
 
 from datetime import date, datetime, timezone
 
-from the_front_office.adapters.outbound.competitions.dates import at_time, day_month, weekday_day_month
+from thefrontoffice.adapters.outbound.competitions.dates import at_time, day_month, weekday_day_month
 
 
 def test_a_day_carries_no_leading_zero() -> None:

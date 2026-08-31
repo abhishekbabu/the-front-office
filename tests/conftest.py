@@ -12,8 +12,8 @@ from typing import Any
 import pytest
 from reports import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
 
-from the_front_office.adapters.outbound.competitions.nfl.sleeper import SleeperNFLProvider
-from the_front_office.adapters.outbound.platforms.sleeper.types import (
+from thefrontoffice.adapters.outbound.competitions.nfl.sleeper import SleeperNFLProvider
+from thefrontoffice.adapters.outbound.platforms.sleeper.types import (
     PlayerMeta,
     ScheduledGame,
     SeasonState,
@@ -312,7 +312,7 @@ class FakeYahoo:
         return self.available[:count]
 
     def get_matchup(self, my_team: Any) -> Any:
-        from the_front_office.adapters.outbound.platforms.yahoo.types import MatchupInfo
+        from thefrontoffice.adapters.outbound.platforms.yahoo.types import MatchupInfo
 
         self.matchup_fetches += 1
         return MatchupInfo(
@@ -398,7 +398,7 @@ class FakeAI:
         return self.chat
 
     def parse_trade_string(self, text: str) -> Any:
-        from the_front_office.domain.models import TradeProposal
+        from thefrontoffice.domain.models import TradeProposal
 
         return (
             self.proposal
@@ -416,7 +416,7 @@ def _isolate_from_local_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     fails on a machine that does — or worse, a test quietly exercises a real
     account. Tests that need a value set it explicitly.
     """
-    from the_front_office.config.settings import settings
+    from thefrontoffice.config.settings import settings
 
     for field in (
         "sleeper_username",

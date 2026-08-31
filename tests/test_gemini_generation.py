@@ -6,10 +6,10 @@ from typing import Any
 import pytest
 from reports import MOCK_NBA_REPORT, MOCK_NBA_VERDICT
 
-from the_front_office.adapters.outbound.llm.gemini.client import GeminiClient
-from the_front_office.adapters.outbound.llm.gemini.constants import MODEL_FLASH, MODEL_PRO
-from the_front_office.domain.errors import AIResponseError, AIUnavailableError
-from the_front_office.domain.models import ScoutReport, TradeVerdict
+from thefrontoffice.adapters.outbound.llm.gemini.client import GeminiClient
+from thefrontoffice.adapters.outbound.llm.gemini.constants import MODEL_FLASH, MODEL_PRO
+from thefrontoffice.domain.errors import AIResponseError, AIUnavailableError
+from thefrontoffice.domain.models import ScoutReport, TradeVerdict
 
 
 class FakeModels:
@@ -193,8 +193,8 @@ def test_cached_tokens_are_reported_when_present(caplog: pytest.LogCaptureFixtur
 def test_a_rejected_key_is_named_as_such() -> None:
     """Distinct from having no key, which the app hides: something was
     configured and is wrong, and only the person who typed it can fix it."""
-    from the_front_office.adapters.outbound.llm.gemini.client import translate
-    from the_front_office.domain.errors import AIKeyInvalidError
+    from thefrontoffice.adapters.outbound.llm.gemini.client import translate
+    from thefrontoffice.domain.errors import AIKeyInvalidError
 
     error = translate(Exception("400 INVALID_ARGUMENT ... 'reason': 'API_KEY_INVALID' ..."))
 
@@ -203,8 +203,8 @@ def test_a_rejected_key_is_named_as_such() -> None:
 
 
 def test_an_exhausted_quota_is_told_apart_from_a_bad_key() -> None:
-    from the_front_office.adapters.outbound.llm.gemini.client import translate
-    from the_front_office.domain.errors import AIQuotaError
+    from thefrontoffice.adapters.outbound.llm.gemini.client import translate
+    from thefrontoffice.domain.errors import AIQuotaError
 
     assert isinstance(translate(Exception("429 RESOURCE_EXHAUSTED")), AIQuotaError)
 
@@ -212,7 +212,7 @@ def test_an_exhausted_quota_is_told_apart_from_a_bad_key() -> None:
 def test_no_vendor_payload_reaches_the_message() -> None:
     """The SDK embeds a repr of a Google RPC payload — nested dicts, type URLs,
     a locale — which is unreadable anywhere a person is looking."""
-    from the_front_office.adapters.outbound.llm.gemini.client import translate
+    from thefrontoffice.adapters.outbound.llm.gemini.client import translate
 
     raw = "500 INTERNAL {'error': {'details': [{'@type': 'type.googleapis.com/google.rpc.ErrorInfo'}]}}"
     message = str(translate(Exception(raw)))

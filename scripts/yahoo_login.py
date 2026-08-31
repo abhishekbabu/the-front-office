@@ -18,10 +18,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient  # noqa: E402
-from the_front_office.config.logging import setup_logging  # noqa: E402
-from the_front_office.config.settings import settings  # noqa: E402
-from the_front_office.domain.errors import FrontOfficeError  # noqa: E402
+from thefrontoffice.adapters.outbound.platforms.yahoo.client import YahooClient  # noqa: E402
+from thefrontoffice.config.logging import setup_logging  # noqa: E402
+from thefrontoffice.config.settings import settings  # noqa: E402
+from thefrontoffice.domain.errors import FrontOfficeError  # noqa: E402
 
 
 def main() -> int:

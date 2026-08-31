@@ -7,10 +7,10 @@ from typing import Any
 import pytest
 import requests
 
-from the_front_office.adapters.outbound.platforms.cache import JsonDiskCache
-from the_front_office.adapters.outbound.platforms.http import JsonApiClient
-from the_front_office.adapters.outbound.platforms.retry import build_retry, is_transient
-from the_front_office.domain.errors import FPLAPIError, SleeperAPIError
+from thefrontoffice.adapters.outbound.platforms.cache import JsonDiskCache
+from thefrontoffice.adapters.outbound.platforms.http import JsonApiClient
+from thefrontoffice.adapters.outbound.platforms.retry import build_retry, is_transient
+from thefrontoffice.domain.errors import FPLAPIError, SleeperAPIError
 
 TTL = timedelta(hours=1)
 

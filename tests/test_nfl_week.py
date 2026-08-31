@@ -12,13 +12,13 @@ from conftest import (
     _provider,
 )
 
-from the_front_office.adapters.outbound.platforms.sleeper.types import (
+from thefrontoffice.adapters.outbound.platforms.sleeper.types import (
     ScheduledGame,
     SleeperLeague,
     SleeperRoster,
     WeeklyProjection,
 )
-from the_front_office.domain.errors import PlayerNotFoundError, SleeperAPIError
+from thefrontoffice.domain.errors import PlayerNotFoundError, SleeperAPIError
 
 MY_ID = SLEEPER_USER_ID
 

@@ -9,7 +9,7 @@ Deliberately not in the package: the application has no use for a fabricated
 report, and shipping one invites a code path that returns it.
 """
 
-from the_front_office.domain.models import Move, ScoutReport, TradeVerdict
+from thefrontoffice.domain.models import Move, ScoutReport, TradeVerdict
 
 MOCK_NBA_REPORT = ScoutReport(
     situation=(

@@ -11,9 +11,9 @@ from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from the_front_office.adapters.outbound.competitions.nba.form import SleeperNBAForm, nine_cat
-from the_front_office.adapters.outbound.platforms.sleeper.types import NBAGameLog, PlayerMeta, ScheduledGame
-from the_front_office.domain.errors import SleeperAPIError
+from thefrontoffice.adapters.outbound.competitions.nba.form import SleeperNBAForm, nine_cat
+from thefrontoffice.adapters.outbound.platforms.sleeper.types import NBAGameLog, PlayerMeta, ScheduledGame
+from thefrontoffice.domain.errors import SleeperAPIError
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 
@@ -55,7 +55,7 @@ class FakeSleeper:
         return self.catalog
 
     def get_state(self, sport: str = "nfl") -> Any:
-        from the_front_office.adapters.outbound.platforms.sleeper.types import SeasonState
+        from thefrontoffice.adapters.outbound.platforms.sleeper.types import SeasonState
 
         return SeasonState(week=10, season="2026", season_type="regular")
 

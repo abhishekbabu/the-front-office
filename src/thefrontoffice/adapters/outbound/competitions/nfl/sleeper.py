@@ -1,0 +1,783 @@
+"""NFL on Sleeper.
+
+Points-scoring football: the forward-looking number is Sleeper's own weekly
+projection in the league's scoring currency, and the binding constraints are the
+starting lineup slots rather than a transaction budget.
+
+Unlike the Yahoo path there is no OAuth — Sleeper's API is public, so a username
+is the only configuration.
+"""
+
+import logging
+from collections.abc import Callable
+
+from thefrontoffice.adapters.outbound.competitions import paging
+from thefrontoffice.adapters.outbound.competitions.names import NameIndex
+from thefrontoffice.adapters.outbound.competitions.nfl import league, prompt
+from thefrontoffice.adapters.outbound.competitions.nfl.lineup import (
+    LineupSlot,
+    current_lineup,
+    lineup_changes,
+    lineup_points,
+    optimal_lineup,
+)
+from thefrontoffice.adapters.outbound.competitions.nfl.week import (
+    SCORING_LABELS,
+    Live,
+    Week,
+    games_by_week,
+    projection_for,
+    week_dates,
+    zero_projection,
+)
+from thefrontoffice.adapters.outbound.competitions.trades import resolve_sides
+from thefrontoffice.adapters.outbound.platforms.sleeper.client import NFL, SleeperClient
+from thefrontoffice.adapters.outbound.platforms.sleeper.types import (
+    PlayerMeta,
+    SeasonStats,
+    SleeperLeague,
+    SleeperRoster,
+    WeeklyProjection,
+)
+from thefrontoffice.config.constants import NFL_TRADE_PROMPT
+from thefrontoffice.config.settings import settings
+from thefrontoffice.domain.errors import LeagueNotFoundError, PlayerNotFoundError, SleeperAPIError, TeamNotFoundError
+from thefrontoffice.domain.models import (
+    NOT_APPLICABLE,
+    CompetitionContext,
+    LeagueSchedule,
+    PlayerCard,
+    PlayerDetail,
+    PlayerPage,
+    PlayerQuery,
+    Side,
+    Spot,
+    Stat,
+    StatGroup,
+    StatRow,
+    StatTable,
+    Summary,
+    Swap,
+    TeamRef,
+    Tone,
+    TradeProposal,
+)
+from thefrontoffice.domain.ports import LeagueRef
+
+logger = logging.getLogger(__name__)
+
+# Sleeper's projection keys, in the order a box score reads them. Only the ones
+# a fantasy line is actually made of — the payload carries dozens more, most of
+# which are zero for any given player.
+PROJECTION_LABELS: tuple[tuple[str, str], ...] = (
+    ("pass_att", "Pass att"),
+    ("pass_cmp", "Completions"),
+    ("pass_yd", "Pass yards"),
+    ("pass_td", "Pass TD"),
+    ("pass_int", "Interceptions"),
+    ("rush_att", "Carries"),
+    ("rush_yd", "Rush yards"),
+    ("rush_td", "Rush TD"),
+    ("rec_tgt", "Targets"),
+    ("rec", "Receptions"),
+    ("rec_yd", "Rec yards"),
+    ("rec_td", "Rec TD"),
+    ("fum_lost", "Fumbles lost"),
+)
+
+
+def _projection_lines(stats: dict[str, float]) -> list[Stat]:
+    """The projection broken out, skipping what does not apply.
+
+    A receiver has no passing line, and printing a column of zeroes for one
+    buries the three numbers that matter.
+    """
+    return [
+        Stat(label=label, value=f"{stats[key]:.1f}".rstrip("0").rstrip(".") or "0")
+        for key, label in PROJECTION_LABELS
+        if stats.get(key)
+    ]
+
+
+# Sleeper serves portraits off its own CDN, keyed by the same player_id the
+# rest of the API uses, with no key and no lookup.
+PORTRAIT_URL = "https://sleepercdn.com/content/nfl/players/{player_id}.jpg"
+# Lowercase or it 404s, and the abbreviation everywhere else in this file is
+# upper.
+TEAM_LOGO_URL = "https://sleepercdn.com/images/team_logos/nfl/{team}.png"
+
+# Where the moves are actually made. Sleeper routes on these — an invented
+# path 404s — so they are addresses rather than guesses.
+LEAGUE_URL = "https://sleeper.com/leagues/{league_id}"
+PLAYER_URL = "https://sleeper.com/players/nfl/{player_id}"
+
+SPLIT_LABELS = (
+    ("pass_yd", "Passing yards"),
+    ("pass_td", "Passing TDs"),
+    ("pass_int", "Interceptions"),
+    ("cmp_pct", "Completion %"),
+    ("rush_yd", "Rushing yards"),
+    ("rush_td", "Rushing TDs"),
+    ("rec", "Receptions"),
+    ("rec_tgt", "Targets"),
+    ("rec_yd", "Receiving yards"),
+    ("rec_td", "Receiving TDs"),
+)
+
+
+def _split_value(key: str, value: float | None) -> str:
+    """A production figure, or nothing where that position never records one."""
+    if not value:
+        return NOT_APPLICABLE
+    return f"{value:.1f}%" if key == "cmp_pct" else f"{value:.0f}"
+
+
+# A week made and a week wasted, on a points-league scale where a startable
+# flex is worth around ten.
+HAUL_POINTS = 20.0
+BLANK_POINTS = 5.0
+
+# What a fantasy league actually scores. The catalog carries every practice
+# squad body in the league, and none of them are a waiver decision.
+FANTASY_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K", "DEF"})
+
+
+class SleeperNFLProvider:
+    """CompetitionProvider for Sleeper points-league football."""
+
+    sport = "football"
+    competition = "nfl"
+    label = "NFL (Sleeper)"
+
+    def __init__(self, username: str | None = None, *, client: SleeperClient | None = None):
+        self.username = username or settings.sleeper_username
+        self.client = client or SleeperClient()
+        self._user_id: str | None = None
+
+    # ── leagues ─────────────────────────────────────────────────────
+
+    def _resolve_user_id(self) -> str:
+        if self._user_id:
+            return self._user_id
+        if not self.username:
+            raise LeagueNotFoundError("SLEEPER_USERNAME is not set in .env")
+        self._user_id = self.client.get_user(self.username).user_id
+        return self._user_id
+
+    def list_leagues(self) -> list[LeagueRef]:
+        state = self.client.get_nfl_state()
+        leagues = self.client.get_leagues(self._resolve_user_id(), state.season)
+        return [
+            LeagueRef(
+                league_id=lg.league_id,
+                name=lg.name,
+                competition=self.competition,
+                detail=f"{lg.total_rosters}-team · {SCORING_LABELS.get(lg.scoring_format, lg.scoring_format)}",
+                url=LEAGUE_URL.format(league_id=lg.league_id),
+            )
+            for lg in leagues
+        ]
+
+    def _league(self, league_id: str) -> SleeperLeague:
+        state = self.client.get_nfl_state()
+        for lg in self.client.get_leagues(self._resolve_user_id(), state.season):
+            if lg.league_id == league_id:
+                return lg
+        raise LeagueNotFoundError(f"league {league_id} is not one of yours this season")
+
+    def _my_roster(self, league_id: str) -> SleeperRoster:
+        user_id = self._resolve_user_id()
+        for roster in self.client.get_rosters(league_id):
+            if roster.owner_id == user_id:
+                return roster
+        raise LeagueNotFoundError(f"you do not own a roster in league {league_id}")
+
+    def roster(self, league_id: str) -> list[PlayerCard]:
+        """The full roster, with the depth and experience a week view leaves out."""
+        state = self._week(league_id)
+        return self._cards(state, state.roster.player_ids, set(state.roster.starter_ids))
+
+    def teams(self, league_id: str) -> list[TeamRef]:
+        """Everyone in the league, yours first."""
+        state = self._week(league_id)
+        names = self.client.get_league_users(league_id)
+        refs = [
+            TeamRef(
+                team_id=str(r.roster_id),
+                name=names.get(r.owner_id, f"Roster {r.roster_id}"),
+                detail=f"{r.record} · {r.points_for:.1f} pts",
+                is_mine=r.roster_id == state.roster.roster_id,
+            )
+            for r in self.client.get_rosters(league_id)
+        ]
+        return sorted(refs, key=lambda ref: (not ref.is_mine, ref.name.lower()))
+
+    def roster_of(self, league_id: str, team_id: str) -> list[PlayerCard]:
+        """Somebody else's squad, in the same columns as your own."""
+        state = self._week(league_id)
+        roster = next((r for r in self.client.get_rosters(league_id) if str(r.roster_id) == team_id), None)
+        if roster is None:
+            raise TeamNotFoundError(f"roster {team_id}")
+        return self._cards(state, roster.player_ids, set(roster.starter_ids))
+
+    def free_agents(self, league_id: str, query: PlayerQuery) -> PlayerPage:
+        """Everyone nobody in the league holds, best projection first.
+
+        The catalog is twelve thousand players and all but a couple of hundred
+        are free, so the pool is cut to the positions a fantasy league actually
+        scores — the rest is practice-squad depth nobody is deciding about.
+        That still leaves four thousand, which is why this is a page.
+        """
+        state = self._week(league_id)
+        owned = {pid for r in self.client.get_rosters(league_id) for pid in r.player_ids}
+
+        available = [
+            (state.projections.get(pid), pid, meta)
+            for pid, meta in state.players.items()
+            if pid not in owned and self._is_signing(meta)
+        ]
+        # Ranked on the projection, and among the unprojected on depth chart —
+        # a starter with no projection yet is worth more than a fourth-stringer.
+        available.sort(
+            key=lambda row: (-(row[0].points if row[0] else 0.0), int(row[2].get("depth_chart_order") or 99))
+        )
+        ranked = self._cards(state, [pid for _, pid, _ in available], starters=set(), owned_column=False)
+        return paging.page(ranked, query)
+
+    @staticmethod
+    def _is_signing(meta: PlayerMeta) -> bool:
+        """Whether adding this player could do anything.
+
+        Two cuts, both about what the wire is for. The catalog carries every
+        position the sport has, and a fantasy league scores six of them. It
+        also never forgets anybody: Reggie Wayne retired in 2014 and is still
+        in it, unsigned, which the default ranking hid because he has no
+        projection — and sorting by experience put him on the first page.
+        A player on no NFL roster cannot score for yours.
+        """
+        return str(meta.get("position") or "") in FANTASY_POSITIONS and str(meta.get("team") or "FA") != "FA"
+
+    def _cards(
+        self,
+        state: Week,
+        player_ids: list[str],
+        starters: set[str],
+        owned_column: bool = True,
+    ) -> list[PlayerCard]:
+        """One table shape for every list of players this sport shows."""
+        scheduled = any(p.opponent for p in state.projected)
+
+        cards = []
+        for player_id in player_ids:
+            meta = state.players.get(player_id)
+            if not meta:
+                continue
+            projection = state.projections.get(player_id)
+            injury = str(meta.get("injury_status") or "")
+            depth = int(meta.get("depth_chart_order") or 0)
+            cards.append(
+                PlayerCard(
+                    player_id=player_id,
+                    tone="warning" if injury else "neutral",
+                    values={
+                        "Proj": projection.points if projection else 0.0,
+                        "Depth": float(depth) if depth else 0.0,
+                        "Exp": float(meta.get("years_exp") or 0),
+                    },
+                    columns={
+                        "Player": str(meta.get("name") or player_id),
+                        "Pos": str(meta.get("position") or ""),
+                        "Team": str(meta.get("team") or "FA"),
+                        # A free-agent list has no lineup to be in, so the
+                        # column would read "BN" down its whole length.
+                        **({"Slot": "START" if player_id in starters else "BN"} if owned_column else {}),
+                        "Proj": f"{projection.points:.1f}" if projection else "0.0",
+                        "Opponent": self._opponent_label(projection, scheduled),
+                        "Depth": str(depth) if depth else "—",
+                        "Exp": f"{int(meta.get('years_exp') or 0)}y",
+                        "Status": injury,
+                    },
+                )
+            )
+        return cards
+
+    @staticmethod
+    def _headline_label(projection: WeeklyProjection | None, scheduled: bool, week: int) -> str:
+        """What the figure is, or why there is not one.
+
+        The two reasons differ and a reader can act on the difference: nothing
+        is published yet, versus published and this player is not in it.
+        """
+        if projection:
+            return f"projected for week {week}"
+        if not scheduled:
+            return f"Week {week} projections are not published yet"
+        return f"Not projected to feature in week {week}"
+
+    @staticmethod
+    def _team_name(team: str, players: dict[str, PlayerMeta]) -> str:
+        """A club in full, at no extra request.
+
+        Sleeper files every team defense in the player catalog under the club's
+        own abbreviation, named the way somebody would say it — so the catalog
+        this provider already holds is also the lookup from 'DET' to
+        'Detroit Lions'. Falls back to the abbreviation, which is what a caller
+        would have shown anyway.
+        """
+        meta = players.get(team)
+        return str(meta.get("name") or team) if meta else team
+
+    @classmethod
+    def _opponent_label(
+        cls, projection: WeeklyProjection | None, scheduled: bool, players: dict[str, PlayerMeta] | None = None
+    ) -> str:
+        """Who they play. In full where a caller has room for it — the drawer
+        does, a table column does not."""
+        if projection and projection.opponent:
+            opponent = cls._team_name(projection.opponent, players) if players else projection.opponent
+            return f"vs {opponent}"
+        return "no game" if scheduled else "—"
+
+    def player(self, league_id: str, player_id: str) -> PlayerDetail:
+        """One player: the week, what makes the projection, and who they are."""
+        state = self._week(league_id)
+        meta = state.players.get(player_id)
+        if meta is None:
+            raise PlayerNotFoundError([player_id])
+
+        projection = state.projections.get(player_id)
+        scheduled = any(p.opponent for p in state.projected)
+        depth = int(meta.get("depth_chart_order") or 0)
+        injury = str(meta.get("injury_status") or "")
+        body = str(meta.get("injury_body_part") or "")
+
+        groups = [
+            StatGroup(
+                title=f"Week {state.week}",
+                stats=[
+                    Stat(label="Opponent", value=self._opponent_label(projection, scheduled, state.players)),
+                    Stat(label="Projected", value=f"{projection.points:.1f}" if projection else "—"),
+                    Stat(
+                        label="Status",
+                        value=injury or "active",
+                        tone="warning" if injury else "good",
+                    ),
+                    *([Stat(label="Injury", value=body)] if body else []),
+                ],
+            )
+        ]
+        if projection and projection.stats:
+            groups.append(StatGroup(title="Projected line", stats=_projection_lines(projection.stats)))
+        groups.append(
+            StatGroup(
+                title="Player",
+                stats=[
+                    Stat(label="Depth chart", value=f"{depth}" if depth else "unlisted"),
+                    Stat(label="Experience", value=f"{int(meta.get('years_exp') or 0)} seasons"),
+                    *([Stat(label="Age", value=str(meta["age"]))] if meta.get("age") else []),
+                    *([Stat(label="Number", value=f"#{meta['number']}")] if meta.get("number") else []),
+                    *([Stat(label="College", value=str(meta["college"]))] if meta.get("college") else []),
+                ],
+            )
+        )
+
+        return PlayerDetail(
+            player_id=player_id,
+            name=str(meta.get("name") or player_id),
+            position=str(meta.get("position") or ""),
+            team=(team := str(meta.get("team") or "FA")),
+            team_name=self._team_name(team, state.players),
+            team_logo_url=TEAM_LOGO_URL.format(team=team.lower()) if team != "FA" else "",
+            headline=f"{projection.points:.1f}" if projection else "",
+            headline_label=self._headline_label(projection, scheduled, state.week),
+            note=str(meta.get("injury_notes") or injury),
+            image_url=PORTRAIT_URL.format(player_id=player_id),
+            url=PLAYER_URL.format(player_id=player_id),
+            tables=[table] if (table := self._season_table(player_id, state)) else [],
+            tone="warning" if injury else "neutral",
+            groups=groups,
+        )
+
+    # ── trades ──────────────────────────────────────────────────────
+
+    def build_trade_context(self, league_id: str, proposal: TradeProposal) -> CompetitionContext:
+        """Price both sides of a trade against the current roster."""
+        league = self._league(league_id)
+        roster = self._my_roster(league_id)
+        state = self.client.get_state(NFL)
+        week, season = self._current_week(), state.season
+
+        projections = self.client.get_projections(season, week, league.scoring_format)
+        players = self.client.get_players()
+        index = self._name_index(projections, players)
+
+        giving, receiving = resolve_sides(proposal, index.lookup)
+
+        rostered = [projection_for(pid, projections, players) for pid in roster.player_ids]
+        roster_lines = {
+            p.name: prompt.player_line(p) for p in sorted((p for p in rostered if p), key=lambda x: -x.points)
+        }
+
+        situation, _ = prompt.matchup(self.client, league, roster, league_id, week)
+        constraints = (
+            f"LINEUP SLOTS: {', '.join(league.starting_slots)}\n"
+            "- Only points from the starting lineup score. Bench depth has value only as "
+            "insurance or as a future starter."
+        )
+        text = NFL_TRADE_PROMPT.format(
+            giving_str="".join(prompt.player_line(p) for p in giving),
+            receiving_str="".join(prompt.player_line(p) for p in receiving),
+            situation=situation,
+            constraints=constraints,
+            roster_str="".join(roster_lines.values()),
+            scoring_label=SCORING_LABELS.get(league.scoring_format, league.scoring_format),
+        )
+        return CompetitionContext(prompt=text, situation=situation, constraints=constraints, roster_lines=roster_lines)
+
+    @staticmethod
+    def _name_index(
+        projections: dict[str, WeeklyProjection], players: dict[str, PlayerMeta]
+    ) -> NameIndex[WeeklyProjection]:
+        """Every projectable player, looked up by the name a user would type."""
+        index: NameIndex[WeeklyProjection] = NameIndex()
+        for projection in projections.values():
+            index.add(projection.name, projection)
+        # Players with no projection are still tradeable — a bye, or a stash.
+        for player_id, meta in players.items():
+            name = meta.get("name")
+            if name and player_id not in projections and meta.get("position"):
+                index.add(name, zero_projection(player_id, meta))
+        return index
+
+    # ── context ─────────────────────────────────────────────────────
+
+    def build_context(self, league_id: str) -> CompetitionContext:
+        """Gather the week, then render it as the text a model reads."""
+        return prompt.build(self.client, self._week(league_id), league_id)
+
+    def _current_week(self) -> int:
+        """The week the report is about; the opener while still in preseason."""
+        state = self.client.get_state(NFL)
+        return max(1, state.week if state.is_regular_season else 1)
+
+    def _week(self, league_id: str) -> Week:
+        """Everything both the header and the prompt are derived from.
+
+        Gathered once because the two would otherwise fetch the same
+        projections and re-run the same lineup solve, and could then disagree
+        about the totals by a rounding.
+        """
+        league = self._league(league_id)
+        roster = self._my_roster(league_id)
+        state = self.client.get_state(NFL)
+        week, season = self._current_week(), state.season
+
+        projections = self.client.get_projections(season, week, league.scoring_format)
+        players = self.client.get_players()
+        projected = [p for p in (projection_for(pid, projections, players) for pid in roster.player_ids) if p]
+
+        slots = league.starting_slots
+        lineup = current_lineup(slots, roster.starter_ids, projected)
+        best = optimal_lineup(slots, projected)
+        current_points = round(lineup_points(lineup), 1)
+        best_points = round(lineup_points(best), 1)
+
+        return Week(
+            is_regular_season=state.is_regular_season,
+            league=league,
+            roster=roster,
+            week=week,
+            season=season,
+            projections=projections,
+            players=players,
+            projected=projected,
+            lineup=lineup,
+            best=best,
+            changes=lineup_changes(slots, roster.starter_ids, projected),
+            current_points=current_points,
+            best_points=best_points,
+            on_bench=round(best_points - current_points, 1),
+        )
+
+    def summary(self, league_id: str) -> Summary:
+        """The week as it stands: both lineups, the swaps, the byes. No model."""
+        state = self._week(league_id)
+        _, matchup_stats = prompt.matchup(self.client, state.league, state.roster, league_id, state.week)
+        live = self._live(state, league_id)
+        starters = {slot.player.player_id for slot in state.lineup if slot.player}
+        # Before the season opens Sleeper publishes no fixtures at all, and
+        # flagging every player for having no game turns the page amber over a
+        # date rather than a decision. It only means something when others do.
+        scheduled = any(p.opponent for p in state.projected)
+
+        return Summary(
+            headline=prompt.headline(state.roster, state.week, state.current_points, state.best_points, state.on_bench)
+            + matchup_stats,
+            mine=Side(
+                name="Your lineup",
+                detail=state.roster.record,
+                points=self._side_total(state, live),
+                lineup=[self._lineup_spot(slot, scheduled, live) for slot in state.lineup],
+                bench=[
+                    self._spot(p, scheduled, live=live)
+                    for p in sorted(
+                        (p for p in state.projected if p.player_id not in starters), key=lambda p: -p.points
+                    )
+                ],
+            ),
+            opponent=self._opponent(state, league_id, scheduled, live),
+            swaps=[
+                Swap(
+                    start=f"{change.start.name} ({change.slot})",
+                    out=change.bench.name if change.bench else "",
+                    gain=f"+{change.gain:.1f} proj pts",
+                )
+                for change in state.changes
+            ],
+            fixtures=[
+                Stat(label=club, value="no game this week", tone="warning")
+                for club in sorted({p.team for p in state.projected if scheduled and not p.opponent})
+            ],
+            window=self._window(state),
+        )
+
+    def _window(self, state: Week) -> str:
+        """Which week, and when it is actually played.
+
+        A week with no dates on it is a number, and the number is the one thing
+        somebody already knows.
+        """
+        span = week_dates(games_by_week(self.client, state.season).get(state.week, []))
+        return f"Week {state.week} · {span}" if span else f"Week {state.week}"
+
+    def schedule(self, league_id: str) -> LeagueSchedule:
+        """The season, the table, this week's real games, and what the league did."""
+        return league.build(self.client, self._week(league_id), league_id)
+
+    def _live(self, state: Week, league_id: str) -> Live:
+        """What has actually been scored, and whose clubs have kicked off."""
+        started = {
+            club
+            for game in games_by_week(self.client, state.season).get(state.week, [])
+            if game.status and game.status != "pre_game"
+            for club in (game.home, game.away)
+        }
+        try:
+            matchups = self.client.get_matchups(league_id, state.week)
+        except SleeperAPIError as e:
+            logger.warning(f"Continuing without live scores: {e}")
+            return Live(started=started, points={})
+
+        points: dict[str, float] = {}
+        for entry in matchups:
+            for player_id, scored in (entry.get("players_points") or {}).items():
+                points[str(player_id)] = float(scored or 0)
+        return Live(started=started, points=points)
+
+    @staticmethod
+    def _side_total(state: Week, live: Live) -> str:
+        """The projection until the ball is rolling, then what is on the board."""
+        if not live.under_way:
+            return f"{state.current_points:.1f} proj"
+        scored = sum(live.scored(slot.player.player_id, slot.player.team) or 0 for slot in state.lineup if slot.player)
+        return f"{scored:.1f} pts"
+
+    def _opponent(self, state: Week, league_id: str, scheduled: bool, live: Live) -> Side | None:
+        """The team you are playing, and what they are starting.
+
+        Their lineup is the other half of the only question this week asks, and
+        it costs one roster fetch that has already been cached.
+        """
+        try:
+            matchups = self.client.get_matchups(league_id, state.week)
+        except SleeperAPIError as e:
+            logger.warning(f"Skipping the opponent: {e}")
+            return None
+
+        mine = next((m for m in matchups if m.get("roster_id") == state.roster.roster_id), None)
+        if not mine or mine.get("matchup_id") is None:
+            return None
+        theirs = next(
+            (
+                m
+                for m in matchups
+                if m.get("matchup_id") == mine.get("matchup_id") and m.get("roster_id") != state.roster.roster_id
+            ),
+            None,
+        )
+        if not theirs:
+            return None
+
+        by_roster = {r.roster_id: r for r in self.client.get_rosters(league_id)}
+        roster = by_roster.get(int(theirs.get("roster_id", 0)))
+        if roster is None:
+            return None
+
+        names = self.client.get_league_users(league_id)
+        projected = [
+            p for p in (projection_for(pid, state.projections, state.players) for pid in roster.player_ids) if p
+        ]
+        starting = set(roster.starter_ids)
+        by_id = {p.player_id: p for p in projected}
+
+        # Walked in slot order rather than filtered out of `player_ids`, which
+        # Sleeper returns in no order at all. Both sides are read across, so an
+        # opponent listed QB-first against your kicker is not a comparison.
+        # `starter_ids` is positionally aligned with the league's starting
+        # slots, which is the only thing that makes the two columns rows.
+        slots = state.league.starting_slots
+        if len(roster.starter_ids) == len(slots):
+            lineup = [
+                self._spot(by_id[pid], scheduled, slot=slot, live=live)
+                if pid in by_id
+                else Spot(slot=slot, player="—", detail="empty", value="0.0", tone="warning")
+                for slot, pid in zip(slots, roster.starter_ids, strict=True)
+            ]
+        else:
+            # Off-length means the positions cannot be trusted, and a WR
+            # labelled QB is worse than a row carrying no label at all.
+            logger.warning(f"Roster {roster.roster_id} starts {len(roster.starter_ids)} into {len(slots)} slots")
+            lineup = [self._spot(p, scheduled, live=live) for p in projected if p.player_id in starting]
+        return Side(
+            name=names.get(roster.owner_id, "Opponent"),
+            detail=roster.record,
+            points=f"{float(theirs.get('points') or 0):.1f}",
+            lineup=lineup,
+            bench=[self._spot(p, scheduled, live=live) for p in projected if p.player_id not in starting],
+        )
+
+    def _season_table(self, player_id: str, state: Week) -> StatTable | None:
+        """This season beside the two before it, read across rather than down.
+
+        A projection is a guess; these are the seasons it is a guess about, and
+        a page showing only the guess gives no way to weigh it. Stacked groups
+        make you hold last year's yards in your head while scrolling to this
+        year's; a row puts them side by side.
+
+        Per game as well as total, because a total mostly measures availability
+        — twelve games is not a worse week.
+
+        Degrades to nothing rather than failing the page: a rookie has no
+        history, and neither does a season Sleeper has not published.
+        """
+        scoring = state.league.scoring_format
+        columns = [state.season, *self._recent_seasons(state.season)]
+        by_season: dict[str, SeasonStats | None] = {}
+        for season in columns:
+            try:
+                by_season[season] = self.client.get_season_stats(season).get(player_id)
+            except SleeperAPIError as e:
+                logger.warning(f"Skipping {season} totals: {e}")
+                by_season[season] = None
+
+        # A season nobody has played yet has no answers, and a column of
+        # noughts claims it does.
+        if not state.is_regular_season:
+            by_season[state.season] = None
+        if not any(stats and stats.games for stats in by_season.values()):
+            return None
+
+        def played(season: str) -> SeasonStats | None:
+            """The season's totals, or nothing where it was never played."""
+            stats = by_season.get(season)
+            return stats if stats and stats.games else None
+
+        def row(label: str, of: Callable[[SeasonStats], str]) -> StatRow:
+            return StatRow(
+                label=label,
+                values=[of(stats) if (stats := played(c)) else NOT_APPLICABLE for c in columns],
+            )
+
+        rows = [
+            row("Per game", lambda st: f"{st.per_game(scoring):.1f}"),
+            row("Total", lambda st: f"{st.scored(scoring):.1f}"),
+            row("Games", lambda st: str(st.games)),
+            row("Position rank", lambda st: f"#{st.position_rank}" if st.position_rank else NOT_APPLICABLE),
+        ]
+        # Only the splits somebody actually records: a running back has no
+        # completion percentage, and a whole row of N/A is a row of nothing.
+        for key, label in SPLIT_LABELS:
+            if any(stats and stats.splits.get(key) for stats in by_season.values()):
+                rows.append(row(label, lambda st, k=key: _split_value(k, st.splits.get(k))))
+
+        return StatTable(title="By season", columns=columns, rows=rows)
+
+    @staticmethod
+    def _recent_seasons(season: str) -> list[str]:
+        """The two seasons before this one, newest first.
+
+        Two rather than a career: three years back is a different team, a
+        different scheme and usually a different player.
+        """
+        try:
+            year = int(season)
+        except ValueError:
+            return []
+        return [str(year - 1), str(year - 2)]
+
+    def _lineup_spot(self, slot: LineupSlot, scheduled: bool, live: Live | None = None) -> Spot:
+        if slot.player is None:
+            return Spot(slot=slot.slot, player="—", detail="empty", value="0.0", tone="warning")
+        return self._spot(slot.player, scheduled, slot=slot.slot, live=live, projected=slot.points)
+
+    def _spot(
+        self,
+        projection: WeeklyProjection,
+        scheduled: bool,
+        slot: str = "",
+        live: Live | None = None,
+        projected: float | None = None,
+    ) -> Spot:
+        """One row, showing what happened where the game has started.
+
+        Once a club has kicked off, what its players actually scored is the
+        number somebody is looking for, and the projection beside it is a guess
+        about a question already being answered.
+        """
+        scored = live.scored(projection.player_id, projection.team) if live else None
+        points = projection.points if projected is None else projected
+        return Spot(
+            player_id=projection.player_id,
+            slot=slot,
+            player=projection.name,
+            detail=self._spot_detail(projection, scheduled, slot),
+            value=f"{scored:.1f} pts" if scored is not None else f"{points:.1f}",
+            tone=self._live_tone(scored) if scored is not None else self._spot_tone(projection, scheduled),
+        )
+
+    @staticmethod
+    def _live_tone(scored: float) -> Tone:
+        """A game already played answers its own question: a doubt about
+        somebody who has been on the field is no longer a doubt."""
+        if scored >= HAUL_POINTS:
+            return "good"
+        return "warning" if scored <= BLANK_POINTS else "neutral"
+
+    @staticmethod
+    def _spot_detail(projection: WeeklyProjection, scheduled: bool, slot: str = "") -> str:
+        if projection.opponent:
+            opponent = f"vs {projection.opponent}"
+        else:
+            opponent = "no game" if scheduled else "not scheduled yet"
+        # The slot column already says "QB", so repeating it here reads as two
+        # different facts about one row. A FLEX is the case worth keeping: the
+        # place and the position genuinely differ, and which of them is filling
+        # it is the whole question the row is asking.
+        if projection.position == slot:
+            return f"{projection.team} {opponent}"
+        return f"{projection.position} · {projection.team} {opponent}"
+
+    @staticmethod
+    def _spot_tone(projection: WeeklyProjection | None, scheduled: bool) -> Tone:
+        """A player who will not play is a zero, not a small number.
+
+        Unless nobody is playing, in which case the week simply has not been
+        published and there is nothing to notice about any single player.
+        """
+        if projection is None:
+            return "warning"
+        if projection.is_questionable:
+            return "warning"
+        return "warning" if scheduled and not projection.opponent else "neutral"
+
+    # ── helpers ─────────────────────────────────────────────────────

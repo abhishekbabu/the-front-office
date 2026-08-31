@@ -17,16 +17,16 @@ from conftest import (
     _provider,
 )
 
-from the_front_office.adapters.outbound.competitions.nfl.sleeper import SleeperNFLProvider
-from the_front_office.adapters.outbound.platforms.sleeper.types import (
+from thefrontoffice.adapters.outbound.competitions.nfl.sleeper import SleeperNFLProvider
+from thefrontoffice.adapters.outbound.platforms.sleeper.types import (
     PlayerMeta,
     SeasonStats,
     SleeperLeague,
     SleeperRoster,
     TrendingPlayer,
 )
-from the_front_office.domain.errors import LeagueNotFoundError, SleeperAPIError, TeamNotFoundError
-from the_front_office.domain.models import PlayerQuery
+from thefrontoffice.domain.errors import LeagueNotFoundError, SleeperAPIError, TeamNotFoundError
+from thefrontoffice.domain.models import PlayerQuery
 
 MY_ID = SLEEPER_USER_ID
 

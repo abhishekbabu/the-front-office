@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from the_front_office.config.settings import AppSettings
+from thefrontoffice.config.settings import AppSettings
 
 
 def _settings(**overrides: object) -> AppSettings:

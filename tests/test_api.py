@@ -11,9 +11,9 @@ import pytest
 from fastapi.testclient import TestClient
 from reports import MOCK_FPL_REPORT, MOCK_NBA_VERDICT
 
-from the_front_office.adapters.inbound.web import api as web
-from the_front_office.domain.models import CompetitionContext, PlayerCard
-from the_front_office.domain.ports import LeagueRef
+from thefrontoffice.adapters.inbound.web import api as web
+from thefrontoffice.domain.models import CompetitionContext, PlayerCard
+from thefrontoffice.domain.ports import LeagueRef
 
 
 class FakeProvider:
@@ -153,7 +153,7 @@ def test_an_unconfigured_sport_is_a_readable_400(monkeypatch: pytest.MonkeyPatch
 
 
 def test_a_platform_failure_reaches_the_client_in_words(monkeypatch: pytest.MonkeyPatch) -> None:
-    from the_front_office.domain.errors import SleeperAPIError
+    from thefrontoffice.domain.errors import SleeperAPIError
 
     monkeypatch.setattr(web.data, "build_provider", lambda sport: FakeProvider(SleeperAPIError("Sleeper is down")))
     client = TestClient(web.create_app())
@@ -272,7 +272,7 @@ def test_an_unknown_api_path_is_a_404_not_the_page(built_client: TestClient) -> 
 @pytest.fixture
 def settings_client(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     """A client editing a throwaway .env rather than the developer's own."""
-    from the_front_office.config import env_file
+    from thefrontoffice.config import env_file
 
     path = tmp_path / ".env"
     path.write_text("SLEEPER_USERNAME=abhibeast\n", encoding="utf-8")
@@ -307,7 +307,7 @@ def test_a_boolean_reports_its_effective_value_not_the_file_text(
 ) -> None:
     """An absent key and a false one look identical in the file, so the UI would
     otherwise render an unset checkbox for a setting that is genuinely on."""
-    from the_front_office.config.settings import settings
+    from thefrontoffice.config.settings import settings
 
     monkeypatch.setattr(settings, "logfire_capture_prompts", True)
     entry = next(s for s in settings_client.get("/api/settings").json() if s["key"] == "LOGFIRE_CAPTURE_PROMPTS")
@@ -319,7 +319,7 @@ def test_a_secret_is_never_sent_to_the_client(settings_client: TestClient, monke
     """There is nothing the UI can do with the characters of an API key that it
     cannot do with the fact that one is set — and a page that renders them puts
     them in screenshots."""
-    from the_front_office.config.settings import settings
+    from thefrontoffice.config.settings import settings
 
     monkeypatch.setattr(settings, "gemini_api_key", "super-secret-value")
 
@@ -365,7 +365,7 @@ def test_a_shell_variable_is_reported_so_a_futile_edit_is_visible(
 def test_a_domain_error_carries_a_code_the_client_can_act_on(client: TestClient) -> None:
     """The message deliberately names no command, so the client needs this to
     know it can offer a button."""
-    from the_front_office.domain.errors import YahooLoginRequiredError
+    from thefrontoffice.domain.errors import YahooLoginRequiredError
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(web.data, "build_provider", _raising(YahooLoginRequiredError()))
@@ -419,8 +419,8 @@ def test_progress_is_readable_while_it_waits(client: TestClient) -> None:
 
 
 def test_a_failed_handshake_is_reported_in_the_domains_words(monkeypatch: pytest.MonkeyPatch) -> None:
-    from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
-    from the_front_office.domain.errors import YahooAuthError
+    from thefrontoffice.adapters.outbound.platforms.yahoo.client import YahooClient
+    from thefrontoffice.domain.errors import YahooAuthError
 
     monkeypatch.setattr(YahooClient, "login", classmethod(lambda cls, force=False: None))
     monkeypatch.setattr(YahooClient, "verify", classmethod(_raising(YahooAuthError())))
@@ -433,7 +433,7 @@ def test_a_failed_handshake_is_reported_in_the_domains_words(monkeypatch: pytest
 
 def test_success_is_only_reported_once_the_grant_is_verified(monkeypatch: pytest.MonkeyPatch) -> None:
     """A login that completes and hands back an inert token is not a success."""
-    from the_front_office.adapters.outbound.platforms.yahoo.client import YahooClient
+    from thefrontoffice.adapters.outbound.platforms.yahoo.client import YahooClient
 
     calls: list[str] = []
     monkeypatch.setattr(YahooClient, "login", classmethod(lambda cls, force=False: calls.append("login")))
@@ -470,7 +470,7 @@ def _with_readiness(monkeypatch: pytest.MonkeyPatch, sport: str, check: Any) -> 
 
 def test_a_configured_sport_can_still_be_unusable(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     """Credentials being set says nothing about whether the platform answers."""
-    from the_front_office.domain.errors import YahooLoginRequiredError
+    from thefrontoffice.domain.errors import YahooLoginRequiredError
 
     monkeypatch.setattr(web.settings, "yahoo_client_id", "id")
     monkeypatch.setattr(web.settings, "yahoo_client_secret", "secret")
@@ -503,7 +503,7 @@ def test_an_unconfigured_sport_is_not_probed(client: TestClient, monkeypatch: py
 
 def test_the_summary_is_served_without_calling_a_model(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     """The whole point: a page that waits on a model is blank while it waits."""
-    from the_front_office.domain.models import Side, Spot, Stat, Summary
+    from thefrontoffice.domain.models import Side, Spot, Stat, Summary
 
     monkeypatch.setattr(web, "scout_engine", _raising(AssertionError("must not run the engine")))
     monkeypatch.setattr(
@@ -546,7 +546,7 @@ def test_a_secrets_effective_value_is_withheld_too(
     settings_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Otherwise the placeholder would print the key the field exists to hide."""
-    from the_front_office.config.settings import settings
+    from thefrontoffice.config.settings import settings
 
     monkeypatch.setattr(settings, "gemini_api_key", "super-secret-value")
     entry = next(s for s in settings_client.get("/api/settings").json() if s["key"] == "GOOGLE_API_KEY")
