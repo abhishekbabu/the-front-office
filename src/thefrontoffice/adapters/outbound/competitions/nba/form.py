@@ -1,9 +1,8 @@
 """Recent form and remaining games, read from Sleeper.
 
-Basketball already read its projections from Sleeper; this is the other half —
-what a player has actually been doing lately, and how many games their club has
-left inside the matchup period. Both used to come from NBA.com, which meant two
-independent name joins against Yahoo and a second platform to keep cached.
+Basketball reads its projections from Sleeper; this is the other half — what a
+player has actually been doing lately, and how many games their club has left
+inside the matchup period.
 
 Form is per game rather than per week on purpose: a category league is won over
 a matchup period, and "the last ten games" is a window a weekly bucket of three

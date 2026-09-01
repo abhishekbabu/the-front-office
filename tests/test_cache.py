@@ -171,7 +171,7 @@ def test_a_corrupt_entry_is_discarded_not_fatal(tmp_path: Path) -> None:
 
 
 def test_one_corrupt_entry_does_not_lose_the_others(tmp_path: Path) -> None:
-    """The whole-file cache this replaced discarded everything on one bad byte."""
+    """One unreadable file costs its own key and nothing else."""
     directory = tmp_path / "cache"
     c = JsonDiskCache(directory)
     c.set("good", "kept", now=T0)

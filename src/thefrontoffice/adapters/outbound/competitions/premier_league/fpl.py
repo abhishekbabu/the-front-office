@@ -600,8 +600,8 @@ class FPLProvider:
     def _live_points(self, gameweek: int) -> dict[int, LiveStat]:
         """What the squad has actually scored, or nothing before a ball is kicked.
 
-        Enrichment, not a dependency: a gameweek with no live feed yet is a
-        gameweek shown on projections, which is what it was before this.
+        Enrichment, not a dependency: a gameweek with no live feed yet falls
+        back to projections rather than failing.
         """
         try:
             return self.client.get_live(gameweek)

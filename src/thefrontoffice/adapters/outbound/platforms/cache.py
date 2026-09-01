@@ -85,9 +85,8 @@ class JsonDiskCache:
     def _read(self, key: str) -> dict[str, Any] | None:
         """The stored envelope for `key`, from memory or else from its own file.
 
-        Entries are held once read so that a second look at the same key costs
-        nothing — the whole-file cache this replaced got that for free by
-        loading everything up front, which is exactly what made it expensive.
+        Entries are held once read, so a second look at the same key costs
+        nothing without loading the whole directory up front.
         """
         if key in self._entries:
             return self._entries[key]

@@ -2,148 +2,229 @@
 
 [![CI](https://github.com/abhishekbabu/thefrontoffice/actions/workflows/ci.yml/badge.svg)](https://github.com/abhishekbabu/thefrontoffice/actions/workflows/ci.yml)
 
-AI-powered fantasy sports general manager. NBA on Yahoo, NFL on Sleeper, Fantasy
-Premier League on the official game.
+An AI general manager for your fantasy teams. It reads your live league state,
+real stats and the fixtures ahead, then scouts the waiver wire, checks your
+lineup, evaluates trades and answers follow-up questions about any of it.
 
-Scouts the waiver wire, sets lineups, evaluates trades, and answers follow-up
-questions about any of it — grounding every prompt in live league state, real
-stats and the fixtures ahead.
+Three competitions, each on the platform that runs it:
 
-## Tech Stack
+| Competition | Platform | Credentials |
+|---|---|---|
+| NBA | Yahoo Fantasy | OAuth (one browser login) |
+| NFL | Sleeper | Username only |
+| Premier League | Fantasy Premier League | Entry id only |
 
-**Layout** (`src/thefrontoffice/`, Python managed with `uv`) — ports and adapters,
-with dependencies pointing strictly inward:
+![This week](docs/screenshots/week.png)
 
-```text
-domain/       models and ports. Imports nothing else in the package.
-application/  use cases over ports: ScoutEngine, TradeEngine.
-adapters/
-  inbound/    drivers — the CLI and the Streamlit UI.
-  outbound/   driven — platform clients, the language model, and the
-              per-competition providers implementing CompetitionProvider.
-bootstrap.py  the composition root: the only module naming a concrete
-              implementation. Registers competitions and wires engines.
-```
+## Quick start
 
-No adapter is named anywhere in `domain/` or `application/`; the engines take an
-`AnalysisModel` port rather than a vendor client.
-
-**Inbound adapters** — a slash-command CLI, and a FastAPI service that returns the
-domain models directly: `ScoutReport` *is* a route's response schema, so there is no
-second representation of a report to keep in step. It also serves the built UI from
-`web/dist`, so one process on one port covers both.
-
-**Outbound adapters** (`src/thefrontoffice/adapters/outbound/`)
-- **Yahoo Fantasy** via `yahoofantasy` — OAuth2, rosters, matchups, and hand-built player queries that sort free agents by an individual stat category. Responses are cached in `.yahoo_cache/` rather than the SDK's own store
-- **Sleeper** — public and auth-free, and the stats provider for both football and basketball: football leagues, every roster in them, matchups and weekly projections; the real-world season schedule, season totals and the league's transaction feed; NBA per-game projections summed into category totals for the matchup period, per-game box scores for recent form (L5/L10/L15), and the basketball schedule. Cached in `.sleeper_cache/`
-- **Fantasy Premier League** — public and auth-free, and the only platform here that is also its own stats provider: one `bootstrap-static` call carries the squad, the prices, the game's own `ep_next` projection and Opta expected goals, with per-player season history, mini-league tables and fixtures alongside. Cached in `.fpl_cache/`
-- **Gemini** via `google-genai` — `gemini-2.5-pro` for analysis, `gemini-2.5-flash` for parsing
-
-**Tracing** — OpenTelemetry via `logfire`, configured in
-[`config/telemetry.py`](src/thefrontoffice/config/telemetry.py) and nowhere else.
-Everything worth measuring happens inside a library, so `requests`, `google-genai`
-and `pydantic` are auto-instrumented and no span is opened by hand — `domain/` and
-`application/` never learn that telemetry exists. The standard-library logging the
-app already does is bridged, so cache hits and retry warnings arrive as events on
-the span that caused them. Without `LOGFIRE_TOKEN` nothing is exported and no
-network call is made.
-
-**Web UI** (`web/`) — React 19, Vite, Tailwind v4 and Radix primitives, served by
-FastAPI. Shared pieces live in `components/ui/`: cards, badges, a table that
-reads its columns off the data, one loading vocabulary, and `IconButton`, whose
-single required `label` is both tooltip and accessible name. Animation is
-Motion, loaded lazily so the entry bundle stays near 145 kB gzip — `just
-check-web` fails if it grows past 150, and ESLint refuses the eager import that
-would put the whole library there. Color is themed in two orthogonal
-dimensions: a palette (`data-theme` on
-`<html>`) and light/dark (`color-scheme`, driven by a class), so every token is a
-single `light-dark(light, dark)` declaration and no component branches on either.
-Status colors are shared across palettes rather than re-themed, and chosen so
-pass/fail reads as a warm/cool contrast that survives red-green color blindness.
-
-**Tooling** — `ruff`, `pyrefly`, `pytest`, `pre-commit`, `just` for Python;
-`tsc`, `vitest` and `pnpm` for the UI. Every Python recipe runs through `uv run`,
-so the same commands work on macOS, Linux and Windows.
-
-## Setup
-
-**1. Install the two CLIs.** Python itself is not installed separately — `uv`
-provisions an interpreter matching `requires-python`.
+**1. Install the two CLIs.** Python is not installed separately — `uv` provisions
+an interpreter matching `requires-python`.
 
 ```bash
-brew bundle                                    # macOS / Linux
-winget install --id=astral-sh.uv --id=Casey.Just -e   # Windows
+brew bundle                                            # macOS / Linux
+winget install --id=astral-sh.uv --id=Casey.Just -e     # Windows
 ```
 
-**2. Get credentials.** A [Yahoo developer app](https://developer.yahoo.com/apps/)
-with Fantasy Sports **Read** permission and redirect URI `https://localhost:8080`,
-and a [Gemini API key](https://aistudio.google.com/app/apikey).
-
-**3. Install and configure.**
+**2. Install the project.**
 
 ```bash
 just install                 # uv sync + git hooks
 cp .env.template .env        # PowerShell: Copy-Item .env.template .env
 ```
 
-Without `just`: `uv sync && uv run pre-commit install`.
+**3. Add credentials.** Either edit `.env`, or start the app and use its
+**Settings** page, which writes `.env` for you and re-reads it into the running
+process — no restart. Secrets there are write-only: the server reports whether
+one is set, never what it is.
 
-The UI's **Settings** page writes `.env` directly, so a fresh machine can be
-configured without opening an editor. Secrets are write-only there: the server
-reports whether one is set, never what it is. Saving re-reads configuration into
-the running process, so a competition becomes available without a restart.
+- **NFL** — your Sleeper username.
+- **Premier League** — your entry id, the number in the URL of your own points
+  page: `fantasy.premierleague.com/entry/<THIS>/event/1`.
+- **NBA** — a [Yahoo developer app](https://developer.yahoo.com/apps/) with
+  Fantasy Sports **Read** permission and redirect URI `https://localhost:8080`,
+  then `just yahoo-login` (see [Yahoo access](#yahoo-access)).
+- **Analysis** — a [Gemini API key](https://aistudio.google.com/app/apikey).
+  Optional; without it the app offers no analysis rather than offering and
+  refusing it.
 
-**On a second machine**, copy `.env` across by hand — the four secrets
-(`YAHOO_CLIENT_ID`, `YAHOO_CLIENT_SECRET`, `GOOGLE_API_KEY`, `LOGFIRE_TOKEN`)
-belong in a password manager, not in this repo, which is public. Then run
-`just doctor`, which names every variable the app reads, reports each as present
-or absent without echoing a secret, and flags keys nothing will pick up —
-`AppSettings` ignores what it does not recognize, so a mistyped key is silent.
-
-Do **not** copy `.yahoofantasy`: refresh-token rotation means two machines
-sharing one token can invalidate each other, and re-authenticating is a single
-browser flow. Do not copy `.sleeper_cache/`, `.fpl_cache/` or `.yahoo_cache/`
-either — they are derived, expiring, and one holds a trimmed player catalog
-built from a ~14MB response.
-
-### Environment
-
-| Variable | Required | Default | Notes |
-|----------|----------|---------|-------|
-| `YAHOO_CLIENT_ID` | yes | — | From your Yahoo developer app |
-| `YAHOO_CLIENT_SECRET` | yes | — | From your Yahoo developer app |
-| `GOOGLE_API_KEY` | no | — | Omit and the app simply offers no analysis |
-| `SLEEPER_USERNAME` | for football | — | Sleeper needs no key or OAuth — just the username |
-| `FPL_ENTRY_ID` | for FPL | — | The number in the URL of your own points page. FPL has no username lookup |
-| `YAHOO_MAX_WEEKLY_ADDS` | no | `3` | Integer ≥ 0; drives the scout's add budget |
-| `LOGFIRE_TOKEN` | no | — | A write token from a [Logfire](https://logfire.pydantic.dev) project. Omit and nothing is exported |
-| `LOGFIRE_ENVIRONMENT` | no | `local` | Separates traces from a laptop and a deployed run in one project |
-| `LOGFIRE_CAPTURE_PROMPTS` | no | `false` | Sends prompt and completion **text**. Off deliberately — a prompt carries your roster, leagues and FPL entry id |
-| `LOG_LEVEL` | no | `INFO` | `DEBUG` \| `INFO` \| `WARNING` \| `ERROR` \| `CRITICAL` |
-
-Each is a validated field on `AppSettings` in
-[`config/settings.py`](src/thefrontoffice/config/settings.py) — a malformed
-value fails at startup naming the field, not mid-report.
-
-## Usage
+**4. Run it.**
 
 ```bash
 just ui     # build the UI and serve it at http://localhost:8000
-just run    # interactive CLI
+just run    # interactive CLI instead
 ```
 
-Every page has an address, so a view can be linked, bookmarked or reloaded and
-the browser's Back button means what it says:
+`just doctor` reports what this machine is configured for, without echoing a
+secret, and flags `.env` keys nothing will read.
+
+![League picker](docs/screenshots/landing.png)
+
+## What it does
+
+The app opens on a league picker and every view has its own address, so a page
+can be linked, bookmarked or reloaded and Back means what it says.
 
 | Path | Page |
-|------|------|
-| `/` | every league you can play, to pick from |
+|---|---|
+| `/` | every league you can play |
 | `/{competition}-{platform}/{league}` | this week, the default view |
 | `/{competition}-{platform}/{league}/{view}` | `league`, `team`, `free-agents`, `report`, `trade` |
 | `/settings` | credentials and appearance |
 
 A competition with no league (`/nfl-sleeper`) resolves to your first one, and a
 path naming a competition you cannot play returns to `/`.
+
+**This week** — your matchup: both lineups side by side, the fixtures behind
+them, and the swaps the projections already imply. All read or computed from
+league state, so it is complete before a model is asked anything.
+
+![Free agents](docs/screenshots/free-agents.png)
+
+**Free agents** — everyone available, ranked by projection, searchable and
+filterable by position. **League** covers the season: your results so far, the
+table, every roster, the fixture list and the transaction feed. **My team** is
+your squad in more depth, and any row opens a player.
+
+![Player detail](docs/screenshots/player.png)
+
+**Report** and **Trade** are the model's work: a scouted week with adds, drops
+and lineup changes, and a plain-language trade verdict
+(`Give Bijan, Get Puka`). Both drop into a follow-up chat. They appear only
+when `GOOGLE_API_KEY` is set — commands and views that cannot work are hidden
+rather than disabled.
+
+The same three competitions run in the CLI:
+
+| Command | Description |
+|---|---|
+| `/leagues` | Every league you are in, per competition |
+| `/roster [competition]` | Your squad |
+| `/scout [competition]` | Analyze a week. No competition runs every configured one |
+| `/trade [competition] <text>` | Evaluate a trade. FPL is excluded — its managers transfer against the market rather than trading each other |
+| `/help` · `/quit` | — |
+
+![Fantasy Premier League](docs/screenshots/fpl-week.png)
+
+## Configuration
+
+Every variable is a validated field on `AppSettings` in
+[`config/settings.py`](src/thefrontoffice/config/settings.py); a malformed value
+fails at startup naming the field, not mid-report.
+
+| Variable | Required | Default | Notes |
+|---|---|---|---|
+| `SLEEPER_USERNAME` | for NFL | — | Sleeper needs no key or OAuth |
+| `FPL_ENTRY_ID` | for FPL | — | FPL has no username lookup |
+| `YAHOO_CLIENT_ID` | for NBA | — | From your Yahoo developer app |
+| `YAHOO_CLIENT_SECRET` | for NBA | — | From your Yahoo developer app |
+| `YAHOO_REDIRECT_URI` | no | `https://localhost:8080` | Must match the app's registered URI |
+| `YAHOO_MAX_WEEKLY_ADDS` | no | `3` | Integer ≥ 0; the scout's add budget |
+| `GOOGLE_API_KEY` | no | — | Omit and the app offers no analysis |
+| `LOGFIRE_TOKEN` | no | — | Write token from a [Logfire](https://logfire.pydantic.dev) project. Omit and nothing is exported |
+| `LOGFIRE_ENVIRONMENT` | no | `local` | Separates traces from a laptop and a deployed run |
+| `LOGFIRE_CAPTURE_PROMPTS` | no | `false` | Sends prompt and completion **text**. Off deliberately — a prompt carries your roster and leagues |
+| `LOG_LEVEL` | no | `INFO` | `DEBUG` \| `INFO` \| `WARNING` \| `ERROR` \| `CRITICAL` |
+
+`YAHOO_CACHE_DIR`, `SLEEPER_CACHE_DIR` and `FPL_CACHE_DIR` relocate the
+per-platform response caches; the defaults are `.yahoo_cache`, `.sleeper_cache`
+and `.fpl_cache`.
+
+**On a second machine**, copy `.env` across by hand — the four secrets belong in
+a password manager, not in this public repo — then run `just doctor`. Do not
+copy `.yahoofantasy`: refresh-token rotation means two machines sharing one
+token invalidate each other, and re-authorizing is a single browser flow. The
+caches are derived and expiring; leave them behind too.
+
+## Yahoo access
+
+```bash
+just yahoo-login    # opens a browser; token cached in .yahoofantasy and reused
+```
+
+It is a separate step because the handshake blocks on a browser click, which a
+request handler cannot do — so every non-interactive path reports a missing
+token rather than trying to obtain one. The browser will warn about the
+self-signed localhost certificate; that is expected, and Yahoo only accepts an
+`https` redirect.
+
+Two things beyond the login are easy to miss, and both fail the same way — every
+Fantasy endpoint answers **403**, including ones needing no user permission,
+which is how this is told apart from an invalid token (401):
+
+- **Yahoo reviews every application** before granting Fantasy Sports API access.
+  Apply at [sports.yahoo.com/developer/access](https://sports.yahoo.com/developer/access/);
+  personal single-league use is an accepted category.
+- **API Permissions → Fantasy Sports → Read must be saved** *before* you
+  authorize. Yahoo fixes a token's grant at that moment, and a refresh cannot
+  widen it, so the fix is `just yahoo-login --force`. The login verifies itself
+  rather than reporting success on an inert token.
+
+## Architecture
+
+Ports and adapters, dependencies pointing strictly inward:
+
+```text
+src/thefrontoffice/
+├── domain/            models and ports. Imports nothing else in the package.
+├── application/       use cases over ports: ScoutEngine, TradeEngine.
+├── adapters/
+│   ├── inbound/       drivers: the CLI and the FastAPI + React web app.
+│   └── outbound/      driven: platform clients, the model, and the
+│                      per-competition CompetitionProvider implementations.
+├── bootstrap.py       composition root: the only module naming a concrete
+│                      implementation. Registers competitions, wires engines.
+└── config/            validated settings, prompt templates, telemetry.
+```
+
+No adapter is named in `domain/` or `application/`; the engines take an
+`AnalysisModel` port rather than a vendor client. Adding a competition is a
+provider, a prompt template and one `CompetitionEntry` — see the
+[`adding-a-competition`](.agents/skills/adding-a-competition/SKILL.md) skill.
+
+**API** — FastAPI returns the domain models directly: `ScoutReport` *is* a
+route's response schema, so there is no second representation to keep in step.
+It also serves the built UI from `web/dist`, so one process on one port covers
+both.
+
+**Platforms** — Yahoo via `yahoofantasy` (OAuth2, rosters, matchups, free agents
+sorted by stat category); Sleeper, public and auth-free, which is also the stats
+provider for both football and basketball (projections, box scores, schedules,
+transactions); Fantasy Premier League, public and auth-free, whose one
+`bootstrap-static` call carries the squad, prices, the game's own `ep_next`
+projection and Opta expected goals. Each caches responses in its own directory.
+
+**Model** — Gemini via `google-genai`: `gemini-2.5-pro` for analysis,
+`gemini-2.5-flash` for parsing. Reports come back as Pydantic models through a
+response schema, never as prose to be parsed out.
+
+**Web UI** (`web/`) — React 19, Vite, Tailwind v4, Radix primitives, Motion
+loaded lazily to hold the entry bundle under 150 kB gzip. Shared pieces live in
+`components/ui/`; `panels/` holds one page each. Color is themed in two
+orthogonal dimensions — a palette (`data-theme`) and light/dark
+(`color-scheme`) — so every token is a single `light-dark(light, dark)`
+declaration and no component branches on either.
+
+**Tracing** — OpenTelemetry via `logfire`, configured in
+[`config/telemetry.py`](src/thefrontoffice/config/telemetry.py) and nowhere
+else. The libraries carrying the latency are auto-instrumented, so no span is
+opened by hand and `domain/` and `application/` never learn telemetry exists.
+Without `LOGFIRE_TOKEN` nothing is exported and no network call is made.
+
+## Development
+
+```bash
+just doctor             # what this machine is configured for
+just check              # lint + format + types + tests + 95% coverage floor
+just check-web          # lint + typecheck + tests + bundle budget (UI)
+just fmt                # auto-fix lint findings, then format
+just test               # hermetic suite (args pass through: just test "-k scout")
+just lock               # re-resolve uv.lock after editing pyproject.toml
+just clean              # caches and build artefacts
+just clean-data         # only the platform caches, forcing a refetch
+```
+
+`just --list` for the full catalog.
 
 For UI work, run the two halves separately so the front end hot-reloads:
 
@@ -159,136 +240,29 @@ just preview   # the real app on its own port, so `just ui` keeps :8000
 just shots     # screenshot every view into web/.shots (starts its own preview)
 ```
 
-`preview` runs the same routes against the same platforms as `just ui` — the
-point is to see what the app actually renders, so substituting fixtures would
-only confirm whatever the fixtures were written to show. Real data is where the
-awkward cases are: a league in a format the code forgot to read, a preseason
-week where every projection is zero, a fifteen-man squad rather than a tidy
-three. `shots` drives it with Playwright and reports any console errors, which a
-screenshot of a blank panel otherwise hides.
+Both run the same routes against the same platforms as `just ui` — real data is
+where the awkward cases are. `shots` drives it with Playwright and reports any
+console errors, which a screenshot of a blank panel otherwise hides.
 
-NBA needs one interactive step first:
+Tests are hermetic: no network, no credentials, no cache on disk. Engines take
+their collaborators by keyword, so the `tests/conftest.py` fakes stand in for
+the platforms and the model. Anything hitting a live API is marked
+`@pytest.mark.integration` and deselected by default. New code needs tests in
+the same commit; coverage is gated at 95%.
 
-```bash
-just yahoo-login    # opens a browser; token cached in .yahoofantasy and reused
-```
-
-It is separate because the handshake blocks on a browser click, which a web
-request handler cannot do — so every non-interactive path reports a missing
-token instead of trying to obtain one.
-
-The handshake is implemented in
-[`platforms/yahoo/oauth.py`](src/thefrontoffice/adapters/outbound/platforms/yahoo/oauth.py)
-rather than delegated to the `yahoofantasy` CLI, which exchanges the code
-against `redirect_uri="oob"` after authorizing against a different one. RFC 6749
-requires the two to match; Yahoo answers the mismatch with a token that
-authenticates and carries no grant, so every endpoint returns 403 instead of
-401. The browser will warn about the self-signed localhost certificate the
-callback is served with — that is expected, and Yahoo only accepts an `https`
-redirect.
-
-**Yahoo reviews every application before granting Fantasy Sports API access.**
-Creating the app and ticking Fantasy Sports → Read is necessary but not
-sufficient; apply at [sports.yahoo.com/developer/access](https://sports.yahoo.com/developer/access/),
-where personal single-league use is an accepted category. Until approved, the
-login succeeds and every Fantasy endpoint returns 403 — including ones needing
-no user permission, which is how this is told apart from a consent problem. An
-invalid token would return 401.
-
-Your Yahoo app must also have **API Permissions → Fantasy Sports → Read**, *saved*.
-Yahoo fixes a token's grant at the moment you authorize, from whatever
-permissions were saved then — so a token minted before that is accepted and
-permitted nothing, answering 403 (not 401) on every endpoint including ones
-needing no permission at all. A refresh cannot widen a grant, so the only fix is
-`just yahoo-login --force`. The login verifies itself and says so rather than
-reporting success on an inert token.
-
-| Command | Description |
-|---------|-------------|
-| `/leagues` | Every league you are in, per competition |
-| `/roster [competition]` | Your squad |
-| `/scout [competition]` | Analyze a week. No competition runs every configured one |
-| `/trade [competition] <text>` | Evaluate a trade, e.g. `/trade nfl Give Bijan, Get Puka`. The competition is optional when only one supports trades. FPL is excluded — its managers transfer against the market rather than trading each other |
-| `/help` · `/quit` | — |
-
-`GOOGLE_API_KEY` is optional. Without it the app has no analysis to offer, so
-nothing that needs a model is shown — no report, no trade evaluation, no
-follow-up chat. Everything read from the platforms works exactly as before.
-Adding a key makes those appear on the next request; nothing explains their
-absence, because from the outside there is nothing missing.
-
-The web UI opens on a league picker and splits into three views. **This week**
-is the matchup: both lineups side by side, the fixtures behind them, and the
-changes the projections already imply — all read or computed from league state,
-so it is complete before anything is asked of a model. **My team** is the squad
-in more depth, and any player opens. **Report** is the analysis, which exists
-only when a `GOOGLE_API_KEY` does.
-
-Commands and views are hidden rather than disabled when they cannot work, so
-the app is smaller without credentials and never explains an absence.
-
-Both drop you into a follow-up chat afterwards; press Enter on an empty line to
-move on.
-
-## Development
-
-```bash
-just doctor             # what this machine is configured for; flags typo'd .env keys
-just check              # lint + format + types + tests + 95% coverage floor (Python)
-just check-web          # lint + typecheck + tests + bundle budget (UI)
-just fmt                # auto-fix lint findings, then format
-just test               # hermetic suite (args pass through: just test "-k scout")
-just coverage           # coverage report
-just lock               # re-resolve uv.lock after editing pyproject.toml
-just clean              # caches and build artefacts
-just clean-data         # only the platform caches, forcing a refetch
-```
-
-`just --list` for the full catalog.
+CI runs these same `just` recipes on Linux, macOS and Windows, on the Python
+version `.python-version` pins plus one newer leg, with `uv sync --locked` and
+`pnpm install --frozen-lockfile`. If `just check` and `just check-web` pass
+locally they pass in CI.
 
 Agent-facing rules are in [`AGENTS.md`](AGENTS.md), with shared skills under
 [`.agents/skills/`](.agents/skills/). `CLAUDE.md` beside any `AGENTS.md` is a
 symlink to it, and `.claude/skills` and `.agent/rules/rules.md` are symlinks
-too — one source of truth, discovered by each tool at the path it expects.
-`just check-agents` enforces that.
-
-CI runs the same `just` recipes on Linux, macOS and Windows for every push and
-PR, on the Python version `.python-version` pins plus one newer leg, with
-`uv sync --locked` so a dependency change that skipped `just lock` cannot land.
-A separate `web` job installs with `pnpm install --frozen-lockfile` — the same
-guarantee on that side — and then runs `just check-web` itself, so adding a gate
-to the justfile extends CI here too rather than only on the Python side.
-If `just check` and `just check-web` pass locally they pass in CI.
-
-Tests are hermetic — no network, no credentials, no cache on disk. Engines
-take their collaborators by keyword, so `tests/conftest.py` fakes stand in for
-Yahoo, NBA and Gemini. Anything hitting a live API is marked
-`@pytest.mark.integration` and deselected by default.
-
-## Project Layout
-
-```text
-thefrontoffice/
-├── src/thefrontoffice/
-│   ├── domain/            # models + ports (pure — imports nothing else here)
-│   ├── application/       # scouting and trading use cases, over ports
-│   ├── adapters/
-│   │   ├── inbound/       # drivers: cli/, web/
-│   │   └── outbound/      # driven: llm/, platforms/, competitions/
-│   ├── bootstrap.py       # composition root: competition registry + engine wiring
-│   └── config/            # validated settings + prompt templates
-├── web/                   # React UI: src/{components,panels,themes,lib}
-├── tests/                 # hermetic pytest suite
-├── AGENTS.md              # agent-facing rules (CLAUDE.md symlinks to it)
-├── .agents/skills/        # shared agent skills
-├── Brewfile               # system tooling (just, uv)
-├── justfile               # task runner
-├── pyproject.toml         # package metadata, dependencies, tool config
-└── uv.lock                # pinned dependency graph
-```
+too — one source of truth per tool. `just check-agents` enforces that.
 
 ## Security
 
-Never commit `.env`, `.yahoofantasy`, or any `.*_cache/` — all of them are
-gitignored, and `detect-private-key` runs as a pre-commit hook. Credentials are
-read only through `AppSettings`.
+Never commit `.env`, `.yahoofantasy`, or any `.*_cache/` — all are gitignored,
+and `detect-private-key` runs as a pre-commit hook. Credentials are read only
+through the `settings` singleton, never `os.getenv` at a call site, and a
+secret's value never leaves the process.

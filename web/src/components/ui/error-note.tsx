@@ -63,12 +63,9 @@ export function YahooLoginButton() {
   useEffect(() => {
     if (state.data?.status !== "ok") return;
     // Everything about this competition failed on the missing authorization;
-    // none of those answers are worth keeping now that it exists.
-    //
-    // Nothing is set here: the polling stops on its own, because
-    // `refetchInterval` returns false the moment the status is no longer
-    // running. Turning `watching` off as well was doing the same job twice,
-    // and doing it by setting state from inside an effect.
+    // none of those answers are worth keeping now that it exists. Polling
+    // stops on its own — `refetchInterval` returns false the moment the status
+    // is no longer running — so nothing is set here.
     queryClient.invalidateQueries();
   }, [state.data?.status, queryClient]);
 

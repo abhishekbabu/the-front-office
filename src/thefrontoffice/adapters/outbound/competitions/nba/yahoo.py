@@ -111,7 +111,7 @@ class YahooNBAProvider:
         self.context_builder = PlayerContextBuilder(self.nba)
         # Two questions, one platform: Yahoo says who is on the roster, and
         # Sleeper says both what they have been doing and what they are
-        # expected to do. That used to be three platforms and two name joins.
+        # expected to do.
         self._sleeper = sleeper
 
     def list_leagues(self) -> list[LeagueRef]:
