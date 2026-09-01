@@ -18,10 +18,6 @@ TOOL_CACHES = (".ruff_cache", ".pytest_cache", ".mypy_cache", ".pyrefly_cache")
 # settings so that cleaning never needs a valid .env to run.
 DATA_CACHES = (".yahoo_cache", ".sleeper_cache", ".fpl_cache")
 
-# The single-file caches those replaced. Nothing reads or writes them any more,
-# so they are dead weight on any machine that ran the older code.
-LEGACY_CACHES = (".nba_cache.json", ".yahoo_cache.json", ".sleeper_cache.json", ".fpl_cache.json")
-
 
 def _remove(path: Path) -> bool:
     """Delete a file or directory. Returns whether anything was removed."""
@@ -46,13 +42,13 @@ def main() -> int:
     removed = 0
 
     if args.data_only:
-        for name in DATA_CACHES + LEGACY_CACHES:
+        for name in DATA_CACHES:
             if _remove(PROJECT_ROOT / name):
                 removed += 1
         print(f"Platform caches cleared ({removed} removed).")
         return 0
 
-    for name in TOOL_CACHES + DATA_CACHES + LEGACY_CACHES:
+    for name in TOOL_CACHES + DATA_CACHES:
         if _remove(PROJECT_ROOT / name):
             removed += 1
 

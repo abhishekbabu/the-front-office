@@ -41,8 +41,7 @@ async function waitForServer(timeoutMs = 60_000) {
  *
  * The spawn below cannot bind a port already in use, so it dies quietly while
  * `waitForServer` succeeds against whatever was already there — and the shots
- * come back from whatever code that process was started with. Twice now that
- * has looked exactly like a bug in the feature being photographed.
+ * come back from that process's code, not this checkout's.
  */
 async function refuseStaleServer() {
   try {
@@ -98,11 +97,8 @@ async function main() {
     await page.goto(BASE, { waitUntil: "networkidle" });
     if (wanted("landing")) await shoot("landing");
 
-    // Straight to each view by its address. This used to click along the rail,
-    // because there was nothing else to go on; now every view has a URL, and a
-    // screenshot run that depends on finding a control by its label breaks
-    // whenever that control changes shape — as it did when the rail became
-    // links rather than buttons.
+    // Straight to each view by its address. Driving the rail instead would tie
+    // this run to the shape of a control, and break whenever that changes.
     const competitions = await (await fetch(`${BASE}/api/competitions`)).json();
     // Both analysis views need a model. Without one the app does not offer
     // them, so the address falls back to this week — and a shot taken there

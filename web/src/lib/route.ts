@@ -1,13 +1,11 @@
 /**
  * The address bar as a value, and the only place the URL shape is written.
  *
- * Parsing and building lived apart before — one `matchPath` read the path and a
- * separate helper assembled it — which is two chances to disagree about what a
- * link looks like. Here they sit together and are tested against each other.
- *
- * Routing is react-router; this is the vocabulary on top of it. The shell is
- * one layout whose rail and panel read the same values, so it reads the address
- * rather than rendering a subtree per route.
+ * Parsing and building sit together here and are tested against each other, so
+ * there is one answer to what a link looks like. Routing is react-router; this
+ * is the vocabulary on top of it. The shell is one layout whose rail and panel
+ * read the same values, so it reads the address rather than rendering a
+ * subtree per route.
  */
 import { matchPath } from "react-router-dom";
 

@@ -497,7 +497,7 @@ def test_an_existing_token_satisfies_the_check(monkeypatch: pytest.MonkeyPatch, 
 
 
 def test_login_without_credentials_raises_rather_than_exiting(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """It used to call sys.exit, which inside a server kills the request."""
+    """A missing credential must raise: sys.exit inside a server kills the request."""
     from thefrontoffice.adapters.outbound.platforms.yahoo.client import YahooClient
     from thefrontoffice.config.settings import settings
     from thefrontoffice.domain.errors import YahooAPIError

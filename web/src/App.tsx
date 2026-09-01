@@ -25,12 +25,8 @@ type PanelProps = { competition: Competition; league: League };
 
 /**
  * Every view in one table: what the rail calls it, what renders it, and whether
- * this competition offers it at all.
- *
- * These three used to live apart — an array for the order, a map for the
- * labels, and a chain of ternaries for the panel — so adding a view meant
- * editing three places that had no way of telling you when they disagreed.
- * `Record<View, …>` now makes a missing entry a type error.
+ * this competition offers it at all. `Record<View, …>` makes a missing entry a
+ * type error rather than a view that silently never renders.
  */
 const PANELS: Record<
   View,
@@ -254,8 +250,7 @@ export default function App() {
       <main className="min-w-0 overflow-y-auto">
         {/* One presence around the whole column, keyed on the page. Settings is
             a place you go and come back from, so it earns the same in-and-out
-            as everything else — it previously swapped in with no transition at
-            all because it sat outside the only AnimatePresence here. */}
+            transition as every other view. */}
         <AnimatePresence mode="wait">
           <m.div
             key={route.page === "settings" ? "settings" : "app"}

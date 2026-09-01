@@ -1,10 +1,9 @@
 """Tests for basketball's recent form and remaining games, read from Sleeper.
 
-This replaced a whole platform client, so the things that platform got right
-are asserted here: percentages summed rather than averaged, a window withheld
-until it can be filled, a game nobody played kept out of the average, and a
-matchup window counted on date labels while "has it happened" is decided in
-the zone the league schedules by.
+The rules that make the numbers mean anything: percentages summed rather than
+averaged, a window withheld until it can be filled, a game nobody played kept
+out of the average, and a matchup window counted on date labels while "has it
+happened" is decided in the zone the league schedules by.
 """
 
 from datetime import date, datetime
